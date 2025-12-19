@@ -27,9 +27,24 @@ echo "Preparing ACME webroot $LE..."
 mkdir -p "$LE"
 chown -R www-data:www-data "$LE"
 
-echo "Installing nginx site..."
-cp "$APP_DIR/nginx/nginx.conf" "$NGINX_SITE"
-ln -sf "$NGINX_SITE" /etc/nginx/sites-enabled/pincerna
+echo "Installing temporary nginx site for ACME challenges..."
+TEMP_SITE="/etc/nginx/sites-available/pincerna-temp"
+cat > "$TEMP_SITE" <<EOF
+server {
+  listen 80;
+  listen [::]:80;
+  server_name $DOMAIN;
+
+  location /.well-known/acme-challenge/ {
+    root $LE;
+  }
+
+  location / {
+    return 302 https://$DOMAIN\$request_uri;
+  }
+}
+EOF
+ln -sf "$TEMP_SITE" /etc/nginx/sites-enabled/pincerna
 nginx -t
 systemctl reload nginx
 
@@ -69,8 +84,12 @@ echo "Optional: obtain a TLS certificate for $DOMAIN using Certbot (webroot)."
 read -rp "Request cert now (y/N)? " REQ
 if [[ "$REQ" =~ ^[Yy] ]]; then
   certbot certonly --webroot -w "$LE" -d "$DOMAIN"
+  echo "Certbot completed. Installing full TLS nginx site..."
+  cp "$APP_DIR/nginx/nginx.conf" "$NGINX_SITE"
+  ln -sf "$NGINX_SITE" /etc/nginx/sites-enabled/pincerna
+  nginx -t
   systemctl reload nginx
-  echo "If cert issued, nginx will use /etc/letsencrypt/live/$DOMAIN/ by default in the repo config." 
+  echo "Full TLS site enabled; nginx uses /etc/letsencrypt/live/$DOMAIN/ for certs." 
 fi
 
 echo "Done. Visit https://$DOMAIN/cloud/ after DNS points to this machine and certs are in place."
