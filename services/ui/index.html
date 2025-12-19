@@ -8,25 +8,43 @@
   <script defer src="app.js"></script>
 </head>
 <body>
-  <main class="container">
-    <h1>Pincerna</h1>
+  <header class="site-header">
+    <div class="brand">Pincerna</div>
+    <nav class="nav">
+      <a href="#" id="nav-home" class="active">Dashboard</a>
+      <a href="#" id="nav-controls">Controls</a>
+      <a href="#" id="nav-about">About</a>
+    </nav>
+  </header>
 
-    <section id="login">
-      <h2>Login</h2>
-      <button id="btn-login">Log in (demo)</button>
-      <p id="login-status"></p>
+  <main class="wrap">
+    <section class="card" id="hero">
+      <h1>Welcome to Pincerna Cloud</h1>
+      <p class="lead">Manage your device remotely — secure, simple, and fast.</p>
+      <div class="row">
+        <div>
+          <button id="btn-login" class="btn primary">Sign in (demo)</button>
+          <button id="btn-logout" class="btn" hidden>Sign out</button>
+        </div>
+        <div class="status" id="login-status">Not signed in</div>
+      </div>
     </section>
 
-    <section id="controls" class="hidden">
+    <section class="card" id="controls">
       <h2>Controls</h2>
-      <button id="btn-data">Fetch Protected Data</button>
-      <button id="btn-metrics">Fetch Metrics</button>
+      <div class="grid">
+        <button id="btn-data" class="btn">Fetch Protected Data</button>
+        <button id="btn-metrics" class="btn">Fetch Metrics</button>
+        <button id="btn-restart" class="btn warn">Restart Service</button>
+      </div>
     </section>
 
-    <section id="output">
+    <section class="card" id="output">
       <h2>Output</h2>
-      <pre id="out">Not connected</pre>
+      <pre id="out">No activity yet.</pre>
     </section>
   </main>
+
+  <footer class="site-footer">© Pincerna — cloud.emilvinod.com</footer>
 </body>
 </html>

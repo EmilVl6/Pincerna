@@ -1,8 +1,38 @@
-:root{--bg:#0f1724;--card:#0b1220;--accent:#60a5fa;--muted:#94a3b8;--text:#e6eef8}
-*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,var(--bg),#071024);color:var(--text);min-height:100vh;display:grid;place-items:center}
-.container{width:min(900px,94vw);background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(0,0,0,0.12));border-radius:12px;padding:24px;box-shadow:0 6px 30px rgba(2,6,23,0.6)}
-h1{margin:0 0 12px}
-section{margin:12px 0;padding:12px;background:rgba(255,255,255,0.02);border-radius:8px}
-button{background:var(--accent);color:#042;border:none;padding:8px 12px;border-radius:6px;cursor:pointer}
-pre{white-space:pre-wrap;word-wrap:break-word;color:var(--muted);margin:0}
-.hidden{display:none}
+:root{
+	--bg: #071028;
+	--card: #0b1220;
+	--accent: #60a5fa;
+	--accent-2: #7dd3fc;
+	--muted: #94a3b8;
+	--text: #e6eef8;
+	--glass: rgba(255,255,255,0.03);
+}
+
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,Helvetica;background:linear-gradient(180deg,var(--bg),#021022);color:var(--text);min-height:100vh}
+
+.site-header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:linear-gradient(90deg,rgba(255,255,255,0.02),transparent);backdrop-filter:blur(6px)}
+.brand{font-weight:700;font-size:1.1rem}
+.nav a{color:var(--muted);margin-left:14px;text-decoration:none}
+.nav a.active{color:var(--accent)}
+
+.wrap{max-width:1060px;margin:20px auto;padding:0 18px}
+.card{background:var(--glass);border-radius:12px;padding:18px;margin:12px 0;box-shadow:0 6px 20px rgba(2,6,23,0.6)}
+.lead{color:var(--muted);margin-top:6px}
+
+.row{display:flex;gap:16px;align-items:center}
+.status{color:var(--muted)}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.btn{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--text);padding:10px 14px;border-radius:8px;cursor:pointer}
+.btn.primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#042;border:none}
+.btn.warn{background:#ffb4a2;color:#401303}
+
+pre{white-space:pre-wrap;word-wrap:break-word;color:var(--muted);margin:0;padding:12px;background:rgba(0,0,0,0.18);border-radius:8px}
+
+.site-footer{text-align:center;color:var(--muted);padding:18px 0;font-size:0.9rem}
+
+@media (max-width:600px){
+	.row{flex-direction:column;align-items:flex-start}
+	.nav a{margin-left:10px}
+}
