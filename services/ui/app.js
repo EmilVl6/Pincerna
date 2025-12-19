@@ -1,9 +1,15 @@
 const apiBase = "/cloud/api";
 const $ = sel => document.querySelector(sel);
 
-function setOutput(v){
-  const el = $('#out');
-  el.textContent = typeof v === 'string' ? v : JSON.stringify(v, null, 2);
+function showMessage(msg, level='info', timeout=4000){
+  try{
+    const t = document.createElement('div');
+    t.className = 'toast ' + (level||'info');
+    t.textContent = typeof msg === 'string' ? msg : JSON.stringify(msg);
+    document.body.appendChild(t);
+    setTimeout(()=>{ t.style.opacity = '0'; setTimeout(()=>t.remove(),300) }, timeout);
+  }catch(e){ console.log('toast err', e) }
+  document.querySelectorAll('.status').forEach(el=>el.textContent = typeof msg === 'string' ? msg : JSON.stringify(msg));
 }
 
 async function demoLogin(){
@@ -33,7 +39,7 @@ async function apiFetch(path, opts={}){
   try{
     const res = await fetch(apiBase + path, {...opts, headers});
     const txt = await res.text();
-    try{ return JSON.parse(txt) }catch{ return txt }
+    try{ return JSON.parse(txt) }catch(e){ return txt }
   }catch(e){ return {error: e.message} }
 }
 
@@ -69,7 +75,7 @@ function renderFileList(items){
 async function refreshFiles(){
   const res = await listFiles();
   if(res && res.files) renderFileList(res.files);
-  else setOutput(res);
+  else showMessage(res.error || res, 'error');
 }
 
 function initFiles(){
@@ -87,16 +93,37 @@ function initFiles(){
 document.addEventListener('DOMContentLoaded', ()=>{
   $('#btn-login').addEventListener('click', demoLogin);
   $('#btn-logout').addEventListener('click', logout);
-  $('#btn-data').addEventListener('click', async ()=> setOutput(await apiFetch('/data')));
-  $('#btn-metrics').addEventListener('click', async ()=> setOutput(await apiFetch('/metrics')));
-  $('#btn-restart').addEventListener('click', async ()=> setOutput(await apiFetch('/restart', {method:'POST'})));
+  $('#btn-vpn').addEventListener('click', toggleVPN);
+  $('#btn-access-local').addEventListener('click', ()=>{ document.getElementById('nav-files').click(); });
+  $('#btn-data').addEventListener('click', async ()=>{ const r = await apiFetch('/data'); showMessage(r.error ? r.error : 'Protected data retrieved', r.error ? 'error' : 'success'); });
+  $('#btn-metrics').addEventListener('click', async ()=>{ const r = await apiFetch('/metrics'); showMessage(r.error ? r.error : 'Metrics retrieved', r.error ? 'error' : 'success'); });
+  $('#btn-restart').addEventListener('click', async ()=>{ if(!confirm('Restart the service on the Pi?')) return; const r = await apiFetch('/restart', {method:'POST'}); showMessage(r.error ? r.error : 'Restart command sent', r.error ? 'error' : 'success'); });
 
   $('#nav-home').addEventListener('click', ()=>{ document.getElementById('controls').style.display='block'; document.getElementById('files').style.display='none'; document.getElementById('nav-home').classList.add('active'); document.getElementById('nav-files').classList.remove('active'); });
   $('#nav-files').addEventListener('click', ()=>{ document.getElementById('controls').style.display='none'; document.getElementById('files').style.display='block'; document.getElementById('nav-home').classList.remove('active'); document.getElementById('nav-files').classList.add('active'); initFiles(); });
+  $('#nav-controls').addEventListener('click', ()=>{ document.getElementById('controls').style.display='block'; document.getElementById('files').style.display='none'; document.getElementById('about').style.display='none'; document.getElementById('nav-home').classList.remove('active'); document.getElementById('nav-files').classList.remove('active'); document.getElementById('nav-controls').classList.add('active'); document.getElementById('nav-about').classList.remove('active'); });
+  $('#nav-about').addEventListener('click', ()=>{ document.getElementById('controls').style.display='none'; document.getElementById('files').style.display='none'; document.getElementById('about').style.display='block'; document.getElementById('nav-home').classList.remove('active'); document.getElementById('nav-files').classList.remove('active'); document.getElementById('nav-controls').classList.remove('active'); document.getElementById('nav-about').classList.add('active'); });
 
   if(localStorage.getItem('pincerna_token')){
     document.querySelectorAll('.status').forEach(el=>el.textContent = 'Token loaded from localStorage');
     $('#btn-logout').hidden = false;
     initFiles();
   }
+  const vpn = localStorage.getItem('pincerna_vpn') === '1';
+  updateVPNUI(vpn);
 });
+
+function updateVPNUI(connected){
+  const btn = document.getElementById('btn-vpn');
+  if(!btn) return;
+  if(connected){ btn.textContent = 'VPN Connected'; btn.classList.add('active'); }
+  else { btn.textContent = 'Start VPN'; btn.classList.remove('active'); }
+}
+
+async function toggleVPN(){
+  const now = localStorage.getItem('pincerna_vpn') === '1';
+  const next = !now;
+  localStorage.setItem('pincerna_vpn', next ? '1' : '0');
+  updateVPNUI(next);
+  setOutput(next ? 'VPN enabled (UI only). Configure WireGuard for real VPN.' : 'VPN disabled');
+}

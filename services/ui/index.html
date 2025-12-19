@@ -27,6 +27,8 @@
         <div>
           <button id="btn-login" class="btn primary">Sign in (demo)</button>
           <button id="btn-logout" class="btn" hidden>Sign out</button>
+          <button id="btn-vpn" class="btn vpn">Start VPN</button>
+          <button id="btn-access-local" class="btn ghost">Access Local Files</button>
         </div>
         <div class="status" id="login-status">Not signed in</div>
       </div>
@@ -54,9 +56,11 @@
       </div>
     </section>
 
-    <section class="card" id="output">
-      <h2>Output</h2>
-      <pre id="out">No activity yet.</pre>
+    <section class="card" id="about" style="display:none">
+      <h2>About</h2>
+      <p class="lead">Pincerna Cloud — personal device management and file access. This interface is a lightweight control panel for your Raspberry Pi. Use <strong>Files</strong> to browse storage, and <strong>VPN</strong> to connect your device to your home network.</p>
+      <p class="lead">Security: authentication is required for protected actions. Do not expose direct file shares to the public internet — use the VPN for full network access.</p>
+      <p class="lead">Current features: demo sign-in, file browser UI (requires backend API), VPN UI toggle (placeholder), and device controls (restart, metrics).</p>
     </section>
   </main>
 
