@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC_DIR="$REPO_ROOT/services/ui"
-WWW_DIR="/var/www/pincerna"
+WWW_DIR="/var/www/pincerna/cloud"
 
 echo "Deploying UI from ${SRC_DIR} -> ${WWW_DIR}"
 
@@ -12,10 +12,11 @@ if [ ! -d "$SRC_DIR" ]; then
   exit 1
 fi
 
-sudo mkdir -p "$WWW_DIR"
+
+sudo mkdir -p "$(dirname "$WWW_DIR")"
 sudo rsync -a --delete --chown=www-data:www-data "$SRC_DIR/" "$WWW_DIR/"
 
-sudo chown -R www-data:www-data "$WWW_DIR"
+sudo chown -R www-data:www-data "$(dirname "$WWW_DIR")"
 
 sudo systemctl reload nginx
 
