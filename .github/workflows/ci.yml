@@ -1,0 +1,11 @@
+name: CI
+
+on: [push]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: pip install -r docs/requirements.txt
+      - run: python -m py_compile services/api/app.py

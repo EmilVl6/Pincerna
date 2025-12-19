@@ -1,9 +1,13 @@
 from flask import Flask, jsonify, request
 import jwt
 import datetime
+import logging
+import psutil
 
 app = Flask(__name__)
 SECRET = "bartendershandbook"
+
+logging.basicConfig(filename="api.log", level=logging.INFO)
 
 @app.route("/login", methods=["POST"])
 def login():
@@ -33,6 +37,13 @@ def health():
 @protected
 def data():
 	return jsonify(message="Local Bartender (CLASSY SERVER) Breathes")
+
+@app.route("/metrics")
+def metrics():
+	return jsonify(
+		cpu=psutil.cpu_percent(),
+		memory=psutil.virtual_memory().percent
+	)
 
 if __name__ == "__main__":
 	app.run(host="0.0.0.0", port=5002)
