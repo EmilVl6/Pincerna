@@ -1,0 +1,15 @@
+[Unit]
+Description=Pincerna Flask API
+After=network.target
+
+[Service]
+User=pi
+Group=www-data
+WorkingDirectory=/home/pi/Pincerna/services/api
+# Update this to point to your virtualenv python
+Environment="PATH=/home/pi/Pincerna/.venv/bin"
+ExecStart=/home/pi/Pincerna/.venv/bin/gunicorn -w 2 -b 127.0.0.1:5002 app:app
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
