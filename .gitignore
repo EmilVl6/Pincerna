@@ -1,0 +1,16 @@
+#Python
+__pycache__/
+*.pyc
+
+#venv
+bin/
+lib/
+lib64/
+include/
+pyvenv.cfg
+
+#env
+.env
+
+#os
+.DS_Store
