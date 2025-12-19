@@ -1,0 +1,6 @@
+[DNS-01 Cloudflare credentials template]
+# Create an API Token in Cloudflare with the following permission scope:
+#  - Zone:DNS:Edit for your zone (e.g. emilvinod.com)
+# Save the token on the Pi as /etc/letsencrypt/cloudflare.ini (owner root, mode 600).
+
+dns_cloudflare_api_token = <YOUR_CLOUDFLARE_API_TOKEN>
