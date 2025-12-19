@@ -37,6 +37,7 @@ async function apiFetch(path, opts={}){
   try{
     const res = await fetch(apiBase + path, {...opts, headers});
     const txt = await res.text();
+    if(typeof txt === 'string' && txt.trim().startsWith('<')) return {error:'server_returned_html'};
     try{ return JSON.parse(txt) }catch(e){ return txt }
   }catch(e){ return {error: e.message} }
 }
@@ -79,6 +80,7 @@ function renderFileList(items){
 async function refreshFiles(){
   const res = await listFiles();
   if(res && res.files) renderFileList(res.files);
+  else if(res && res.error === 'server_returned_html') showMessage('Server returned HTML instead of JSON; backend missing or misconfigured','error');
   else showMessage(res.error || res, 'error');
 }
 
