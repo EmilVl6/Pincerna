@@ -7,18 +7,16 @@
   <title>Pincerna — Sign in</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="icon" href="pincerna.svg" type="image/svg+xml">
-  <!-- Cloudflare Turnstile (replace SITE_KEY with your site key) -->
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
   <main class="auth-wrap">
     <div class="auth-card">
-      <h1 class="auth-title">ID, Please!</h1>
+      <h1 class="auth-title">Log in to Pincerna</h1>
       <div class="auth-verify">
         <div id="turnstile-container" style="min-height:80px;display:flex;align-items:center;justify-content:center">
-          <!-- widget will be rendered here after fetching the public site key -->
         </div>
-        <div class="cf-status"><span id="cf-status-text">Please complete the verification</span></div>
+      
       </div>
       <div class="auth-actions">
         <a id="signin-btn" class="btn gbtn disabled" href="/cloud/api/oauth/start" aria-disabled="true">
@@ -31,15 +29,9 @@
   <script>
     (function(){
       const btn = document.getElementById('signin-btn');
-      const statusText = document.getElementById('cf-status-text');
       if(!btn) return;
-      
-      btn.classList.add('disabled');
-      btn.setAttribute('aria-disabled','true');
 
-      
       window.onTurnstileSuccess = function(token){
-        statusText.textContent = 'Verifying...';
         fetch('/cloud/api/verify_turnstile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -48,40 +40,25 @@
           if(j && j.success){
             btn.classList.remove('disabled');
             btn.removeAttribute('aria-disabled');
-            statusText.innerHTML = '<span class="cf-success">Success</span>';
-          } else {
-            btn.classList.add('disabled');
-            btn.setAttribute('aria-disabled','true');
-            statusText.innerHTML = '<span class="cf-failed">Verification failed</span>';
           }
-        }).catch(e=>{
-          btn.classList.add('disabled');
-          btn.setAttribute('aria-disabled','true');
-          statusText.innerHTML = '<span class="cf-failed">Verification error</span>';
-        });
+        }).catch(()=>{});
       };
-      
+
       fetch('/cloud/api/config').then(r=>r.json()).then(cfg=>{
         const sitekey = cfg && cfg.turnstile_sitekey;
-        if(!sitekey){
-          statusText.textContent = 'Verification not configured';
-          return;
-        }
-        
+        if(!sitekey) return;
         function renderWhenReady(){
           if(window.turnstile && typeof window.turnstile.render === 'function'){
-            
             window.turnstile.render(document.getElementById('turnstile-container'), {
               sitekey: sitekey,
               callback: 'onTurnstileSuccess'
             });
-            statusText.textContent = 'Please complete the verification';
             return;
           }
           setTimeout(renderWhenReady, 150);
         }
         renderWhenReady();
-      }).catch(()=>{ statusText.textContent = 'Verification unavailable'; });
+      }).catch(()=>{});
     })();
   </script>
 </body>
