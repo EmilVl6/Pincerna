@@ -73,4 +73,22 @@ body{
 .preloader-indicator{margin-top:8px;color:var(--muted);font-weight:300;font-size:0.68rem;text-align:center;min-height:18px}
 .preloader-indicator.error{color:#ff6b6b;font-weight:600}
 
+/* auth page styles */
+.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#f6f8fa,#f1f5f8)}
+.auth-card{width:520px;max-width:94%;padding:32px;border-radius:12px;background:#fff;box-shadow:0 14px 40px rgba(15,23,42,0.08);text-align:center}
+.auth-title{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;font-size:22px;font-weight:700;margin:0 0 6px}
+.auth-sub{color:var(--muted);margin:0 0 18px}
+.auth-actions{margin-top:8px}
+.gbtn{display:inline-block;padding:12px 20px;border-radius:10px;background:#fff;color:#202124;border:1px solid rgba(0,0,0,0.08);text-decoration:none;font-weight:700}
+.gbtn:hover{box-shadow:0 8px 24px rgba(2,6,23,0.06)}
+.gbtn:active{transform:translateY(1px)}
+.gbtn{min-width:220px}
+
+/* small visual tweak for preloader steps to appear as contiguous blocks */
+.preloader-progress{display:flex;gap:6px;align-items:flex-start;justify-content:center}
+.preloader-progress .step-wrap{display:flex;flex-direction:column;align-items:center;gap:0;width:44px}
+.preloader-progress .step{width:44px;height:18px;border-radius:6px;background:rgba(15,23,42,0.06);overflow:hidden;position:relative;transition:background-color 140ms ease, opacity 140ms ease}
+.preloader-progress .step.done{background:var(--primary)}
+.preloader-progress .step.error{background:#ff6b6b}
+
 
