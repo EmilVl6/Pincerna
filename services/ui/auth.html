@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <base href="/cloud/">
   <title>Pincerna Auth</title>
-  <link rel="stylesheet" href="styles2.css">
+  <link rel="stylesheet" href="styles_sec.css">
   <link rel="icon" href="pincerna.svg" type="image/svg+xml">
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
@@ -48,26 +48,17 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token })
-        }).then(r=>{
-          if(!r.ok){
-            // server returned error — allow local fallback so user can still try sign-in
-            console.warn('verify_turnstile not OK', r.status);
-            enableSignIn();
-            return null;
-          }
-          return r.json();
-        }).then(j=>{
-          if(j && j.success){
-            enableSignIn();
-          } else if(j && j.success === false){
-            // explicit failure: keep disabled but log
-            console.warn('turnstile verification failed');
-          }
-        }).catch(err=>{
-          // network error — allow user to proceed (fallback)
-          console.warn('verify_turnstile fetch failed', err);
-          enableSignIn();
-        });
+        }).then(r => r.ok ? r.json() : null)
+          .then(j => {
+            if(j && j.success){
+              enableSignIn();
+            } else {
+              console.warn('Turnstile verification failed or unavailable');
+            }
+          })
+          .catch(err => {
+            console.warn('verify_turnstile fetch failed', err);
+          });
       };
 
       fetch('/cloud/api/config').then(r=>r.json()).then(cfg=>{
