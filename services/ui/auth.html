@@ -31,7 +31,7 @@
       const btn = document.getElementById('signin-btn');
       if(!btn) return;
 
-      const _origHref = btn.getAttribute('href') || '';
+      const _origHref = btn.getAttribute('href') || '/cloud/api/oauth/start';
       btn.removeAttribute('href');
       btn.setAttribute('aria-disabled','true');
       btn.setAttribute('tabindex','-1');
