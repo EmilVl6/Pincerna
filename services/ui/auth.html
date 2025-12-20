@@ -33,12 +33,19 @@
     (function(){
       const chk = document.getElementById('cf-check');
       const btn = document.getElementById('signin-btn');
+      const cfText = document.querySelector('.cf-text');
       if(!chk || !btn) return;
       chk.addEventListener('change', ()=>{
-        if(chk.checked){ btn.classList.remove('disabled'); btn.removeAttribute('aria-disabled'); }
-        else { btn.classList.add('disabled'); btn.setAttribute('aria-disabled','true'); }
+        if(chk.checked){
+          btn.classList.remove('disabled');
+          btn.removeAttribute('aria-disabled');
+          if (cfText) cfText.innerHTML = '<span class="cf-success"><span>Success!</span></span>';
+        } else {
+          btn.classList.add('disabled');
+          btn.setAttribute('aria-disabled','true');
+          if (cfText) cfText.textContent = "Let us know you're human";
+        }
       });
-      // ensure button disabled by default
       btn.classList.add('disabled');
       btn.setAttribute('aria-disabled','true');
     })();
