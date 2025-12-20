@@ -297,17 +297,26 @@ def oauth_start():
 
 @app.route('/oauth/callback')
 def oauth_callback():
-	# Exchange code for tokens using stored code_verifier
+	# Handle errors from Google (user cancelled, denied access, etc.)
 	error = request.args.get('error')
+	error_desc = request.args.get('error_description', '')
 	if error:
-		return f'OAuth error: {error}', 400
+		if error == 'access_denied':
+			return _access_denied_page("Sign in was cancelled"), 200
+		return _access_denied_page(f"Authentication failed"), 200
+	
 	code = request.args.get('code')
 	state = request.args.get('state')
 	if not code or not state:
-		return 'Missing parameters', 400
+		return _access_denied_page("Missing authentication data"), 200
+	
+	# Reload oauth store from disk to handle server restarts
+	_load_oauth_store()
 	stored = OAUTH_STORE.get(state)
 	if not stored or stored.get('expires',0) < int(time.time()):
-		return 'Invalid or expired state', 400
+		# State expired or missing - redirect back to auth to try again
+		return ('', 302, {'Location': '/cloud/auth.html'})
+	
 	code_verifier = stored.get('code_verifier')
 	# exchange
 	token_url = 'https://oauth2.googleapis.com/token'
@@ -329,10 +338,10 @@ def oauth_callback():
 			resp_j = json.load(resp)
 	except Exception as e:
 		logging.exception('token exchange failed')
-		return f'Token exchange failed: {e}', 500
+		return _access_denied_page('Authentication failed'), 200
 	id_token = resp_j.get('id_token')
 	if not id_token:
-		return 'No id_token returned', 500
+		return _access_denied_page('Authentication failed'), 200
 	# verify id_token via tokeninfo
 	try:
 		url = 'https://oauth2.googleapis.com/tokeninfo?' + urllib.parse.urlencode({'id_token': id_token})
@@ -340,11 +349,11 @@ def oauth_callback():
 			payload = json.load(r)
 	except Exception as e:
 		logging.exception('tokeninfo failed')
-		return f'id_token verification failed: {e}', 500
+		return _access_denied_page('Authentication failed'), 200
 	email = payload.get('email')
 	verified = payload.get('email_verified') in ('true', True, '1')
 	if not email or not verified:
-		return _access_denied_page('Email not verified'), 400
+		return _access_denied_page('Email not verified'), 200
 	# check allowed
 	try:
 		base = os.path.dirname(__file__)
