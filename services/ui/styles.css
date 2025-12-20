@@ -14,7 +14,6 @@ html,body{height:100%}
 body{
   margin:0;
   font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
-  background: linear-gradient(135deg,#0b0b0b 0%, #0b0b0b 42%, rgba(255,106,0,0.06) 65%, rgba(255,106,0,0.12) 100%);
   color:var(--text);
   -webkit-font-smoothing:antialiased;
 }
@@ -75,7 +74,7 @@ body{
 
 /* auth page styles */
 .auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center}
-.auth-card{width:fit-content;min-width:360px;padding:28px;border-radius:12px;background:#fff;box-shadow:0 18px 60px rgba(11,11,11,0.28);text-align:center}
+.auth-card{width:auto;padding:28px 32px;border-radius:12px;background:#fff;box-shadow:0 24px 80px rgba(11,11,11,0.32);text-align:center}
 .auth-title{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;font-size:22px;font-weight:700;margin:0 0 6px}
 .auth-sub{color:var(--muted);margin:0 0 18px}
 .auth-actions{margin-top:8px}
@@ -103,7 +102,15 @@ body{
 .auth-card .auth-actions{width:100%;display:flex;justify-content:center}
 .gbtn{width:100%}
 
-body::before{content:'';position:fixed;inset:0;pointer-events:none;background-image:radial-gradient(circle at 10% 20%, rgba(255,106,0,0.06), transparent 10%), radial-gradient(circle at 80% 30%, rgba(255,106,0,0.04), transparent 20%), repeating-linear-gradient(45deg, rgba(0,0,0,0.02) 0 2px, rgba(255,106,0,0.01) 2px 4px);mix-blend-mode:overlay;opacity:0.9}
+body::before{content:'';position:fixed;inset:0;z-index:-1;background:linear-gradient(120deg,#070707 0%,#0b0b0b 30%,#ffecd9 60%,#ffebdf 100%);background-size:200% 200%;animation:bgShift 8s linear infinite}
+
+@keyframes bgShift{
+  0%{background-position:0% 50%}
+  50%{background-position:100% 50%}
+  100%{background-position:0% 50%}
+}
+
+body::after{content:'';position:fixed;inset:0;pointer-events:none;background-image:radial-gradient(circle at 10% 20%, rgba(255,106,0,0.06), transparent 10%), radial-gradient(circle at 80% 30%, rgba(255,106,0,0.04), transparent 20%), repeating-linear-gradient(45deg, rgba(0,0,0,0.02) 0 2px, rgba(255,106,0,0.01) 2px 4px);mix-blend-mode:overlay;opacity:0.9}
 
 /* Cloudflare verify box */
 .auth-verify{display:flex;justify-content:center;margin-bottom:14px}

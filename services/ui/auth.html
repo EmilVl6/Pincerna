@@ -31,6 +31,11 @@
       const btn = document.getElementById('signin-btn');
       if(!btn) return;
 
+      const _origHref = btn.getAttribute('href') || '';
+      btn.removeAttribute('href');
+      btn.setAttribute('aria-disabled','true');
+      btn.setAttribute('tabindex','-1');
+
       window.onTurnstileSuccess = function(token){
         fetch('/cloud/api/verify_turnstile', {
           method: 'POST',
@@ -40,6 +45,8 @@
           if(j && j.success){
             btn.classList.remove('disabled');
             btn.removeAttribute('aria-disabled');
+            btn.removeAttribute('tabindex');
+            if(_origHref) btn.setAttribute('href', _origHref);
           }
         }).catch(()=>{});
       };
