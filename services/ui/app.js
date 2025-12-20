@@ -65,6 +65,42 @@ function markStepError(i){
   }catch(e){}
 }
 
+function _fetchWithTimeout(url, opts={}, timeout=3000){
+  return new Promise((resolve, reject)=>{
+    const t = setTimeout(()=>reject(new Error('timeout')), timeout);
+    fetch(url, opts).then(r=>{ clearTimeout(t); resolve(r); }).catch(e=>{ clearTimeout(t); reject(e); });
+  });
+}
+
+async function animateProgress(delayMs=220){
+  for(let i=0;i<progressSteps.length;i++){
+    if(preloaderFailed) break;
+    const step = progressSteps[i];
+    setIndicator(step.name);
+    // handler for specific steps
+    try{
+      if(i === 3){
+        // Connecting to backend: check health endpoint
+        try{
+          const res = await _fetchWithTimeout(apiBase + '/health', {}, 3000);
+          if(!res || !res.ok){ markStepError(i); break; }
+          markStepDone(i);
+        }catch(e){ markStepError(i); break; }
+      } else if(i === 4){
+        // Authenticating: ensure token exists
+        const token = localStorage.getItem('pincerna_token');
+        if(!token){ markStepError(i); break; }
+        markStepDone(i);
+      } else {
+        // simple progress mark after delay
+        await new Promise(r=>setTimeout(r, delayMs));
+        markStepDone(i);
+      }
+    }catch(e){ markStepError(i); break; }
+  }
+  if(!preloaderFailed) hidePreloader(300);
+}
+
 function nextIncomplete(){ try{ return progressSteps.findIndex(s=>!s.rect.classList.contains('done') && !s.rect.classList.contains('error')); }catch(e){return -1} }
 
 const PROGRESS_NAMES = ['Initializing interface','Loading assets','Resolving tunnel','Connecting to backend','Authenticating','Loading files','Ready'];
