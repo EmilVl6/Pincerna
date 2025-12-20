@@ -286,24 +286,57 @@ document.addEventListener('DOMContentLoaded', ()=>{
     else showMessage('Restart command sent', 'info');
   });
 
-  $('#nav-home').addEventListener('click', ()=>{
-    // show main hero/dashboard
-    const hero = document.getElementById('hero'); if(hero) hero.style.display = 'block';
-    const files = document.getElementById('files'); if(files) files.style.display = 'none';
-    const metrics = document.getElementById('metrics'); if(metrics) metrics.style.display = 'none';
-    const about = document.getElementById('about'); if(about) about.style.display = 'none';
-    document.getElementById('nav-home').classList.add('active'); document.getElementById('nav-files').classList.remove('active'); document.getElementById('nav-about').classList.remove('active');
-  });
-  $('#nav-files').addEventListener('click', ()=>{ const files = document.getElementById('files'); if(files) files.style.display='block'; const hero = document.getElementById('hero'); if(hero) hero.style.display='none'; document.getElementById('nav-home').classList.remove('active'); document.getElementById('nav-files').classList.add('active'); initFiles(); });
-  $('#nav-about').addEventListener('click', ()=>{ const about = document.getElementById('about'); if(about) about.style.display='block'; const hero = document.getElementById('hero'); if(hero) hero.style.display='none'; const files = document.getElementById('files'); if(files) files.style.display='none'; document.getElementById('nav-home').classList.remove('active'); document.getElementById('nav-files').classList.remove('active'); document.getElementById('nav-about').classList.add('active'); });
+  // Navigation - clean section switching
+  function showSection(sectionId) {
+    // Hide all sections
+    ['hero', 'controls', 'files', 'metrics', 'about'].forEach(id => {
+      const el = document.getElementById(id);
+      if(el) el.style.display = 'none';
+    });
+    // Remove active from all nav
+    document.querySelectorAll('.nav a').forEach(a => a.classList.remove('active'));
+    
+    // Show requested section(s)
+    if(sectionId === 'home') {
+      const hero = document.getElementById('hero');
+      const controls = document.getElementById('controls');
+      if(hero) hero.style.display = 'block';
+      if(controls) controls.style.display = 'block';
+      const navHome = document.getElementById('nav-home');
+      if(navHome) navHome.classList.add('active');
+    } else if(sectionId === 'files') {
+      const files = document.getElementById('files');
+      if(files) files.style.display = 'block';
+      const navFiles = document.getElementById('nav-files');
+      if(navFiles) navFiles.classList.add('active');
+    } else if(sectionId === 'about') {
+      const about = document.getElementById('about');
+      if(about) about.style.display = 'block';
+      const navAbout = document.getElementById('nav-about');
+      if(navAbout) navAbout.classList.add('active');
+    }
+  }
+  
+  $('#nav-home').addEventListener('click', (e) => { e.preventDefault(); showSection('home'); });
+  $('#nav-files').addEventListener('click', (e) => { e.preventDefault(); showSection('files'); refreshFiles(); });
+  $('#nav-about').addEventListener('click', (e) => { e.preventDefault(); showSection('about'); });
 
   if(localStorage.getItem('pincerna_token')){
     // User is authenticated - initialize the app
     if(indicator) indicator.textContent = 'Loading';
-    initFiles().then(()=>{
-      hidePreloader(400);
-    }).catch(()=>{
-      hidePreloader(400);
+    // Show dashboard by default
+    showSection('home');
+    // Check backend health and hide preloader
+    fetch(apiBase + '/health').then(r => {
+      if(r.ok) {
+        hidePreloader(300);
+      } else {
+        if(indicator) indicator.textContent = 'Backend unavailable';
+        hidePreloader(1500);
+      }
+    }).catch(() => {
+      if(indicator) indicator.textContent = 'Cannot connect to server';
+      hidePreloader(1500);
     });
   } else {
     // No token - redirect to auth
