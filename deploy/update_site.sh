@@ -108,45 +108,37 @@ fi
 
 
 
-log_step "2/8" "Configuring credentials"
+log_step "2/8" "Checking credentials"
 
-
+# Only create env file if it doesn't exist - NEVER overwrite existing credentials
 if [ ! -f "$ENV_FILE" ]; then
-    touch "$ENV_FILE"
-    chmod 640 "$ENV_FILE"
-fi
-
-echo ""
-echo "Checking OAuth and Turnstile credentials..."
-echo "(Press Enter to keep existing values)"
-echo ""
-
-
-GOOGLE_CLIENT_ID=$(get_credential "GOOGLE_CLIENT_ID" "Google OAuth Client ID")
-GOOGLE_CLIENT_SECRET=$(get_credential "GOOGLE_CLIENT_SECRET" "Google OAuth Client Secret")
-TURNSTILE_SITEKEY=$(get_credential "TURNSTILE_SITEKEY" "Cloudflare Turnstile Site Key")
-TURNSTILE_SECRET=$(get_credential "TURNSTILE_SECRET" "Cloudflare Turnstile Secret Key")
-
-
-cat > "$ENV_FILE" <<EOL
+    echo "Creating new credentials file at $ENV_FILE"
+    echo "You will need to edit this file and add your keys manually."
+    cat > "$ENV_FILE" <<EOL
 # Pincerna Environment Configuration
-# Generated on $(date)
+# Edit this file to add your credentials
 
-# Google OAuth
-GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+# Google OAuth (from console.cloud.google.com)
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
 
-# Cloudflare Turnstile
-TURNSTILE_SITEKEY=${TURNSTILE_SITEKEY}
-TURNSTILE_SECRET=${TURNSTILE_SECRET}
+# Cloudflare Turnstile (from dash.cloudflare.com -> Turnstile)
+TURNSTILE_SITEKEY=
+TURNSTILE_SECRET=
 
-# File storage
+# File storage root
 FILES_ROOT=${FILES_ROOT}
 EOL
+    chmod 640 "$ENV_FILE"
+    log_warn "Created $ENV_FILE - you MUST edit it to add your credentials!"
+    log_warn "Run: sudo nano $ENV_FILE"
+else
+    log_success "Credentials file exists at $ENV_FILE (not modified)"
+    # Source existing values to check them
+    . "$ENV_FILE" 2>/dev/null || true
+fi
 
-chmod 640 "$ENV_FILE"
-
-# Warn if credentials are missing
+# Check if credentials are set
 MISSING_CREDS=""
 [ -z "$GOOGLE_CLIENT_ID" ] && MISSING_CREDS="$MISSING_CREDS GOOGLE_CLIENT_ID"
 [ -z "$GOOGLE_CLIENT_SECRET" ] && MISSING_CREDS="$MISSING_CREDS GOOGLE_CLIENT_SECRET"
@@ -154,10 +146,10 @@ MISSING_CREDS=""
 [ -z "$TURNSTILE_SECRET" ] && MISSING_CREDS="$MISSING_CREDS TURNSTILE_SECRET"
 
 if [ -n "$MISSING_CREDS" ]; then
-    log_warn "Missing credentials:$MISSING_CREDS"
-    log_warn "Edit $ENV_FILE to add them, then run: sudo systemctl restart pincerna"
+    log_warn "Missing credentials in $ENV_FILE:$MISSING_CREDS"
+    log_warn "Edit $ENV_FILE to add them, then: sudo systemctl restart pincerna"
 else
-    log_success "All credentials configured"
+    log_success "All credentials found"
 fi
 
 

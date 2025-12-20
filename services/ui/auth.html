@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <base href="/cloud/">
   <title>Pincerna Auth</title>
+  <script>
+    // If already logged in, go to dashboard
+    (function(){ try{ if(localStorage.getItem('pincerna_token')){ window.location.replace('index.html'); } }catch(e){} })();
+  </script>
   <link rel="stylesheet" href="styles_sec.css">
   <link rel="icon" href="pincerna.svg" type="image/svg+xml">
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
