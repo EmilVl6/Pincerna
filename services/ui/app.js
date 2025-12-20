@@ -247,18 +247,51 @@ async function listFiles(path = currentPath) {
 }
 
 function getFileIcon(name, isDir) {
-  if (isDir) return '📁';
+  if (isDir) return '🗎';
   const ext = name.split('.').pop().toLowerCase();
   const icons = {
-    'pdf': '📕', 'doc': '📘', 'docx': '📘', 'txt': '📄', 'md': '📝',
-    'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🖼️', 'svg': '🖼️', 'webp': '🖼️',
-    'mp3': '🎵', 'wav': '🎵', 'flac': '🎵', 'ogg': '🎵',
-    'mp4': '🎬', 'mkv': '🎬', 'avi': '🎬', 'mov': '🎬', 'webm': '🎬',
-    'zip': '📦', 'rar': '📦', '7z': '📦', 'tar': '📦', 'gz': '📦',
-    'js': '⚡', 'py': '🐍', 'html': '🌐', 'css': '🎨', 'json': '📋',
-    'exe': '⚙️', 'sh': '⚙️', 'bat': '⚙️'
-  };
-  return icons[ext] || '📄';
+  'pdf': '⌘',      
+  'doc': '≡',
+  'docx': '≡',
+  'txt': '⎘',
+  'md': '✎',
+
+  'jpg': '▣',
+  'jpeg': '▣',
+  'png': '▣',
+  'gif': '▣',
+  'svg': '▣',
+  'webp': '▣',
+
+  'mp3': '♪',
+  'wav': '♪',
+  'flac': '♪',
+  'ogg': '♪',
+
+  'mp4': '▶',
+  'mkv': '▶',
+  'avi': '▶',
+  'mov': '▶',
+  'webm': '▶',
+
+  'zip': '⬚',
+  'rar': '⬚',
+  '7z': '⬚',
+  'tar': '⬚',
+  'gz': '⬚',
+
+  'js': '{}',
+  'py': 'λ',
+  'html': '<>',
+  'css': '#',
+  'json': '⋯',
+
+  'exe': '⚙',
+  'sh': '⚙',
+  'bat': '⚙'
+}
+;
+  return icons[ext] || '🗎';
 }
 
 function renderFileList(items, path) {
@@ -270,7 +303,7 @@ function renderFileList(items, path) {
     upDiv.className = 'file-entry file-dir';
     upDiv.innerHTML = `
       <div class="file-info">
-        <span class="file-icon">📁</span>
+        <span class="file-icon">🗎</span>
         <div class="file-details">
           <div class="file-name">..</div>
           <div class="file-meta">Parent directory</div>
@@ -285,7 +318,7 @@ function renderFileList(items, path) {
   }
 
   if (!items || !Array.isArray(items) || items.length === 0) {
-    if (path === '/') out.innerHTML += '<div class="file-entry"><div class="file-info"><span class="file-icon">📂</span><div class="file-details"><div class="file-name">Empty folder</div></div></div></div>';
+    if (path === '/') out.innerHTML += '<div class="file-entry"><div class="file-info"><span class="file-icon">🗐</span><div class="file-details"><div class="file-name">Empty folder</div></div></div></div>';
     return;
   }
 
@@ -307,9 +340,9 @@ function renderFileList(items, path) {
         </div>
       </div>
       <div class="actions">
-        ${!item.is_dir ? '<button class="btn btn-download" title="Download">📥</button>' : ''}
-        <button class="btn btn-rename" title="Rename">✏️</button>
-        <button class="btn btn-delete warn" title="Delete">🗑️</button>
+        ${!item.is_dir ? '<button class="btn btn-download" title="Download">⤓</button>' : ''}
+        <button class="btn btn-rename" title="Rename">✎</button>
+        <button class="btn btn-delete warn" title="Delete">⌫</button>
       </div>
     `;
 

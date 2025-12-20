@@ -21,7 +21,6 @@ SECRET = "bartendershandbook"
 EMAIL_CODES = {}
 
 OAUTH_STORE = {}
-# Use /tmp for oauth state - always writable and works across workers
 OAUTH_STATE_FILE = '/tmp/pincerna_oauth_state.json'
 
 def _load_oauth_store():
