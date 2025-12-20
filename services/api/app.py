@@ -314,8 +314,8 @@ def oauth_callback():
 	_load_oauth_store()
 	stored = OAUTH_STORE.get(state)
 	if not stored or stored.get('expires',0) < int(time.time()):
-		
-		return ('', 302, {'Location': '/cloud/auth.html'})
+		# State expired or not found - show error instead of silent redirect
+		return _access_denied_page("Session expired. Please try signing in again."), 200
 	
 	code_verifier = stored.get('code_verifier')
 	
@@ -384,10 +384,17 @@ def oauth_callback():
 	user_js = json.dumps(json.dumps(user_info))  # Double encode: Python dict -> JSON string -> JS string literal
 	
 	html = f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>
+<p id="msg">Signing you in...</p>
 <script>
-localStorage.setItem('pincerna_token', {token_js});
-localStorage.setItem('pincerna_user', {user_js});
-window.location.replace('/cloud/');
+try {{
+  localStorage.setItem('pincerna_token', {token_js});
+  localStorage.setItem('pincerna_user', {user_js});
+  document.getElementById('msg').textContent = 'Success! Redirecting...';
+  setTimeout(function() {{ window.location.replace('/cloud/index.html'); }}, 100);
+}} catch(e) {{
+  document.getElementById('msg').textContent = 'Error: ' + e.message;
+  console.error('Auth callback error:', e);
+}}
 </script>
 </body></html>"""
 	return html
