@@ -37,16 +37,17 @@ REQ_FILE="$REPO_ROOT/services/api/requirements.txt"
 if [ ! -d "$VENV_PATH" ]; then
   echo "Creating venv at $VENV_PATH"
   sudo python3 -m venv "$VENV_PATH"
-  sudo "$VENV_PATH/bin/pip" install --upgrade pip setuptools wheel || true
+  sudo "$VENV_PATH/bin/python" -m pip install --upgrade pip setuptools wheel || true
 fi
 if [ -f "$REQ_FILE" ]; then
   echo "Installing Python requirements from $REQ_FILE"
-  sudo "$VENV_PATH/bin/pip" install -r "$REQ_FILE" || true
+  sudo "$VENV_PATH/bin/python" -m pip install --no-cache-dir -r "$REQ_FILE" || true
 fi
 sudo chown -R www-data:www-data "$VENV_PATH" || true
 
 API_LOG="$REPO_ROOT/api.log"
 if [ ! -f "$API_LOG" ]; then
+  sudo mkdir -p "$(dirname "$API_LOG")"
   sudo touch "$API_LOG"
 fi
 sudo chown www-data:www-data "$API_LOG" || true
@@ -63,6 +64,10 @@ Type=simple
 User=www-data
 WorkingDirectory=${REPO_ROOT}
 Environment=FLASK_ENV=production
+EnvironmentFile=/etc/default/pincerna
+ExecStartPre=/bin/mkdir -p /var/log/pincerna
+ExecStartPre=/bin/touch ${API_LOG}
+ExecStartPre=/bin/chown www-data:www-data ${API_LOG}
 ExecStart=${VENV_PATH}/bin/gunicorn -b 127.0.0.1:5002 services.api.app:app --workers 2 --chdir ${REPO_ROOT}
 Restart=on-failure
 
