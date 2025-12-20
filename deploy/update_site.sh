@@ -129,23 +129,36 @@ TURNSTILE_SECRET=$(get_credential "TURNSTILE_SECRET" "Cloudflare Turnstile Secre
 
 
 cat > "$ENV_FILE" <<EOL
+# Pincerna Environment Configuration
+# Generated on $(date)
 
-
-
-
+# Google OAuth
 GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
 GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
 
-
+# Cloudflare Turnstile
 TURNSTILE_SITEKEY=${TURNSTILE_SITEKEY}
 TURNSTILE_SECRET=${TURNSTILE_SECRET}
 
-
+# File storage
 FILES_ROOT=${FILES_ROOT}
 EOL
 
 chmod 640 "$ENV_FILE"
-log_success "Credentials configured in $ENV_FILE"
+
+# Warn if credentials are missing
+MISSING_CREDS=""
+[ -z "$GOOGLE_CLIENT_ID" ] && MISSING_CREDS="$MISSING_CREDS GOOGLE_CLIENT_ID"
+[ -z "$GOOGLE_CLIENT_SECRET" ] && MISSING_CREDS="$MISSING_CREDS GOOGLE_CLIENT_SECRET"
+[ -z "$TURNSTILE_SITEKEY" ] && MISSING_CREDS="$MISSING_CREDS TURNSTILE_SITEKEY"
+[ -z "$TURNSTILE_SECRET" ] && MISSING_CREDS="$MISSING_CREDS TURNSTILE_SECRET"
+
+if [ -n "$MISSING_CREDS" ]; then
+    log_warn "Missing credentials:$MISSING_CREDS"
+    log_warn "Edit $ENV_FILE to add them, then run: sudo systemctl restart pincerna"
+else
+    log_success "All credentials configured"
+fi
 
 
 
@@ -329,6 +342,43 @@ fi
 
 # Remove any broken symlinks in sites-enabled
 find /etc/nginx/sites-enabled -xtype l -delete 2>/dev/null || true
+
+# Fix snakeoil cert references - create them if missing, or remove references
+SNAKEOIL_CERT="/etc/ssl/certs/ssl-cert-snakeoil.pem"
+SNAKEOIL_KEY="/etc/ssl/private/ssl-cert-snakeoil.key"
+if [ ! -f "$SNAKEOIL_CERT" ] || [ ! -f "$SNAKEOIL_KEY" ]; then
+    echo "Creating snakeoil certificates to fix nginx references..."
+    # Either install ssl-cert package or create dummy certs
+    if apt-get install -y ssl-cert >/dev/null 2>&1; then
+        log_success "Installed ssl-cert package"
+    else
+        # Create dummy snakeoil certs
+        openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+            -keyout "$SNAKEOIL_KEY" -out "$SNAKEOIL_CERT" \
+            -subj "/CN=localhost" >/dev/null 2>&1
+        chmod 640 "$SNAKEOIL_KEY"
+        chmod 644 "$SNAKEOIL_CERT"
+        log_success "Created snakeoil certificates"
+    fi
+fi
+
+# Also check conf.d for any problematic configs
+for conf in /etc/nginx/conf.d/*.conf; do
+    if [ -f "$conf" ] && grep -q "snakeoil" "$conf" 2>/dev/null; then
+        log_warn "Found snakeoil reference in $conf - disabling"
+        mv "$conf" "${conf}.disabled" 2>/dev/null || true
+    fi
+done
+
+# Check sites-enabled for any other configs with snakeoil
+for conf in /etc/nginx/sites-enabled/*; do
+    if [ -f "$conf" ] && [ "$conf" != "$NGINX_ENABLED" ]; then
+        if grep -q "snakeoil" "$conf" 2>/dev/null; then
+            log_warn "Found snakeoil reference in $conf - disabling"
+            rm -f "$conf" 2>/dev/null || true
+        fi
+    fi
+done
 
 mkdir -p /var/log/nginx
 chown root:adm /var/log/nginx
