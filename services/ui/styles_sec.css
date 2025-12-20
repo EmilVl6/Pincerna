@@ -305,3 +305,70 @@ section h2 {
 .context-menu-item:hover {
 	background: #333;
 }
+.auth-wrap {
+	min-height: 100vh;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: #0a0a0a;
+}
+.auth-card {
+	width: 400px;
+	max-width: 90vw;
+	padding: 40px;
+	border-radius: 16px;
+	background: #111;
+	border: 1px solid #222;
+	text-align: center;
+}
+.auth-title {
+	font-size: 1.5rem;
+	font-weight: 600;
+	margin: 0 0 24px;
+	letter-spacing: -0.02em;
+}
+.auth-body {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 24px;
+}
+.auth-verify {
+	display: flex;
+	justify-content: center;
+	min-height: 65px;
+}
+.auth-actions {
+	width: 100%;
+}
+.gbtn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	width: 100%;
+	padding: 14px 24px;
+	border-radius: 10px;
+	background: #fff;
+	color: #202124;
+	text-decoration: none;
+	font-weight: 600;
+	font-size: 0.9rem;
+	border: 1px solid #333;
+	transition: all 0.2s;
+}
+.gbtn:hover {
+	background: #f5f5f5;
+	box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.gbtn.disabled {
+	opacity: 0.4;
+	pointer-events: none;
+	cursor: not-allowed;
+}
+.glogo {
+	flex-shrink: 0;
+}
+.gbtn-text {
+	font-weight: 600;
+}
