@@ -54,6 +54,11 @@ sudo chown www-data:www-data "$API_LOG" || true
 sudo chmod 640 "$API_LOG" || true
 
 
+sudo mkdir -p /var/log/pincerna || true
+sudo chown www-data:www-data /var/log/pincerna || true
+sudo chmod 750 /var/log/pincerna || true
+
+
 ENV_FILE="/etc/default/pincerna"
 if [ ! -f "$ENV_FILE" ]; then
   echo "Creating default environment file at $ENV_FILE"
@@ -76,9 +81,7 @@ User=www-data
 WorkingDirectory=${REPO_ROOT}
 Environment=FLASK_ENV=production
 EnvironmentFile=/etc/default/pincerna
-ExecStartPre=/bin/mkdir -p /var/log/pincerna
-ExecStartPre=/bin/touch ${API_LOG}
-ExecStartPre=/bin/chown www-data:www-data ${API_LOG}
+
 ExecStart=${VENV_PATH}/bin/gunicorn -b 127.0.0.1:5002 services.api.app:app --workers 2 --chdir ${REPO_ROOT}
 Restart=on-failure
 
