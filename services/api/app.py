@@ -377,15 +377,19 @@ def oauth_callback():
 	except:
 		pass
 	
-	user_info = json.dumps({'email': email, 'name': user_name, 'given_name': user_given, 'picture': user_picture})
+	user_info = {'email': email, 'name': user_name, 'given_name': user_given, 'picture': user_picture}
 	
-	html = f"""<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head><body>
-	<script>
-	  localStorage.setItem('pincerna_token', {json.dumps(token)});
-	  localStorage.setItem('pincerna_user', {user_info});
-	  window.location.href = '/cloud/';
-	</script>
-	</body></html>"""
+	# Both values need to be JSON strings for JavaScript
+	token_js = json.dumps(token)
+	user_js = json.dumps(json.dumps(user_info))  # Double encode: Python dict -> JSON string -> JS string literal
+	
+	html = f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>
+<script>
+localStorage.setItem('pincerna_token', {token_js});
+localStorage.setItem('pincerna_user', {user_js});
+window.location.replace('/cloud/');
+</script>
+</body></html>"""
 	return html
 
 def protected(f):
