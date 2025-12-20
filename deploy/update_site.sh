@@ -334,49 +334,17 @@ if [ -f "$REPO_ROOT/nginx/pincerna_auth.conf.example" ]; then
     ln -sf "$NGINX_AVAILABLE" "$NGINX_ENABLED"
 fi
 
-# Disable default nginx site that may reference snakeoil certs
-if [ -f "/etc/nginx/sites-enabled/default" ]; then
-    rm -f /etc/nginx/sites-enabled/default
-    log_success "Disabled default nginx site"
-fi
-
-# Remove any broken symlinks in sites-enabled
+# Remove default nginx site and any configs referencing snakeoil certs
+rm -f /etc/nginx/sites-enabled/default 2>/dev/null
 find /etc/nginx/sites-enabled -xtype l -delete 2>/dev/null || true
 
-# Fix snakeoil cert references - create them if missing, or remove references
-SNAKEOIL_CERT="/etc/ssl/certs/ssl-cert-snakeoil.pem"
-SNAKEOIL_KEY="/etc/ssl/private/ssl-cert-snakeoil.key"
-if [ ! -f "$SNAKEOIL_CERT" ] || [ ! -f "$SNAKEOIL_KEY" ]; then
-    echo "Creating snakeoil certificates to fix nginx references..."
-    # Either install ssl-cert package or create dummy certs
-    if apt-get install -y ssl-cert >/dev/null 2>&1; then
-        log_success "Installed ssl-cert package"
-    else
-        # Create dummy snakeoil certs
-        openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
-            -keyout "$SNAKEOIL_KEY" -out "$SNAKEOIL_CERT" \
-            -subj "/CN=localhost" >/dev/null 2>&1
-        chmod 640 "$SNAKEOIL_KEY"
-        chmod 644 "$SNAKEOIL_CERT"
-        log_success "Created snakeoil certificates"
-    fi
-fi
-
-# Also check conf.d for any problematic configs
-for conf in /etc/nginx/conf.d/*.conf; do
-    if [ -f "$conf" ] && grep -q "snakeoil" "$conf" 2>/dev/null; then
-        log_warn "Found snakeoil reference in $conf - disabling"
-        mv "$conf" "${conf}.disabled" 2>/dev/null || true
-    fi
-done
-
-# Check sites-enabled for any other configs with snakeoil
-for conf in /etc/nginx/sites-enabled/*; do
-    if [ -f "$conf" ] && [ "$conf" != "$NGINX_ENABLED" ]; then
-        if grep -q "snakeoil" "$conf" 2>/dev/null; then
-            log_warn "Found snakeoil reference in $conf - disabling"
-            rm -f "$conf" 2>/dev/null || true
-        fi
+# Disable any config files that reference snakeoil (but not our site)
+for conf in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/*.conf; do
+    [ -f "$conf" ] || continue
+    [ "$conf" = "$NGINX_ENABLED" ] && continue
+    if grep -q "snakeoil" "$conf" 2>/dev/null; then
+        log_warn "Disabling $conf (references missing snakeoil certs)"
+        rm -f "$conf" 2>/dev/null || mv "$conf" "${conf}.disabled" 2>/dev/null || true
     fi
 done
 
