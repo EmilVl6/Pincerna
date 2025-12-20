@@ -1,205 +1,293 @@
 #!/usr/bin/env bash
+#
+# Pincerna - Complete Automated Installer & Deployer
+# Run with: sudo ./deploy/update_site.sh
+#
+# This script handles EVERYTHING automatically:
+# - Installs all dependencies
+# - Sets up credentials (prompts if not configured)
+# - Configures WireGuard VPN
+# - Deploys frontend and backend
+# - Starts all services
+#
 set -euo pipefail
 
+# =========================================
+# Configuration
+# =========================================
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC_DIR="$REPO_ROOT/services/ui"
 WWW_DIR="/var/www/pincerna/cloud"
 FILES_ROOT="/home/pincerna/files"
-
-echo "========================================="
-echo "Pincerna Deployment Script"
-echo "========================================="
-
-# =========================================
-# 1. Deploy UI files
-# =========================================
-echo ""
-echo "[1/7] Deploying UI from ${SRC_DIR} -> ${WWW_DIR}"
-
-if [ ! -d "$SRC_DIR" ]; then
-  echo "Source directory not found: $SRC_DIR" >&2
-  exit 1
-fi
-
-sudo mkdir -p "$(dirname "$WWW_DIR")"
-sudo rsync -a --delete --chown=www-data:www-data "$SRC_DIR/" "$WWW_DIR/"
-sudo chown -R www-data:www-data "$(dirname "$WWW_DIR")"
-echo "UI deployed to ${WWW_DIR}"
-
-# =========================================
-# 2. Set up file storage directory
-# =========================================
-echo ""
-echo "[2/7] Setting up file storage at ${FILES_ROOT}"
-
-sudo mkdir -p "$FILES_ROOT"
-sudo chown www-data:www-data "$FILES_ROOT"
-sudo chmod 750 "$FILES_ROOT"
-echo "File storage ready at ${FILES_ROOT}"
-
-# =========================================
-# 3. Install WireGuard VPN
-# =========================================
-echo ""
-echo "[3/7] Setting up WireGuard VPN"
-
-if ! command -v wg &> /dev/null; then
-  echo "Installing WireGuard..."
-  sudo apt-get update -qq
-  sudo apt-get install -y wireguard wireguard-tools
-fi
-
+ENV_FILE="/etc/default/pincerna"
+SYSTEMD_UNIT="/etc/systemd/system/pincerna.service"
+NGINX_AVAILABLE="/etc/nginx/sites-available/cloud.emilvinod.com"
+NGINX_ENABLED="/etc/nginx/sites-enabled/cloud.emilvinod.com"
+VENV_PATH="$REPO_ROOT/venv"
 WG_CONF="/etc/wireguard/wg0.conf"
-if [ ! -f "$WG_CONF" ]; then
-  echo "Creating WireGuard configuration template..."
-  
-  # Generate keys if they don't exist
-  WG_PRIVKEY="/etc/wireguard/privatekey"
-  WG_PUBKEY="/etc/wireguard/publickey"
-  if [ ! -f "$WG_PRIVKEY" ]; then
-    sudo bash -c "wg genkey > $WG_PRIVKEY"
-    sudo chmod 600 "$WG_PRIVKEY"
-    sudo bash -c "cat $WG_PRIVKEY | wg pubkey > $WG_PUBKEY"
-    sudo chmod 644 "$WG_PUBKEY"
-    echo "Generated WireGuard keys"
-  fi
-  
-  PRIVKEY=$(sudo cat "$WG_PRIVKEY")
-  
-  # Create a template config - user needs to fill in peer details
-  sudo tee "$WG_CONF" > /dev/null <<WGEOF
-[Interface]
-# This server's private key
-PrivateKey = ${PRIVKEY}
-# VPN subnet address for this server
-Address = 10.0.0.1/24
-# Port to listen on
-ListenPort = 51820
-# Enable IP forwarding when interface comes up
-PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
+WG_PRIVKEY="/etc/wireguard/privatekey"
+WG_PUBKEY="/etc/wireguard/publickey"
 
-# Add peer configs below (one [Peer] section per client)
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# =========================================
+# Helper Functions
+# =========================================
+log_step() {
+    echo -e "\n${BLUE}[$1]${NC} $2"
+}
+
+log_success() {
+    echo -e "${GREEN}✓${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}⚠${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}✗${NC} $1"
+}
+
+# Check if running as root
+check_root() {
+    if [ "$EUID" -ne 0 ]; then
+        echo "This script must be run as root (use sudo)"
+        exit 1
+    fi
+}
+
+# Get credential from env file or prompt
+get_credential() {
+    local var_name="$1"
+    local prompt_text="$2"
+    local current_value=""
+    
+    # Try to get existing value from env file
+    if [ -f "$ENV_FILE" ]; then
+        current_value=$(grep "^${var_name}=" "$ENV_FILE" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
+    fi
+    
+    # If empty, prompt user
+    if [ -z "$current_value" ]; then
+        echo -en "${YELLOW}Enter ${prompt_text}: ${NC}"
+        read -r current_value
+    else
+        echo -e "${GREEN}✓${NC} ${prompt_text}: [already configured]"
+    fi
+    
+    echo "$current_value"
+}
+
+# =========================================
+# Main Script
+# =========================================
+echo ""
+echo -e "${BLUE}=========================================${NC}"
+echo -e "${BLUE}   Pincerna Complete Installer v2.0     ${NC}"
+echo -e "${BLUE}=========================================${NC}"
+echo ""
+
+check_root
+
+# =========================================
+# Step 1: Install System Dependencies
+# =========================================
+log_step "1/8" "Installing system dependencies"
+
+# Update package lists
+apt-get update -qq
+
+# Install required packages
+PACKAGES="nginx python3 python3-venv python3-pip rsync wireguard wireguard-tools openssl"
+for pkg in $PACKAGES; do
+    if ! dpkg -l | grep -q "^ii  $pkg "; then
+        echo "Installing $pkg..."
+        apt-get install -y "$pkg" >/dev/null 2>&1
+    fi
+done
+log_success "All dependencies installed"
+
+# =========================================
+# Step 2: Collect & Configure Credentials
+# =========================================
+log_step "2/8" "Configuring credentials"
+
+# Create env file if it doesn't exist
+if [ ! -f "$ENV_FILE" ]; then
+    touch "$ENV_FILE"
+    chmod 640 "$ENV_FILE"
+fi
+
+echo ""
+echo "Checking OAuth and Turnstile credentials..."
+echo "(Press Enter to keep existing values)"
+echo ""
+
+# Collect credentials
+GOOGLE_CLIENT_ID=$(get_credential "GOOGLE_CLIENT_ID" "Google OAuth Client ID")
+GOOGLE_CLIENT_SECRET=$(get_credential "GOOGLE_CLIENT_SECRET" "Google OAuth Client Secret")
+TURNSTILE_SITEKEY=$(get_credential "TURNSTILE_SITEKEY" "Cloudflare Turnstile Site Key")
+TURNSTILE_SECRET=$(get_credential "TURNSTILE_SECRET" "Cloudflare Turnstile Secret Key")
+
+# Write complete env file
+cat > "$ENV_FILE" <<EOL
+# Pincerna Environment Configuration
+# Auto-generated by installer on $(date)
+
+# Google OAuth
+GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+
+# Cloudflare Turnstile
+TURNSTILE_SITEKEY=${TURNSTILE_SITEKEY}
+TURNSTILE_SECRET=${TURNSTILE_SECRET}
+
+# File storage
+FILES_ROOT=${FILES_ROOT}
+EOL
+
+chmod 640 "$ENV_FILE"
+log_success "Credentials configured in $ENV_FILE"
+
+# =========================================
+# Step 3: Set Up File Storage
+# =========================================
+log_step "3/8" "Setting up file storage"
+
+mkdir -p "$FILES_ROOT"
+chown www-data:www-data "$FILES_ROOT"
+chmod 750 "$FILES_ROOT"
+log_success "File storage ready at $FILES_ROOT"
+
+# =========================================
+# Step 4: Configure WireGuard VPN
+# =========================================
+log_step "4/8" "Configuring WireGuard VPN"
+
+# Generate keys if they don't exist
+if [ ! -f "$WG_PRIVKEY" ]; then
+    echo "Generating WireGuard keys..."
+    mkdir -p /etc/wireguard
+    wg genkey > "$WG_PRIVKEY"
+    chmod 600 "$WG_PRIVKEY"
+    cat "$WG_PRIVKEY" | wg pubkey > "$WG_PUBKEY"
+    chmod 644 "$WG_PUBKEY"
+    log_success "Generated new WireGuard keypair"
+fi
+
+# Create WireGuard config if it doesn't exist
+if [ ! -f "$WG_CONF" ]; then
+    PRIVKEY=$(cat "$WG_PRIVKEY")
+    
+    # Detect primary network interface
+    PRIMARY_IFACE=$(ip route | grep default | awk '{print $5}' | head -1)
+    [ -z "$PRIMARY_IFACE" ] && PRIMARY_IFACE="eth0"
+    
+    cat > "$WG_CONF" <<WGEOF
+[Interface]
+PrivateKey = ${PRIVKEY}
+Address = 10.0.0.1/24
+ListenPort = 51820
+PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o ${PRIMARY_IFACE} -j MASQUERADE
+PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o ${PRIMARY_IFACE} -j MASQUERADE
+
+# Peers will be added via the web UI or manually below
+# Example:
 # [Peer]
 # PublicKey = <client-public-key>
 # AllowedIPs = 10.0.0.2/32
 WGEOF
-  sudo chmod 600 "$WG_CONF"
-  
-  PUBKEY=$(sudo cat "$WG_PUBKEY")
-  echo ""
-  echo "========================================="
-  echo "WireGuard server public key:"
-  echo "$PUBKEY"
-  echo "========================================="
-  echo "Edit $WG_CONF to add peer configurations"
-  echo ""
+    chmod 600 "$WG_CONF"
+    log_success "Created WireGuard configuration"
 else
-  echo "WireGuard config already exists at $WG_CONF"
+    log_success "WireGuard config already exists"
 fi
 
-# Enable IP forwarding
-if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf 2>/dev/null; then
-  echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf > /dev/null
-  sudo sysctl -p > /dev/null 2>&1 || true
-  echo "Enabled IP forwarding"
+# Enable IP forwarding (persistent)
+if ! grep -q "^net.ipv4.ip_forward=1" /etc/sysctl.conf 2>/dev/null; then
+    echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
 fi
+sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1
+log_success "IP forwarding enabled"
 
-# Allow www-data to run wg-quick via sudo without password
+# Set up sudoers for www-data to control VPN
 SUDOERS_WG="/etc/sudoers.d/pincerna-wg"
-if [ ! -f "$SUDOERS_WG" ]; then
-  echo "Setting up sudo permissions for VPN control..."
-  sudo tee "$SUDOERS_WG" > /dev/null <<SUDOEOF
-# Allow www-data to control WireGuard VPN
+cat > "$SUDOERS_WG" <<SUDOEOF
+# Allow www-data to control WireGuard VPN without password
 www-data ALL=(ALL) NOPASSWD: /usr/bin/wg-quick up wg0
 www-data ALL=(ALL) NOPASSWD: /usr/bin/wg-quick down wg0
 www-data ALL=(ALL) NOPASSWD: /usr/bin/wg show
+www-data ALL=(ALL) NOPASSWD: /usr/bin/wg show wg0
 SUDOEOF
-  sudo chmod 440 "$SUDOERS_WG"
-  echo "Sudo permissions configured"
-fi
+chmod 440 "$SUDOERS_WG"
+log_success "VPN sudo permissions configured"
 
-echo "WireGuard setup complete"
+# Enable WireGuard to start on boot (but don't start yet if no peers)
+systemctl enable wg-quick@wg0 >/dev/null 2>&1 || true
 
-# =========================================
-# 4. Set up Python environment
-# =========================================
-echo ""
-echo "[4/7] Setting up Python environment"
-
-SYSTEMD_UNIT_PATH="/etc/systemd/system/pincerna.service"
-NGINX_SITE_AVAILABLE="/etc/nginx/sites-available/cloud.emilvinod.com"
-NGINX_SITE_ENABLED="/etc/nginx/sites-enabled/cloud.emilvinod.com"
-
-
-if [ -f "$SYSTEMD_UNIT_PATH" ]; then
-  echo "Backing up existing systemd unit to ${SYSTEMD_UNIT_PATH}.bak"
-  sudo cp -a "$SYSTEMD_UNIT_PATH" "${SYSTEMD_UNIT_PATH}.bak"
-fi
-
-
-VENV_PATH="$REPO_ROOT/venv"
-REQ_FILE="$REPO_ROOT/services/api/requirements.txt"
-if [ ! -d "$VENV_PATH" ]; then
-  echo "Creating venv at $VENV_PATH"
-  sudo python3 -m venv "$VENV_PATH"
-  sudo "$VENV_PATH/bin/python" -m pip install --upgrade pip setuptools wheel || true
-fi
-if [ -f "$REQ_FILE" ]; then
-  echo "Installing Python requirements from $REQ_FILE"
-  sudo "$VENV_PATH/bin/python" -m pip install --no-cache-dir -r "$REQ_FILE" || true
-fi
-sudo chown -R www-data:www-data "$VENV_PATH" || true
-
-API_LOG="$REPO_ROOT/api.log"
-if [ ! -f "$API_LOG" ]; then
-  sudo mkdir -p "$(dirname "$API_LOG")"
-  sudo touch "$API_LOG"
-fi
-sudo chown www-data:www-data "$API_LOG" || true
-sudo chmod 640 "$API_LOG" || true
-
-
-sudo mkdir -p /var/log/pincerna || true
-sudo chown www-data:www-data /var/log/pincerna || true
-sudo chmod 750 /var/log/pincerna || true
-
-
-ENV_FILE="/etc/default/pincerna"
-if [ ! -f "$ENV_FILE" ]; then
-  echo "Creating default environment file at $ENV_FILE"
-  sudo tee "$ENV_FILE" > /dev/null <<EOL
-# Pincerna environment configuration
-# Fill in your credentials below:
-
-# Google OAuth (required for sign-in)
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-
-# Cloudflare Turnstile (required for bot protection)
-TURNSTILE_SITEKEY=
-TURNSTILE_SECRET=
-
-# File storage root directory
-FILES_ROOT=${FILES_ROOT}
-EOL
-  sudo chmod 640 "$ENV_FILE" || true
-  sudo chown root:root "$ENV_FILE" || true
-  echo ""
-  echo "========================================="
-  echo "IMPORTANT: Edit $ENV_FILE to add your credentials"
-  echo "========================================="
-  echo ""
+# Start WireGuard if it has peers configured
+if grep -q "^\[Peer\]" "$WG_CONF" 2>/dev/null; then
+    wg-quick down wg0 >/dev/null 2>&1 || true
+    wg-quick up wg0 >/dev/null 2>&1 || true
+    log_success "WireGuard VPN started"
 else
-  # Make sure FILES_ROOT is in the env file
-  if ! grep -q "FILES_ROOT" "$ENV_FILE" 2>/dev/null; then
-    echo "FILES_ROOT=${FILES_ROOT}" | sudo tee -a "$ENV_FILE" > /dev/null
-  fi
+    log_warn "WireGuard configured but no peers yet - will start when peers are added"
 fi
 
-echo ""
-echo "[5/7] Writing systemd service"
-sudo tee "$SYSTEMD_UNIT_PATH" > /dev/null <<EOF
+# =========================================
+# Step 5: Set Up Python Environment
+# =========================================
+log_step "5/8" "Setting up Python environment"
+
+# Create virtual environment
+if [ ! -d "$VENV_PATH" ]; then
+    python3 -m venv "$VENV_PATH"
+    log_success "Created Python virtual environment"
+fi
+
+# Upgrade pip and install requirements
+"$VENV_PATH/bin/python" -m pip install --upgrade pip setuptools wheel -q
+if [ -f "$REPO_ROOT/services/api/requirements.txt" ]; then
+    "$VENV_PATH/bin/python" -m pip install -q --no-cache-dir -r "$REPO_ROOT/services/api/requirements.txt"
+fi
+chown -R www-data:www-data "$VENV_PATH"
+log_success "Python dependencies installed"
+
+# Create log directories
+mkdir -p /var/log/pincerna
+chown www-data:www-data /var/log/pincerna
+chmod 750 /var/log/pincerna
+touch "$REPO_ROOT/api.log" 2>/dev/null || true
+chown www-data:www-data "$REPO_ROOT/api.log" 2>/dev/null || true
+
+# =========================================
+# Step 6: Deploy UI Files
+# =========================================
+log_step "6/8" "Deploying UI files"
+
+if [ ! -d "$SRC_DIR" ]; then
+    log_error "Source directory not found: $SRC_DIR"
+    exit 1
+fi
+
+mkdir -p "$(dirname "$WWW_DIR")"
+rsync -a --delete "$SRC_DIR/" "$WWW_DIR/"
+chown -R www-data:www-data "$(dirname "$WWW_DIR")"
+log_success "UI deployed to $WWW_DIR"
+
+# =========================================
+# Step 7: Configure Services
+# =========================================
+log_step "7/8" "Configuring services"
+
+# Create systemd service
+cat > "$SYSTEMD_UNIT" <<EOF
 [Unit]
 Description=Pincerna Flask API
 After=network.target
@@ -209,97 +297,120 @@ Type=simple
 User=www-data
 WorkingDirectory=${REPO_ROOT}
 Environment=FLASK_ENV=production
-EnvironmentFile=/etc/default/pincerna
-
+EnvironmentFile=${ENV_FILE}
 ExecStart=${VENV_PATH}/bin/gunicorn -b 127.0.0.1:5002 services.api.app:app --workers 2 --chdir ${REPO_ROOT}
 Restart=on-failure
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-sudo systemctl daemon-reload || true
-echo "Enabling and starting pincerna service"
-if sudo systemctl enable --now pincerna.service 2>/dev/null; then
-  true
-else
-  
-  sudo systemctl daemon-reload || true
-  sudo systemctl enable pincerna.service || true
-  sudo systemctl start pincerna.service || sudo systemctl restart pincerna.service || true
-fi
-
-
-# =========================================
-# 6. Configure nginx
-# =========================================
-echo ""
-echo "[6/7] Configuring nginx"
-
+# Configure nginx
 if [ -f "$REPO_ROOT/nginx/pincerna_auth.conf.example" ]; then
-  if [ -f "$NGINX_SITE_AVAILABLE" ]; then
-    echo "Backing up existing nginx site to ${NGINX_SITE_AVAILABLE}.bak"
-    sudo cp -a "$NGINX_SITE_AVAILABLE" "${NGINX_SITE_AVAILABLE}.bak"
-  fi
-  echo "Installing nginx site from repo example"
-  sudo install -m 644 "$REPO_ROOT/nginx/pincerna_auth.conf.example" "$NGINX_SITE_AVAILABLE"
-  sudo ln -sf "$NGINX_SITE_AVAILABLE" "$NGINX_SITE_ENABLED"
-  
-  if sudo grep -q "listen 443" "$NGINX_SITE_AVAILABLE" && ! sudo grep -q "ssl_certificate" "$NGINX_SITE_AVAILABLE"; then
-    SSLCERT=/etc/ssl/certs/cloud.emilvinod.com.crt
-    SSLKEY=/etc/ssl/private/cloud.emilvinod.com.key
-    if [ ! -f "$SSLCERT" ] || [ ! -f "$SSLKEY" ]; then
-      echo "Creating temporary self-signed certificate at $SSLCERT"
-      sudo mkdir -p /etc/ssl/private /etc/ssl/certs
-      sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-        -keyout "$SSLKEY" -out "$SSLCERT" -subj "/CN=cloud.emilvinod.com" || true
-      sudo chmod 640 "$SSLKEY" || true
-      sudo chmod 644 "$SSLCERT" || true
-    fi
+    cp "$REPO_ROOT/nginx/pincerna_auth.conf.example" "$NGINX_AVAILABLE"
+    ln -sf "$NGINX_AVAILABLE" "$NGINX_ENABLED"
     
-    sudo sed -i "/server_name cloud.emilvinod.com;/a \    ssl_certificate $SSLCERT;\n    ssl_certificate_key $SSLKEY;" "$NGINX_SITE_AVAILABLE" || true
-  fi
+    # Add SSL certificates if needed
+    SSLCERT="/etc/ssl/certs/cloud.emilvinod.com.crt"
+    SSLKEY="/etc/ssl/private/cloud.emilvinod.com.key"
+    
+    if [ ! -f "$SSLCERT" ] || [ ! -f "$SSLKEY" ]; then
+        mkdir -p /etc/ssl/private /etc/ssl/certs
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout "$SSLKEY" -out "$SSLCERT" \
+            -subj "/CN=cloud.emilvinod.com" >/dev/null 2>&1
+        chmod 640 "$SSLKEY"
+        chmod 644 "$SSLCERT"
+        log_success "Created self-signed SSL certificate"
+    fi
 fi
 
+# Create nginx log directory
+mkdir -p /var/log/nginx
+chown root:adm /var/log/nginx
+chmod 750 /var/log/nginx
 
-sudo mkdir -p /var/log/nginx
-sudo chown root:adm /var/log/nginx || true
-sudo chmod 750 /var/log/nginx || true
-sudo touch /var/log/nginx/error.log /var/log/nginx/access.log || true
-sudo chmod 640 /var/log/nginx/*.log || true
+log_success "Services configured"
 
-echo "Testing nginx configuration"
-if sudo nginx -t 2>/dev/null; then
-  echo "Reloading nginx"
-  sudo systemctl reload nginx || sudo systemctl restart nginx || true
+# =========================================
+# Step 8: Start Everything
+# =========================================
+log_step "8/8" "Starting all services"
+
+# Reload systemd and start/restart services
+systemctl daemon-reload
+
+# Enable and restart pincerna service
+systemctl enable pincerna.service >/dev/null 2>&1
+systemctl restart pincerna.service
+sleep 2
+
+# Check if pincerna is running
+if systemctl is-active --quiet pincerna.service; then
+    log_success "Pincerna backend service started"
 else
-  sudo nginx -t || true
-  echo "nginx config test failed; not reloading. Inspect the output above."
+    log_error "Pincerna service failed to start!"
+    systemctl status pincerna.service --no-pager || true
+fi
+
+# Test and reload nginx
+if nginx -t >/dev/null 2>&1; then
+    systemctl reload nginx || systemctl restart nginx
+    log_success "Nginx reloaded"
+else
+    log_error "Nginx configuration test failed:"
+    nginx -t
 fi
 
 # =========================================
-# 7. Deployment Complete
+# Complete!
 # =========================================
 echo ""
-echo "========================================="
-echo "[7/7] Deployment Complete!"
-echo "========================================="
+echo -e "${GREEN}=========================================${NC}"
+echo -e "${GREEN}    Installation Complete!              ${NC}"
+echo -e "${GREEN}=========================================${NC}"
 echo ""
 echo "Summary:"
-echo "  - UI deployed to ${WWW_DIR}"
-echo "  - File storage at ${FILES_ROOT}"
-echo "  - WireGuard VPN configured"
-echo "  - Backend service: pincerna.service"
+echo -e "  ${GREEN}✓${NC} UI:        $WWW_DIR"
+echo -e "  ${GREEN}✓${NC} Files:     $FILES_ROOT"
+echo -e "  ${GREEN}✓${NC} Backend:   pincerna.service (port 5002)"
+echo -e "  ${GREEN}✓${NC} VPN:       WireGuard on wg0"
 echo ""
-echo "Next steps:"
-echo "  1. Edit /etc/default/pincerna with your credentials"
-echo "  2. Edit /etc/wireguard/wg0.conf to add VPN peers"
-echo "  3. Start VPN: sudo wg-quick up wg0"
-echo "  4. Check service: sudo systemctl status pincerna"
-echo ""
-if [ -f "/etc/wireguard/publickey" ]; then
-  echo "Your WireGuard server public key:"
-  sudo cat /etc/wireguard/publickey
-  echo ""
+
+# Show WireGuard public key
+if [ -f "$WG_PUBKEY" ]; then
+    echo -e "${BLUE}WireGuard Server Public Key:${NC}"
+    echo -e "${YELLOW}$(cat "$WG_PUBKEY")${NC}"
+    echo ""
+    echo "To add a client, append to $WG_CONF:"
+    echo ""
+    echo "  [Peer]"
+    echo "  PublicKey = <client-public-key>"
+    echo "  AllowedIPs = 10.0.0.2/32"
+    echo ""
 fi
-echo "========================================="
+
+# Check service status
+echo "Service Status:"
+if systemctl is-active --quiet pincerna.service; then
+    echo -e "  ${GREEN}●${NC} pincerna.service: running"
+else
+    echo -e "  ${RED}●${NC} pincerna.service: stopped"
+fi
+
+if systemctl is-active --quiet nginx; then
+    echo -e "  ${GREEN}●${NC} nginx: running"
+else
+    echo -e "  ${RED}●${NC} nginx: stopped"
+fi
+
+if ip link show wg0 >/dev/null 2>&1; then
+    echo -e "  ${GREEN}●${NC} WireGuard (wg0): up"
+else
+    echo -e "  ${YELLOW}●${NC} WireGuard (wg0): down (no peers configured)"
+fi
+
+echo ""
+echo -e "Access your dashboard at: ${BLUE}https://cloud.emilvinod.com/cloud${NC}"
+echo ""
