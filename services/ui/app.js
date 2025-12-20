@@ -173,44 +173,73 @@ async function apiFetch(path, opts={}){
 
 let currentPath = '/';
 async function listFiles(path=currentPath){
+  currentPath = path;
   const q = '?path=' + encodeURIComponent(path);
   const res = await apiFetch('/files' + q);
+  // Update path display
+  const pathEl = document.getElementById('files-path');
+  if(pathEl) pathEl.textContent = path;
   return res;
 }
 
-function renderFileList(items){
+function renderFileList(items, path){
   const out = document.getElementById('file-list');
   out.innerHTML = '';
-  if(!items || !Array.isArray(items) || items.length===0){
-    out.textContent = 'No files.'; return;
+  
+  // Add "up" directory if not at root
+  if(path && path !== '/'){
+    const upDiv = document.createElement('div');
+    upDiv.className = 'file-entry file-dir';
+    upDiv.innerHTML = '<div><strong>📁 ..</strong><div class="meta">Parent directory</div></div>';
+    upDiv.style.cursor = 'pointer';
+    upDiv.addEventListener('click', ()=>{
+      const parent = path.split('/').slice(0,-1).join('/') || '/';
+      listFiles(parent).then(res => { if(res && res.files) renderFileList(res.files, parent); });
+    });
+    out.appendChild(upDiv);
   }
+  
+  if(!items || !Array.isArray(items) || items.length===0){
+    if(path === '/') out.innerHTML += '<div class="file-entry"><div>No files.</div></div>';
+    return;
+  }
+  
   items.forEach(item=>{
     const div = document.createElement('div');
-    div.className = 'file-entry';
+    div.className = 'file-entry' + (item.is_dir ? ' file-dir' : '');
     const left = document.createElement('div');
     const nameEl = document.createElement('strong');
-    nameEl.textContent = item.name;
+    nameEl.textContent = (item.is_dir ? '📁 ' : '📄 ') + item.name;
     const metaEl = document.createElement('div');
     metaEl.className = 'meta';
-    metaEl.textContent = (item.size||'') + ' ' + (item.mtime||'');
+    metaEl.textContent = (item.size||'') + (item.size && item.mtime ? ' • ' : '') + (item.mtime||'');
     left.appendChild(nameEl);
     left.appendChild(metaEl);
-    const actions = document.createElement('div'); actions.className='actions';
-    const dl = document.createElement('button'); dl.className='btn'; dl.textContent='Download';
-    dl.addEventListener('click', ()=>{ window.location = '/cloud/api/files/download?path=' + encodeURIComponent(item.path) });
-    const del = document.createElement('button'); del.className='btn'; del.textContent='Delete';
-    del.addEventListener('click', async ()=>{ if(confirm('Delete '+item.name+'?')){ await apiFetch('/files?path='+encodeURIComponent(item.path), {method:'DELETE'}); refreshFiles(); } });
-    actions.appendChild(dl); actions.appendChild(del);
-    div.appendChild(left); div.appendChild(actions);
+    
+    if(item.is_dir){
+      div.style.cursor = 'pointer';
+      div.addEventListener('click', ()=>{
+        listFiles(item.path).then(res => { if(res && res.files) renderFileList(res.files, item.path); });
+      });
+      div.appendChild(left);
+    } else {
+      const actions = document.createElement('div'); actions.className='actions';
+      const dl = document.createElement('button'); dl.className='btn'; dl.textContent='Download';
+      dl.addEventListener('click', (e)=>{ e.stopPropagation(); window.open(apiBase + '/files/download?path=' + encodeURIComponent(item.path), '_blank'); });
+      const del = document.createElement('button'); del.className='btn warn'; del.textContent='Delete';
+      del.addEventListener('click', async (e)=>{ e.stopPropagation(); if(confirm('Delete '+item.name+'?')){ await apiFetch('/files?path='+encodeURIComponent(item.path), {method:'DELETE'}); refreshFiles(); } });
+      actions.appendChild(dl); actions.appendChild(del);
+      div.appendChild(left); div.appendChild(actions);
+    }
     out.appendChild(div);
   });
 }
 
 async function refreshFiles(){
-  const res = await listFiles();
-  if(res && res.files) renderFileList(res.files);
-  else if(res && res.error === 'server_returned_html') showMessage('Server returned HTML instead of JSON; backend missing or misconfigured','error');
-  else showMessage(res.error || res, 'error');
+  const res = await listFiles(currentPath);
+  if(res && res.files) renderFileList(res.files, currentPath);
+  else if(res && res.error === 'server_returned_html') showMessage('Backend not connected','error');
+  else if(res && res.error) showMessage(res.error, 'error');
   return res;
 }
 
@@ -238,7 +267,41 @@ async function initFiles(){
   }catch(e){ const idx = nextIncomplete(); if(idx !== -1) markStepError(idx); hidePreloader(800); }
 }
 
+// Navigation - clean section switching (global so it works everywhere)
+function showSection(sectionId) {
+  // Hide all sections
+  ['hero', 'controls', 'files', 'metrics', 'about'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.style.display = 'none';
+  });
+  // Remove active from all nav
+  document.querySelectorAll('.nav a').forEach(a => a.classList.remove('active'));
+  
+  // Show requested section(s)
+  if(sectionId === 'home') {
+    const hero = document.getElementById('hero');
+    const controls = document.getElementById('controls');
+    if(hero) hero.style.display = 'block';
+    if(controls) controls.style.display = 'block';
+    const navHome = document.getElementById('nav-home');
+    if(navHome) navHome.classList.add('active');
+  } else if(sectionId === 'files') {
+    const files = document.getElementById('files');
+    if(files) files.style.display = 'block';
+    const navFiles = document.getElementById('nav-files');
+    if(navFiles) navFiles.classList.add('active');
+  } else if(sectionId === 'about') {
+    const about = document.getElementById('about');
+    if(about) about.style.display = 'block';
+    const navAbout = document.getElementById('nav-about');
+    if(navAbout) navAbout.classList.add('active');
+  }
+}
+
 document.addEventListener('DOMContentLoaded', ()=>{
+  // Show dashboard immediately
+  showSection('home');
+  
   // Show user greeting immediately if we have user info
   showUserGreeting();
   
@@ -286,46 +349,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
     else showMessage('Restart command sent', 'info');
   });
 
-  // Navigation - clean section switching
-  function showSection(sectionId) {
-    // Hide all sections
-    ['hero', 'controls', 'files', 'metrics', 'about'].forEach(id => {
-      const el = document.getElementById(id);
-      if(el) el.style.display = 'none';
-    });
-    // Remove active from all nav
-    document.querySelectorAll('.nav a').forEach(a => a.classList.remove('active'));
-    
-    // Show requested section(s)
-    if(sectionId === 'home') {
-      const hero = document.getElementById('hero');
-      const controls = document.getElementById('controls');
-      if(hero) hero.style.display = 'block';
-      if(controls) controls.style.display = 'block';
-      const navHome = document.getElementById('nav-home');
-      if(navHome) navHome.classList.add('active');
-    } else if(sectionId === 'files') {
-      const files = document.getElementById('files');
-      if(files) files.style.display = 'block';
-      const navFiles = document.getElementById('nav-files');
-      if(navFiles) navFiles.classList.add('active');
-    } else if(sectionId === 'about') {
-      const about = document.getElementById('about');
-      if(about) about.style.display = 'block';
-      const navAbout = document.getElementById('nav-about');
-      if(navAbout) navAbout.classList.add('active');
-    }
-  }
-  
   $('#nav-home').addEventListener('click', (e) => { e.preventDefault(); showSection('home'); });
   $('#nav-files').addEventListener('click', (e) => { e.preventDefault(); showSection('files'); refreshFiles(); });
   $('#nav-about').addEventListener('click', (e) => { e.preventDefault(); showSection('about'); });
 
   if(localStorage.getItem('pincerna_token')){
-    // User is authenticated - initialize the app
-    if(indicator) indicator.textContent = 'Loading';
-    // Show dashboard by default
-    showSection('home');
+    // User is authenticated - app is ready
     // Check backend health and hide preloader
     fetch(apiBase + '/health').then(r => {
       if(r.ok) {
@@ -342,26 +371,49 @@ document.addEventListener('DOMContentLoaded', ()=>{
     // No token - redirect to auth
     window.location.href = 'auth.html';
   }
-  const vpn = localStorage.getItem('pincerna_vpn') === '1';
-  updateVPNUI(vpn);
-  // mark init step and assets as done early
-  if(progressSteps && progressSteps.length) markStepDone(0);
-  if(progressSteps && progressSteps.length) markStepDone(1);
+  // Check VPN status from server
+  checkVPNStatus();
 });
 
 function updateVPNUI(connected){
   const btn = document.getElementById('btn-vpn');
   if(!btn) return;
-  if(connected){ btn.textContent = 'VPN Connected'; btn.classList.add('active'); }
-  else { btn.textContent = 'Start VPN'; btn.classList.remove('active'); }
+  if(connected){ 
+    btn.textContent = 'VPN Connected ✓'; 
+    btn.classList.add('active');
+    btn.style.background = '#22c55e';
+  } else { 
+    btn.textContent = 'Start VPN'; 
+    btn.classList.remove('active');
+    btn.style.background = '';
+  }
+}
+
+async function checkVPNStatus(){
+  try{
+    const res = await apiFetch('/vpn/status');
+    if(res && res.connected !== undefined){
+      updateVPNUI(res.connected);
+    }
+  }catch(e){}
 }
 
 async function toggleVPN(){
-  const now = localStorage.getItem('pincerna_vpn') === '1';
-  const next = !now;
-  localStorage.setItem('pincerna_vpn', next ? '1' : '0');
-  updateVPNUI(next);
-  showMessage(next ? 'VPN enabled (UI only). Configure WireGuard for real VPN.' : 'VPN disabled');
+  const btn = document.getElementById('btn-vpn');
+  if(btn) btn.textContent = 'Connecting...';
+  try{
+    const res = await apiFetch('/vpn/toggle', {method:'POST'});
+    if(res && res.connected !== undefined){
+      updateVPNUI(res.connected);
+      showMessage(res.message || (res.connected ? 'VPN connected' : 'VPN disconnected'), 'info');
+    } else if(res && res.error){
+      showMessage(res.error, 'error');
+      checkVPNStatus();
+    }
+  }catch(e){
+    showMessage('VPN toggle failed', 'error');
+    checkVPNStatus();
+  }
 }
 
 function sampleMetrics(){

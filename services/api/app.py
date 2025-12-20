@@ -423,14 +423,23 @@ def restart_service():
 	# Placeholder - in production this would trigger a service restart
 	return jsonify(message="Restart command received", status="ok")
 
+def _get_files_base():
+	return os.environ.get('FILES_ROOT', '/home')
+
+def _safe_path(path):
+	"""Ensure path stays within FILES_ROOT"""
+	base_dir = _get_files_base()
+	full_path = os.path.normpath(os.path.join(base_dir, path.lstrip('/')))
+	if not full_path.startswith(base_dir):
+		return None
+	return full_path
+
 @app.route("/files")
 @protected
 def list_files():
 	path = request.args.get('path', '/')
-	# For security, only allow listing from a specific directory
-	base_dir = os.environ.get('FILES_ROOT', '/home')
-	full_path = os.path.normpath(os.path.join(base_dir, path.lstrip('/')))
-	if not full_path.startswith(base_dir):
+	full_path = _safe_path(path)
+	if not full_path:
 		return jsonify(error='Invalid path'), 400
 	try:
 		items = []
@@ -440,16 +449,110 @@ def list_files():
 					item_path = os.path.join(full_path, name)
 					rel_path = os.path.join(path, name)
 					stat = os.stat(item_path)
+					size = stat.st_size if not os.path.isdir(item_path) else None
+					# Format size nicely
+					if size is not None:
+						if size > 1024*1024*1024:
+							size_str = f"{size/(1024*1024*1024):.1f} GB"
+						elif size > 1024*1024:
+							size_str = f"{size/(1024*1024):.1f} MB"
+						elif size > 1024:
+							size_str = f"{size/1024:.1f} KB"
+						else:
+							size_str = f"{size} B"
+					else:
+						size_str = ""
 					items.append({
 						'name': name,
 						'path': rel_path,
 						'is_dir': os.path.isdir(item_path),
-						'size': stat.st_size if not os.path.isdir(item_path) else None,
-						'mtime': datetime.datetime.fromtimestamp(stat.st_mtime).isoformat()
+						'size': size_str,
+						'mtime': datetime.datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M')
 					})
 				except (PermissionError, OSError):
 					pass
+		# Sort: directories first, then files alphabetically
+		items.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
 		return jsonify(files=items, path=path)
+	except Exception as e:
+		return jsonify(error=str(e)), 500
+
+@app.route("/files/download")
+@protected
+def download_file():
+	path = request.args.get('path', '')
+	full_path = _safe_path(path)
+	if not full_path or not os.path.isfile(full_path):
+		return jsonify(error='File not found'), 404
+	from flask import send_file
+	return send_file(full_path, as_attachment=True)
+
+@app.route("/files/upload", methods=["POST"])
+@protected
+def upload_file():
+	if 'file' not in request.files:
+		return jsonify(error='No file provided'), 400
+	file = request.files['file']
+	if file.filename == '':
+		return jsonify(error='No file selected'), 400
+	path = request.form.get('path', '/')
+	full_path = _safe_path(path)
+	if not full_path:
+		return jsonify(error='Invalid path'), 400
+	if not os.path.isdir(full_path):
+		os.makedirs(full_path, exist_ok=True)
+	# Secure the filename
+	from werkzeug.utils import secure_filename
+	filename = secure_filename(file.filename)
+	dest = os.path.join(full_path, filename)
+	file.save(dest)
+	return jsonify(success=True, filename=filename)
+
+@app.route("/files", methods=["DELETE"])
+@protected
+def delete_file():
+	path = request.args.get('path', '')
+	full_path = _safe_path(path)
+	if not full_path:
+		return jsonify(error='Invalid path'), 400
+	if not os.path.exists(full_path):
+		return jsonify(error='File not found'), 404
+	try:
+		if os.path.isdir(full_path):
+			import shutil
+			shutil.rmtree(full_path)
+		else:
+			os.remove(full_path)
+		return jsonify(success=True)
+	except Exception as e:
+		return jsonify(error=str(e)), 500
+
+@app.route("/vpn/status")
+@protected
+def vpn_status():
+	# Check if WireGuard interface is up
+	try:
+		import subprocess
+		result = subprocess.run(['ip', 'link', 'show', 'wg0'], capture_output=True, text=True)
+		connected = result.returncode == 0 and 'UP' in result.stdout
+		return jsonify(connected=connected)
+	except:
+		return jsonify(connected=False)
+
+@app.route("/vpn/toggle", methods=["POST"])
+@protected
+def vpn_toggle():
+	try:
+		import subprocess
+		# Check current state
+		result = subprocess.run(['ip', 'link', 'show', 'wg0'], capture_output=True, text=True)
+		is_up = result.returncode == 0 and 'UP' in result.stdout
+		if is_up:
+			subprocess.run(['sudo', 'wg-quick', 'down', 'wg0'], capture_output=True)
+			return jsonify(connected=False, message='VPN disconnected')
+		else:
+			subprocess.run(['sudo', 'wg-quick', 'up', 'wg0'], capture_output=True)
+			return jsonify(connected=True, message='VPN connected')
 	except Exception as e:
 		return jsonify(error=str(e)), 500
 
