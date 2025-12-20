@@ -1,12 +1,12 @@
 :root{
   --bg: #070607;
   --card: #ffffff;
-  --primary: #ff8200; /* stronger orange primary */
-  --accent: #ffc08d; /* lighter orange accent */
+  --primary: #ff8200; 
+  --accent: #ffc08d; 
   --muted: #9aa0a6;
   --text: #0f172a;
   --glass: rgba(15,23,42,0.04);
-  --radius: 0px; /* no rounding */
+  --radius: 0px; 
   --font-stack: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
@@ -55,7 +55,7 @@ body{
   .brand-text{display:none}
 }
 
-/* Preloader */
+
 .preloader{position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:9999}
 .preloader-img{width:140px;height:140px;max-width:28vw}
 .preloader-steps{list-style:none;padding:6px 0 0 0;margin:4px 0 0 0;max-width:360px;margin-left:auto;margin-right:auto}
@@ -67,14 +67,14 @@ body{
 .preloader-indicator{margin-top:8px;color:var(--muted);font-weight:300;font-size:0.68rem;text-align:center;min-height:18px}
 .preloader-indicator.error{color:#ff6b6b;font-weight:600}
 
-/* auth page */
+
 .auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center}
 .auth-card{width:auto;max-width:92vw;padding:24px;border-radius:var(--radius);background:linear-gradient(180deg,#fffaf3 0%, #fff4e6 100%);border:1px solid rgba(0,0,0,0.05);box-shadow:0 32px 90px rgba(0,0,0,0.32);text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px}
-.auth-title{font-size:22px;font-weight:700;margin:0 0 8px 0;color:#111;width:100%;text-align:center}
+.auth-title{font-size:25px;font-weight:700;margin:0 0 8px 0;color:#111;width:100%;text-align:center}
 .auth-sub{color:var(--muted);margin:0}
 .auth-actions{margin-top:0}
 
-/* Google button */
+
 .gbtn{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:16px 0;border-radius:var(--radius);background:var(--primary);color:#fff;border:none;box-shadow:0 12px 32px rgba(255,130,0,0.28);text-decoration:none;font-weight:700;width:100%;box-sizing:border-box}
 .gbtn:hover{box-shadow:0 14px 36px rgba(255,130,0,0.36)}
 .gbtn:active{transform:translateY(1px)}
@@ -88,7 +88,7 @@ body{
 .auth-card .auth-verify #turnstile-container{display:flex;justify-content:center}
 .auth-card .auth-actions{width:100%;display:flex}
 
-/* layered floating patches background */
+
 body::before{
   content:'';position:fixed;inset:0;z-index:-2;pointer-events:none;
   background:
@@ -120,7 +120,7 @@ body::after{
   100%{transform:translate3d(25%,0,0)}
 }
 
-/* Cloudflare verify box */
+
 .auth-verify{display:flex;justify-content:center;margin-bottom:14px}
 .cf-verify{display:inline-flex;align-items:center;gap:10px;border-radius:0;padding:8px 12px;background:#fff;border:1px solid rgba(15,23,42,0.04);box-shadow:0 6px 18px rgba(2,6,23,0.03);cursor:pointer}
 .cf-verify input{display:none}
@@ -132,6 +132,6 @@ body::after{
 .cf-success{display:inline-flex;align-items:center;gap:8px;color:#fff;background:var(--primary);padding:6px 10px;border-radius:0}
 .cf-cloud{width:20px;height:14px}
 
-/* auth card accent */
+
 .auth-card{border:1px solid rgba(11,11,11,0.03)}
 .auth-title{color:#0b0b0b}
