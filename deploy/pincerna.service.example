@@ -1,0 +1,21 @@
+[Unit]
+Description=Pincerna Flask API
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/pincerna
+Environment=FLASK_ENV=production
+Environment=GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+Environment=GOOGLE_CLIENT_SECRET=your-google-client-secret
+Environment=SMTP_HOST=smtp.example.com
+Environment=SMTP_PORT=587
+Environment=SMTP_USER=you@example.com
+Environment=SMTP_PASS=yourpassword
+Environment=SMTP_FROM=no-reply@emilvinod.com
+ExecStart=/usr/bin/python3 services/api/app.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
