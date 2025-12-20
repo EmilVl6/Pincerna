@@ -158,13 +158,9 @@ body::after{
 .file-entry.file-dir{background:rgba(255,130,0,0.03)}
 .file-entry.file-dir:hover{background:rgba(255,130,0,0.08)}
 
-/* Warn button */
 .btn.warn{background:#e74c3c;color:#fff;border:none}
 .btn.warn:hover{background:#c0392b}
 
-/* ========================================= */
-/* Metric Widgets - Pixel Style */
-/* ========================================= */
 .metrics-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));gap:12px;margin-bottom:16px}
 .metric-widget{background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);border:2px solid #0f3460;padding:16px;text-align:center;position:relative;overflow:hidden}
 .metric-widget::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg, transparent, var(--primary), transparent)}
@@ -175,7 +171,6 @@ body::after{
 .metrics-refresh{display:flex;align-items:center;gap:12px;margin-top:12px}
 .metrics-refresh .meta{color:var(--muted);font-size:0.85rem}
 
-/* VPN Panel */
 .vpn-stats{display:flex;flex-direction:column;gap:16px}
 .vpn-status-indicator{display:flex;align-items:center;gap:12px;padding:12px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.05)}
 .vpn-dot{width:12px;height:12px;background:#666;animation:none}
@@ -188,21 +183,16 @@ body::after{
 .vpn-stat-value{font-size:18px;font-weight:700;color:#fff;font-family:'Courier New', monospace}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
 
-/* ========================================= */
-/* File Manager - Drive Style */
-/* ========================================= */
 .file-controls{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:12px}
 .file-actions-left{display:flex;gap:8px;flex-wrap:wrap}
 .file-path-display{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.1);padding:6px 12px}
 .file-path-label{color:var(--muted);font-size:0.85rem}
 
-/* Upload Progress */
 .upload-progress{margin:12px 0;padding:12px;background:rgba(255,130,0,0.1);border:1px solid rgba(255,130,0,0.2)}
 .upload-progress-bar{height:4px;background:rgba(0,0,0,0.2);overflow:hidden}
 .upload-progress-fill{height:100%;background:var(--primary);width:0%;transition:width 0.3s ease}
 #upload-status{display:block;margin-top:8px;font-size:0.85rem;color:var(--muted)}
 
-/* File List Updated */
 .file-list{border:1px solid rgba(0,0,0,0.05);background:rgba(255,255,255,0.02)}
 .file-entry .file-info{display:flex;align-items:center;gap:12px;flex:1;min-width:0}
 .file-entry .file-icon{font-size:24px;flex-shrink:0}
@@ -213,7 +203,6 @@ body::after{
 .file-entry.file-dir{cursor:pointer}
 .file-entry.file-dir .file-name{color:var(--primary)}
 
-/* Context Menu */
 .context-menu{position:fixed;background:#1a1a2e;border:1px solid #0f3460;box-shadow:0 8px 32px rgba(0,0,0,0.5);z-index:10001;min-width:160px}
 .context-item{padding:10px 16px;color:#fff;cursor:pointer;font-size:0.9rem;display:flex;align-items:center;gap:8px}
 .context-item:hover{background:rgba(255,130,0,0.2)}
@@ -221,6 +210,5 @@ body::after{
 .context-item.danger:hover{background:rgba(239,68,68,0.2)}
 .context-divider{height:1px;background:rgba(255,255,255,0.1);margin:4px 0}
 
-/* Turnstile Container - ensure visibility */
 #turnstile-container{min-height:65px;display:flex;align-items:center;justify-content:center}
 #turnstile-container iframe{max-width:100%}

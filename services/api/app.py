@@ -381,24 +381,14 @@ def oauth_callback():
 	
 	user_info = {'email': email, 'name': user_name, 'given_name': user_given, 'picture': user_picture}
 	
-	# Both values need to be JSON strings for JavaScript
 	token_js = json.dumps(token)
-	user_js = json.dumps(json.dumps(user_info))  # Double encode: Python dict -> JSON string -> JS string literal
+	user_js = json.dumps(json.dumps(user_info))
 	
-	html = f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>
-<p id="msg">Signing you in...</p>
-<script>
-try {{
-  localStorage.setItem('pincerna_token', {token_js});
-  localStorage.setItem('pincerna_user', {user_js});
-  document.getElementById('msg').textContent = 'Success! Redirecting...';
-  setTimeout(function() {{ window.location.replace('/cloud/index.html'); }}, 100);
-}} catch(e) {{
-  document.getElementById('msg').textContent = 'Error: ' + e.message;
-  console.error('Auth callback error:', e);
-}}
-</script>
-</body></html>"""
+	html = f"""<!doctype html><html><head><meta charset="utf-8"></head><body><script>
+localStorage.setItem('pincerna_token',{token_js});
+localStorage.setItem('pincerna_user',{user_js});
+location.replace('/cloud/index.html');
+</script></body></html>"""
 	return html
 
 def protected(f):

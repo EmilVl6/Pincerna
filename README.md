@@ -10,7 +10,7 @@ v.1.0-beta
 
 ## Availability
 
-Currently accessible by Me alone
+Currently accessible by EV alone
 
 ## License
 
