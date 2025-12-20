@@ -20,15 +20,28 @@ sudo chown -R www-data:www-data "$(dirname "$WWW_DIR")"
 
 echo "UI deployed to ${WWW_DIR}"
 
-# Paths for services/configs we manage
+
 SYSTEMD_UNIT_PATH="/etc/systemd/system/pincerna.service"
 NGINX_SITE_AVAILABLE="/etc/nginx/sites-available/cloud.emilvinod.com"
 NGINX_SITE_ENABLED="/etc/nginx/sites-enabled/cloud.emilvinod.com"
 
-# --- Install or update systemd unit for backend ---
+
 if [ -f "$SYSTEMD_UNIT_PATH" ]; then
   echo "Backing up existing systemd unit to ${SYSTEMD_UNIT_PATH}.bak"
   sudo cp -a "$SYSTEMD_UNIT_PATH" "${SYSTEMD_UNIT_PATH}.bak"
+fi
+
+
+VENV_PATH="$REPO_ROOT/venv"
+REQ_FILE="$REPO_ROOT/services/api/requirements.txt"
+if [ ! -d "$VENV_PATH" ]; then
+  echo "Creating venv at $VENV_PATH"
+  sudo python3 -m venv "$VENV_PATH"
+  sudo "$VENV_PATH/bin/pip" install --upgrade pip setuptools wheel || true
+fi
+if [ -f "$REQ_FILE" ]; then
+  echo "Installing Python requirements from $REQ_FILE"
+  sudo "$VENV_PATH/bin/pip" install -r "$REQ_FILE" || true
 fi
 
 echo "Writing systemd unit to ${SYSTEMD_UNIT_PATH}"
@@ -42,7 +55,7 @@ Type=simple
 User=www-data
 WorkingDirectory=${REPO_ROOT}
 Environment=FLASK_ENV=production
-ExecStart=/usr/bin/python3 ${REPO_ROOT}/services/api/app.py
+ExecStart=${VENV_PATH}/bin/gunicorn -b 127.0.0.1:5002 services.api.app:app --workers 2 --chdir ${REPO_ROOT}
 Restart=on-failure
 
 [Install]
@@ -53,7 +66,7 @@ sudo systemctl daemon-reload || true
 echo "Enabling and starting pincerna service"
 sudo systemctl enable --now pincerna.service || sudo systemctl restart pincerna.service || true
 
-# --- Install nginx site if example exists in repo ---
+
 if [ -f "$REPO_ROOT/nginx/pincerna_auth.conf.example" ]; then
   if [ -f "$NGINX_SITE_AVAILABLE" ]; then
     echo "Backing up existing nginx site to ${NGINX_SITE_AVAILABLE}.bak"
@@ -64,7 +77,7 @@ if [ -f "$REPO_ROOT/nginx/pincerna_auth.conf.example" ]; then
   sudo ln -sf "$NGINX_SITE_AVAILABLE" "$NGINX_SITE_ENABLED"
 fi
 
-# Ensure nginx log dir exists and permissions are sane
+
 sudo mkdir -p /var/log/nginx
 sudo chown root:adm /var/log/nginx || true
 sudo chmod 750 /var/log/nginx || true
