@@ -36,41 +36,49 @@
       btn.setAttribute('aria-disabled','true');
       btn.setAttribute('tabindex','-1');
 
+      let verified = false;
+
       function enableSignIn(){
+        if(verified) return;
+        verified = true;
         btn.classList.remove('disabled');
         btn.removeAttribute('aria-disabled');
         btn.removeAttribute('tabindex');
-        if(_origHref) btn.setAttribute('href', _origHref);
+        btn.setAttribute('href', _origHref);
+        btn.style.cursor = 'pointer';
+        document.body.classList.add('turnstile-verified');
       }
 
+      // Global callback for Turnstile
       window.onTurnstileSuccess = function(token){
-        
+        console.log('Turnstile verified!');
         enableSignIn();
-        
+        // Background server verification (non-blocking)
         fetch('/cloud/api/verify_turnstile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token })
-        }).then(r => r.json()).then(j => {
-          if(j && !j.success) console.warn('server-side turnstile check', j);
-        }).catch(()=>{});
+          body: JSON.stringify({ token: token })
+        }).catch(function(){});
       };
 
-      fetch('/cloud/api/config').then(r=>r.json()).then(cfg=>{
-        const sitekey = cfg && cfg.turnstile_sitekey;
-        if(!sitekey) return;
+      fetch('/cloud/api/config').then(function(r){ return r.json(); }).then(function(cfg){
+        var sitekey = cfg && cfg.turnstile_sitekey;
+        if(!sitekey) {
+          console.error('No turnstile sitekey found');
+          return;
+        }
         function renderWhenReady(){
           if(window.turnstile && typeof window.turnstile.render === 'function'){
             window.turnstile.render(document.getElementById('turnstile-container'), {
               sitekey: sitekey,
-              callback: 'onTurnstileSuccess'
+              callback: window.onTurnstileSuccess
             });
             return;
           }
-          setTimeout(renderWhenReady, 150);
+          setTimeout(renderWhenReady, 100);
         }
         renderWhenReady();
-      }).catch(()=>{});
+      }).catch(function(e){ console.error('Config fetch failed', e); });
     })();
   </script>
 </body>
