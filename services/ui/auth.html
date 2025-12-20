@@ -49,11 +49,9 @@
         document.body.classList.add('turnstile-verified');
       }
 
-      // Global callback for Turnstile
       window.onTurnstileSuccess = function(token){
         console.log('Turnstile verified!');
         enableSignIn();
-        // Background server verification (non-blocking)
         fetch('/cloud/api/verify_turnstile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
