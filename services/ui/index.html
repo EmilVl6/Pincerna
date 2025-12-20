@@ -4,22 +4,39 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <base href="/cloud/">
-  <title>Pincerna — Cloud</title>
+  <script>
+    // Require auth: if no token present, redirect to auth page before loading the app
+    (function(){ try{ if(!localStorage.getItem('pincerna_token')){ window.location.href = 'auth.html'; } }catch(e){} })();
+  </script>
+  <title>Emil's Cloud Server</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="pincerna.svg" type="image/svg+xml">
   <script defer src="app.js"></script>
 </head>
 <body>
   <header class="site-header">
-    <div class="brand">Pincerna</div>
-    <nav class="nav">
+    <div class="brand">
+      <div class="logo"><img src="pincerna.svg" alt="Pincerna logo" class="logo-img"></div>
+      <div class="brand-text">Pincerna</div>
+    </div>
+    <nav class="nav" aria-label="Main">
       <a href="#" id="nav-home" class="active">Dashboard</a>
-        <a href="#" id="nav-files">Files</a>
-        <a href="#" id="nav-controls">Controls</a>
-        <a href="#" id="nav-about">About</a>
+      <a href="#" id="nav-files">Files</a>
+      <a href="#" id="nav-about">About</a>
     </nav>
   </header>
 
-  <main class="wrap">
+  <main class="wrap container">
+    <!-- Preloader: shown on site entry; hidden by JS after a short delay -->
+    <div id="preloader" class="preloader" aria-hidden="true">
+      <div style="text-align:center">
+        <img src="pincerna_anim.svg" alt="Loading" class="preloader-img">
+        <ul id="preloader-steps" class="preloader-steps" aria-hidden="true"></ul>
+        <div id="preloader-indicator" class="preloader-indicator" aria-hidden="true"></div>
+      </div>
+    </div>
     <section class="card" id="hero">
       <h1>Welcome to Pincerna Cloud</h1>
       <p class="lead">Manage your device remotely — secure, simple, and fast.</p>

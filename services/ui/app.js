@@ -1,6 +1,17 @@
 const apiBase = "/cloud/api";
 const $ = sel => document.querySelector(sel);
 
+// Preloader helper: hide the #preloader element after a small delay
+function hidePreloader(delay=700){
+  const p = document.getElementById('preloader');
+  if(!p) return;
+  setTimeout(()=>{
+    p.style.transition = 'opacity 220ms ease';
+    p.style.opacity = '0';
+    setTimeout(()=>{ p.style.display='none'; }, 240);
+  }, delay);
+}
+
 function showMessage(msg, level='info', timeout=4000){
   const t = document.createElement('div');
   t.className = 'toast ' + (level||'info');
@@ -9,6 +20,54 @@ function showMessage(msg, level='info', timeout=4000){
   setTimeout(()=>{ t.style.opacity = '0'; setTimeout(()=>t.remove(),300) }, timeout);
   document.querySelectorAll('.status').forEach(el=>el.textContent = typeof msg === 'string' ? msg : JSON.stringify(msg));
 }
+
+// Progress rectangles for preloader
+function createProgressSteps(names){
+  try{
+    const list = document.getElementById('preloader-steps'); if(!list) return [];
+    list.innerHTML = '';
+    list.classList.add('preloader-progress');
+    return names.map(n=>{
+      const li = document.createElement('li'); li.className = 'step-wrap';
+      const rect = document.createElement('div'); rect.className = 'step';
+      li.appendChild(rect);
+      list.appendChild(li);
+      return {li, rect, name: n};
+    });
+  }catch(e){ return [] }
+}
+
+function setIndicator(text, isError){
+  try{
+    const ind = document.getElementById('preloader-indicator'); if(!ind) return;
+    ind.textContent = text || '';
+    if(isError) ind.classList.add('error'); else ind.classList.remove('error');
+  }catch(e){}
+}
+
+function markStepDone(i){
+  try{
+    if(!progressSteps[i]) return;
+    progressSteps[i].rect.classList.add('done');
+    // update indicator to next step or clear
+    const next = nextIncomplete();
+    if(next === -1) setIndicator('Ready');
+    else setIndicator(progressSteps[next].name);
+  }catch(e){}
+}
+
+function markStepError(i){ try{ if(!progressSteps[i]) return; progressSteps[i].rect.classList.add('error'); setIndicator(progressSteps[i].name + ' — failed', true); }catch(e){} }
+
+function nextIncomplete(){ try{ return progressSteps.findIndex(s=>!s.rect.classList.contains('done') && !s.rect.classList.contains('error')); }catch(e){return -1} }
+
+const PROGRESS_NAMES = ['Initializing interface','Loading assets','Resolving tunnel','Connecting to backend','Authenticating','Loading files','Ready'];
+let progressSteps = [];
+
+// Failsafe: if steps are still incomplete after 6s, mark the next step as error and continue
+setTimeout(()=>{
+  const idx = nextIncomplete();
+  if(idx !== -1){ markStepError(idx); hidePreloader(300); }
+}, 6000);
 
 async function demoLogin(){
   try{
@@ -20,7 +79,9 @@ async function demoLogin(){
     localStorage.setItem('pincerna_token', token);
     document.querySelectorAll('.status').forEach(el=>el.textContent = 'Signed in (demo)');
     $('#btn-logout').hidden = false;
-    initFiles();
+    if(progressSteps && progressSteps.length) markStepDone(4); // auth
+    if(progressSteps && progressSteps.length) markStepDone(5); // files
+    await initFiles();
   }catch(err){ showMessage(err.message || 'Login failed','error') }
 }
 
@@ -82,41 +143,68 @@ async function refreshFiles(){
   if(res && res.files) renderFileList(res.files);
   else if(res && res.error === 'server_returned_html') showMessage('Server returned HTML instead of JSON; backend missing or misconfigured','error');
   else showMessage(res.error || res, 'error');
+  return res;
 }
 
-function initFiles(){
-  document.getElementById('file-input').addEventListener('change', async (ev)=>{
-    const f = ev.target.files[0]; if(!f) return;
-    const fd = new FormData(); fd.append('file', f); fd.append('path', currentPath);
-    await fetch(apiBase + '/files/upload', {method:'POST', body:fd});
-    document.getElementById('file-input').value = '';
-    refreshFiles();
-  });
-  document.getElementById('btn-refresh-files').addEventListener('click', refreshFiles);
-  refreshFiles();
+async function initFiles(){
+  try{
+    const input = document.getElementById('file-input');
+    if(input) input.addEventListener('change', async (ev)=>{
+      const f = ev.target.files[0]; if(!f) return;
+      const fd = new FormData(); fd.append('file', f); fd.append('path', currentPath);
+      await fetch(apiBase + '/files/upload', {method:'POST', body:fd});
+      document.getElementById('file-input').value = '';
+      await refreshFiles();
+    });
+    const btn = document.getElementById('btn-refresh-files'); if(btn) btn.addEventListener('click', refreshFiles);
+    if(progressSteps && progressSteps.length) markStepDone(3); // connecting
+    const res = await refreshFiles();
+    if(res && res.files){
+      if(progressSteps && progressSteps.length) markStepDone(5); // files
+      if(progressSteps && progressSteps.length) markStepDone(6); // ready
+    } else {
+      if(progressSteps && progressSteps.length) markStepDone(6); // ready
+    }
+    // hide preloader when initial load completes
+    hidePreloader(500);
+  }catch(e){ const idx = nextIncomplete(); if(idx !== -1) markStepError(idx); hidePreloader(800); }
 }
 
 document.addEventListener('DOMContentLoaded', ()=>{
+  // create progress rectangles now that DOM is ready
+  progressSteps = createProgressSteps(PROGRESS_NAMES);
+  // small perceived progress markers for init and assets
+  setTimeout(()=>{ if(progressSteps.length) markStepDone(0); }, 80);
+  setTimeout(()=>{ if(progressSteps.length) markStepDone(1); }, 220);
   $('#btn-login').addEventListener('click', demoLogin);
   $('#btn-logout').addEventListener('click', logout);
   $('#btn-vpn').addEventListener('click', toggleVPN);
   $('#btn-access-local').addEventListener('click', ()=>{ document.getElementById('nav-files').click(); });
-  $('#btn-data').addEventListener('click', async ()=>{ const r = await apiFetch('/data'); showMessage(r.error ? r.error : 'Protected data retrieved', r.error ? 'error' : 'success'); });
-  $('#btn-metrics').addEventListener('click', async ()=>{ document.getElementById('controls').style.display='none'; document.getElementById('files').style.display='none'; document.getElementById('about').style.display='none'; document.getElementById('metrics').style.display='block'; document.getElementById('nav-home').classList.remove('active'); document.getElementById('nav-files').classList.remove('active'); document.getElementById('nav-controls').classList.remove('active'); document.getElementById('nav-about').classList.remove('active'); const r = await apiFetch('/metrics'); updateMetrics(r && !r.error ? r : sampleMetrics()); });
-  $('#btn-restart').addEventListener('click', async ()=>{ if(!confirm('Restart the service on the Pi?')) return; const r = await apiFetch('/restart', {method:'POST'}); showMessage(r.error ? r.error : 'Restart command sent', r.error ? 'error' : 'success'); });
+  // Controls removed: no bound actions for data/metrics/restart here
 
-  $('#nav-home').addEventListener('click', ()=>{ document.getElementById('controls').style.display='block'; document.getElementById('files').style.display='none'; document.getElementById('nav-home').classList.add('active'); document.getElementById('nav-files').classList.remove('active'); });
-  $('#nav-files').addEventListener('click', ()=>{ document.getElementById('controls').style.display='none'; document.getElementById('files').style.display='block'; document.getElementById('nav-home').classList.remove('active'); document.getElementById('nav-files').classList.add('active'); initFiles(); });
-  $('#nav-controls').addEventListener('click', ()=>{ document.getElementById('controls').style.display='block'; document.getElementById('files').style.display='none'; document.getElementById('about').style.display='none'; document.getElementById('nav-home').classList.remove('active'); document.getElementById('nav-files').classList.remove('active'); document.getElementById('nav-controls').classList.add('active'); document.getElementById('nav-about').classList.remove('active'); });
-  $('#nav-about').addEventListener('click', ()=>{ document.getElementById('controls').style.display='none'; document.getElementById('files').style.display='none'; document.getElementById('about').style.display='block'; document.getElementById('nav-home').classList.remove('active'); document.getElementById('nav-files').classList.remove('active'); document.getElementById('nav-controls').classList.remove('active'); document.getElementById('nav-about').classList.add('active'); });
+  $('#nav-home').addEventListener('click', ()=>{
+    // show main hero/dashboard
+    const hero = document.getElementById('hero'); if(hero) hero.style.display = 'block';
+    const files = document.getElementById('files'); if(files) files.style.display = 'none';
+    const metrics = document.getElementById('metrics'); if(metrics) metrics.style.display = 'none';
+    const about = document.getElementById('about'); if(about) about.style.display = 'none';
+    document.getElementById('nav-home').classList.add('active'); document.getElementById('nav-files').classList.remove('active'); document.getElementById('nav-about').classList.remove('active');
+  });
+  $('#nav-files').addEventListener('click', ()=>{ const files = document.getElementById('files'); if(files) files.style.display='block'; const hero = document.getElementById('hero'); if(hero) hero.style.display='none'; document.getElementById('nav-home').classList.remove('active'); document.getElementById('nav-files').classList.add('active'); initFiles(); });
+  $('#nav-about').addEventListener('click', ()=>{ const about = document.getElementById('about'); if(about) about.style.display='block'; const hero = document.getElementById('hero'); if(hero) hero.style.display='none'; const files = document.getElementById('files'); if(files) files.style.display='none'; document.getElementById('nav-home').classList.remove('active'); document.getElementById('nav-files').classList.remove('active'); document.getElementById('nav-about').classList.add('active'); });
 
   if(localStorage.getItem('pincerna_token')){
     document.querySelectorAll('.status').forEach(el=>el.textContent = 'Token loaded from localStorage');
     $('#btn-logout').hidden = false;
+    // mark auth step complete when token present
+    if(progressSteps && progressSteps.length) markStepDone(4);
     initFiles();
   }
   const vpn = localStorage.getItem('pincerna_vpn') === '1';
   updateVPNUI(vpn);
+  // mark init step and assets as done early
+  if(progressSteps && progressSteps.length) markStepDone(0);
+  if(progressSteps && progressSteps.length) markStepDone(1);
 });
 
 function updateVPNUI(connected){

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <base href="/cloud/">
+  <title>Pincerna — Sign in</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="pincerna.svg" type="image/svg+xml">
+  <style>
+    html,body{height:100%;margin:0}
+    .gwrap{height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#f6f8fa,#f1f5f8)}
+    .card{width:420px;max-width:94%;padding:28px;border-radius:12px;background:white;box-shadow:0 6px 30px rgba(15,20,30,0.06);text-align:center}
+    .big{font-size:22px;font-weight:700;margin-bottom:8px}
+    .muted{color:var(--muted)}
+    .gbtn-link{display:inline-block;padding:12px 18px;border-radius:8px;background:#fff;color:#202124;border:1px solid rgba(0,0,0,0.08);text-decoration:none;font-weight:600}
+    .gbtn-link:hover{box-shadow:0 4px 10px rgba(0,0,0,0.06)}
+    .gbtn-link:active{transform:translateY(1px)}
+  </style>
+</head>
+<body>
+  <main class="gwrap">
+    <div class="card">
+      <div class="big">PINCERNA AUTH</div>
+      <div style="margin-top:20px">
+        <a class="gbtn-link" href="/cloud/api/oauth/start">Sign in with Google</a>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
