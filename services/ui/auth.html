@@ -53,11 +53,13 @@
             if(j && j.success){
               enableSignIn();
             } else {
-              console.warn('Turnstile verification failed or unavailable');
+              console.warn('Turnstile verification failed or unavailable; enabling sign-in fallback');
+              enableSignIn();
             }
           })
           .catch(err => {
             console.warn('verify_turnstile fetch failed', err);
+            enableSignIn();
           });
       };
 
