@@ -53,6 +53,17 @@ fi
 sudo chown www-data:www-data "$API_LOG" || true
 sudo chmod 640 "$API_LOG" || true
 
+
+ENV_FILE="/etc/default/pincerna"
+if [ ! -f "$ENV_FILE" ]; then
+  echo "Creating default environment file at $ENV_FILE"
+  sudo tee "$ENV_FILE" > /dev/null <<EOL
+
+EOL
+  sudo chmod 640 "$ENV_FILE" || true
+  sudo chown root:root "$ENV_FILE" || true
+fi
+
 echo "Writing systemd unit to ${SYSTEMD_UNIT_PATH}"
 sudo tee "$SYSTEMD_UNIT_PATH" > /dev/null <<EOF
 [Unit]
@@ -77,7 +88,14 @@ EOF
 
 sudo systemctl daemon-reload || true
 echo "Enabling and starting pincerna service"
-sudo systemctl enable --now pincerna.service || sudo systemctl restart pincerna.service || true
+if sudo systemctl enable --now pincerna.service 2>/dev/null; then
+  true
+else
+  
+  sudo systemctl daemon-reload || true
+  sudo systemctl enable pincerna.service || true
+  sudo systemctl start pincerna.service || sudo systemctl restart pincerna.service || true
+fi
 
 
 if [ -f "$REPO_ROOT/nginx/pincerna_auth.conf.example" ]; then
