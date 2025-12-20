@@ -307,23 +307,26 @@ WantedBy=multi-user.target
 EOF
 
 # Configure nginx
+SSLCERT="/etc/ssl/certs/cloud.emilvinod.com.crt"
+SSLKEY="/etc/ssl/private/cloud.emilvinod.com.key"
+
+# Always ensure SSL certificates exist before nginx config
+if [ ! -f "$SSLCERT" ] || [ ! -f "$SSLKEY" ]; then
+    echo "Creating self-signed SSL certificate..."
+    mkdir -p /etc/ssl/private /etc/ssl/certs
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        -keyout "$SSLKEY" -out "$SSLCERT" \
+        -subj "/CN=cloud.emilvinod.com" >/dev/null 2>&1
+    chmod 640 "$SSLKEY"
+    chmod 644 "$SSLCERT"
+    log_success "Created self-signed SSL certificate"
+else
+    log_success "SSL certificates already exist"
+fi
+
 if [ -f "$REPO_ROOT/nginx/pincerna_auth.conf.example" ]; then
     cp "$REPO_ROOT/nginx/pincerna_auth.conf.example" "$NGINX_AVAILABLE"
     ln -sf "$NGINX_AVAILABLE" "$NGINX_ENABLED"
-    
-    # Add SSL certificates if needed
-    SSLCERT="/etc/ssl/certs/cloud.emilvinod.com.crt"
-    SSLKEY="/etc/ssl/private/cloud.emilvinod.com.key"
-    
-    if [ ! -f "$SSLCERT" ] || [ ! -f "$SSLKEY" ]; then
-        mkdir -p /etc/ssl/private /etc/ssl/certs
-        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-            -keyout "$SSLKEY" -out "$SSLCERT" \
-            -subj "/CN=cloud.emilvinod.com" >/dev/null 2>&1
-        chmod 640 "$SSLKEY"
-        chmod 644 "$SSLCERT"
-        log_success "Created self-signed SSL certificate"
-    fi
 fi
 
 # Create nginx log directory

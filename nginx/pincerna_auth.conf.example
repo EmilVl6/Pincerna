@@ -6,7 +6,14 @@ server {
 
 server {
     listen 443 ssl;
-    server_name cloud.emilvinod.com;    
+    server_name cloud.emilvinod.com;
+    
+    # SSL Configuration
+    ssl_certificate /etc/ssl/certs/cloud.emilvinod.com.crt;
+    ssl_certificate_key /etc/ssl/private/cloud.emilvinod.com.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    
     proxy_read_timeout 300s;
     proxy_send_timeout 300s;
 
