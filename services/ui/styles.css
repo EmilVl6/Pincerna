@@ -1,5 +1,5 @@
 :root{
-  --bg: #f6f8fb;
+  --bg: #070607;
   --card: #ffffff;
   --primary: #ff6a00; /* orange primary */
   --accent: #ff9a44; /* lighter orange accent */
@@ -74,14 +74,14 @@ body{
 
 /* auth page styles */
 .auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center}
-.auth-card{width:auto;padding:28px 32px;border-radius:12px;background:#fff;box-shadow:0 24px 80px rgba(11,11,11,0.32);text-align:center}
+.auth-card{width:360px;padding:22px 22px;border-radius:12px;background:#fff;box-shadow:0 24px 80px rgba(11,11,11,0.32);text-align:center}
 .auth-title{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;font-size:22px;font-weight:700;margin:0 0 6px}
 .auth-sub{color:var(--muted);margin:0 0 18px}
 .auth-actions{margin-top:8px}
 .gbtn{display:inline-block;padding:12px 20px;border-radius:10px;background:#fff;color:#202124;border:1px solid rgba(0,0,0,0.08);text-decoration:none;font-weight:700}
 .gbtn:hover{box-shadow:0 8px 24px rgba(2,6,23,0.06)}
 .gbtn:active{transform:translateY(1px)}
-.gbtn{min-width:220px}
+.gbtn{min-width:0}
 
 /* small visual tweak for preloader steps to appear as contiguous blocks */
 .preloader-progress{display:flex;gap:6px;align-items:flex-start;justify-content:center}
@@ -97,20 +97,48 @@ body{
 .gbtn-text{font-weight:700}
 .gbtn.disabled{opacity:0.6;pointer-events:none}
 
-.auth-card .auth-body{display:flex;flex-direction:column;align-items:center;gap:18px;width:420px}
+.auth-card .auth-body{display:flex;flex-direction:column;align-items:center;gap:18px;width:100%}
+.auth-card .auth-body > *{width:100%}
 .auth-card .auth-verify{width:100%;display:flex;justify-content:center}
 .auth-card .auth-actions{width:100%;display:flex;justify-content:center}
 .gbtn{width:100%}
 
-body::before{content:'';position:fixed;inset:0;z-index:-1;background:linear-gradient(120deg,#070707 0%,#0b0b0b 30%,#ffecd9 60%,#ffebdf 100%);background-size:200% 200%;animation:bgShift 8s linear infinite}
-
-@keyframes bgShift{
-  0%{background-position:0% 50%}
-  50%{background-position:100% 50%}
-  100%{background-position:0% 50%}
+/* layered floating patches background */
+body{background-color:var(--bg)}
+body::before{
+  content:'';position:fixed;inset:0;z-index:-2;pointer-events:none;
+  background-image:
+    radial-gradient(30vw 30vw at 12% 18%, rgba(255,106,0,0.38), transparent 18%),
+    radial-gradient(26vw 26vw at 82% 28%, rgba(255,150,70,0.28), transparent 20%),
+    radial-gradient(36vw 36vw at 60% 78%, rgba(0,0,0,0.72), transparent 20%),
+    radial-gradient(28vw 28vw at 30% 72%, rgba(0,0,0,0.5), transparent 18%);
+  background-repeat:no-repeat;background-size:cover;filter:blur(48px) saturate(120%);
+  mix-blend-mode:normal;opacity:0.95;transform-origin:center;
+  animation:patchesFloat 22s ease-in-out infinite;
 }
 
-body::after{content:'';position:fixed;inset:0;pointer-events:none;background-image:radial-gradient(circle at 10% 20%, rgba(255,106,0,0.06), transparent 10%), radial-gradient(circle at 80% 30%, rgba(255,106,0,0.04), transparent 20%), repeating-linear-gradient(45deg, rgba(0,0,0,0.02) 0 2px, rgba(255,106,0,0.01) 2px 4px);mix-blend-mode:overlay;opacity:0.9}
+body::after{
+  content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background-image:radial-gradient(circle at 20% 30%, rgba(255,106,0,0.04), transparent 8%),
+                    radial-gradient(circle at 80% 60%, rgba(255,150,70,0.03), transparent 14%),
+                    radial-gradient(circle at 50% 50%, rgba(0,0,0,0.06), transparent 20%);
+  mix-blend-mode:overlay;opacity:0.85;filter:blur(8px) contrast(1.05);
+  animation:patchesDrift 36s linear infinite;
+}
+
+@keyframes patchesFloat{
+  0%{transform:translate3d(-2%,0,0) scale(1)}
+  25%{transform:translate3d(6%,-3%,0) scale(1.02)}
+  50%{transform:translate3d(-4%,3%,0) scale(1)}
+  75%{transform:translate3d(3%,-2%,0) scale(1.01)}
+  100%{transform:translate3d(-2%,0,0) scale(1)}
+}
+
+@keyframes patchesDrift{
+  0%{transform:translateY(0)}
+  50%{transform:translateY(-3%)}
+  100%{transform:translateY(0)}
+}
 
 /* Cloudflare verify box */
 .auth-verify{display:flex;justify-content:center;margin-bottom:14px}
