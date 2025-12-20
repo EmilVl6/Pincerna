@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <base href="/cloud/">
   <title>Pincerna Auth</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles2.css">
   <link rel="icon" href="pincerna.svg" type="image/svg+xml">
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
   <main class="auth-wrap">
     <div class="auth-card">
-      <h1 class="auth-title">Welcome to Emil's Cloud Server</h1>
+      <h1 class="auth-title">Welcome to Emil's Cloud!</h1>
       <div class="auth-body">
         <div class="auth-verify">
           <div id="turnstile-container" style="min-height:80px;display:flex;align-items:center;justify-content:center"></div>
@@ -36,19 +36,38 @@
       btn.setAttribute('aria-disabled','true');
       btn.setAttribute('tabindex','-1');
 
+      function enableSignIn(){
+        btn.classList.remove('disabled');
+        btn.removeAttribute('aria-disabled');
+        btn.removeAttribute('tabindex');
+        if(_origHref) btn.setAttribute('href', _origHref);
+      }
+
       window.onTurnstileSuccess = function(token){
         fetch('/cloud/api/verify_turnstile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token })
-        }).then(r=>r.json()).then(j=>{
-          if(j && j.success){
-            btn.classList.remove('disabled');
-            btn.removeAttribute('aria-disabled');
-            btn.removeAttribute('tabindex');
-            if(_origHref) btn.setAttribute('href', _origHref);
+        }).then(r=>{
+          if(!r.ok){
+            // server returned error — allow local fallback so user can still try sign-in
+            console.warn('verify_turnstile not OK', r.status);
+            enableSignIn();
+            return null;
           }
-        }).catch(()=>{});
+          return r.json();
+        }).then(j=>{
+          if(j && j.success){
+            enableSignIn();
+          } else if(j && j.success === false){
+            // explicit failure: keep disabled but log
+            console.warn('turnstile verification failed');
+          }
+        }).catch(err=>{
+          // network error — allow user to proceed (fallback)
+          console.warn('verify_turnstile fetch failed', err);
+          enableSignIn();
+        });
       };
 
       fetch('/cloud/api/config').then(r=>r.json()).then(cfg=>{
