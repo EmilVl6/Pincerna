@@ -72,7 +72,12 @@ else
 fi
 echo "Step 5: Setting up Python environment..."
 sudo mkdir -p "$API_DEST"
-sudo cp -r "$API_SRC"/* "$API_DEST"/
+for f in "$API_SRC"/*; do
+    fname=$(basename "$f")
+    if [ "$fname" != "venv" ] && [ "$fname" != "__pycache__" ]; then
+        sudo cp -r "$f" "$API_DEST"/
+    fi
+done
 if [ ! -d "$API_DEST/venv" ]; then
     sudo python3 -m venv "$API_DEST/venv"
     echo "Created Python virtual environment"
