@@ -47,26 +47,35 @@ function setIndicator(text, isError){
 
 function markStepDone(i){
   try{
+    if(preloaderFailed) return;
     if(!progressSteps[i]) return;
     progressSteps[i].rect.classList.add('done');
-    // update indicator to next step or clear
     const next = nextIncomplete();
     if(next === -1) setIndicator('Ready');
     else setIndicator(progressSteps[next].name);
   }catch(e){}
 }
 
-function markStepError(i){ try{ if(!progressSteps[i]) return; progressSteps[i].rect.classList.add('error'); setIndicator(progressSteps[i].name + ' — failed', true); }catch(e){} }
+function markStepError(i){
+  try{
+    if(!progressSteps[i]) return;
+    preloaderFailed = true;
+    progressSteps[i].rect.classList.add('error');
+    setIndicator(progressSteps[i].name + ' — failed', true);
+  }catch(e){}
+}
 
 function nextIncomplete(){ try{ return progressSteps.findIndex(s=>!s.rect.classList.contains('done') && !s.rect.classList.contains('error')); }catch(e){return -1} }
 
 const PROGRESS_NAMES = ['Initializing interface','Loading assets','Resolving tunnel','Connecting to backend','Authenticating','Loading files','Ready'];
 let progressSteps = [];
+let preloaderFailed = false;
 
-// Failsafe: if steps are still incomplete after 6s, mark the next step as error and continue
+// Failsafe: if steps are still incomplete after 6s, mark the next step as error (unless already failed)
 setTimeout(()=>{
+  if(preloaderFailed) return;
   const idx = nextIncomplete();
-  if(idx !== -1){ markStepError(idx); hidePreloader(300); }
+  if(idx !== -1){ markStepError(idx); }
 }, 6000);
 
 async function demoLogin(){

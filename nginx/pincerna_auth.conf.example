@@ -13,6 +13,9 @@ server {
     
     root /var/www/pincerna;
     index index.html;
+    location = / {
+        return 302 /cloud/;
+    }
     location /cloud/ {
         try_files $uri $uri/ /cloud/index.html;
     }
