@@ -11,43 +11,45 @@
   <title>Emil's Cloud Server</title>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles_sec.css">
   <link rel="icon" href="pincerna.svg" type="image/svg+xml">
   <script defer src="app.js"></script>
 </head>
 <body>
+  <!-- Preloader: shown on site entry; hidden by JS after load -->
+  <div id="preloader" class="preloader" aria-hidden="true">
+    <div style="text-align:center">
+      <img src="pincerna_anim.svg" alt="Loading" class="preloader-img">
+      <div id="preloader-steps" class="preloader-progress"></div>
+      <div id="preloader-indicator" class="preloader-indicator">Loading...</div>
+    </div>
+  </div>
+
   <header class="site-header">
     <div class="brand">
       <div class="logo"><img src="pincerna.svg" alt="Pincerna logo" class="logo-img"></div>
       <div class="brand-text">Pincerna</div>
     </div>
-    <nav class="nav" aria-label="Main">
-      <a href="#" id="nav-home" class="active">Dashboard</a>
-      <a href="#" id="nav-files">Files</a>
-      <a href="#" id="nav-about">About</a>
-    </nav>
+    <div class="header-right">
+      <span id="user-greeting" class="user-greeting"></span>
+      <nav class="nav" aria-label="Main">
+        <a href="#" id="nav-home" class="active">Dashboard</a>
+        <a href="#" id="nav-files">Files</a>
+        <a href="#" id="nav-about">About</a>
+      </nav>
+    </div>
   </header>
 
   <main class="wrap container">
-    <!-- Preloader: shown on site entry; hidden by JS after a short delay -->
-    <div id="preloader" class="preloader" aria-hidden="true">
-      <div style="text-align:center">
-        <img src="pincerna_anim.svg" alt="Loading" class="preloader-img">
-        <ul id="preloader-steps" class="preloader-steps" aria-hidden="true"></ul>
-        <div id="preloader-indicator" class="preloader-indicator" aria-hidden="true"></div>
-      </div>
-    </div>
     <section class="card" id="hero">
-      <h1>Welcome to Pincerna Cloud</h1>
+      <h1 id="welcome-title">Welcome to Pincerna Cloud</h1>
       <p class="lead">Manage your device remotely — secure, simple, and fast.</p>
       <div class="row">
         <div>
-          <button id="btn-login" class="btn primary">Sign in (demo)</button>
-          <button id="btn-logout" class="btn" hidden>Sign out</button>
+          <button id="btn-logout" class="btn">Sign out</button>
           <button id="btn-vpn" class="btn vpn">Start VPN</button>
           <button id="btn-access-local" class="btn ghost">Access Local Files</button>
         </div>
-        <div class="status" id="login-status">Not signed in</div>
       </div>
     </section>
 

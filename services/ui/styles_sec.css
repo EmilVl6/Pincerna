@@ -21,13 +21,17 @@ body{
 }
 
 .container{max-width:1100px;margin:28px auto;padding:0 18px}
-.site-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;margin-bottom:8px}
+.site-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;margin-bottom:8px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.05)}
 .brand{display:flex;align-items:center;gap:12px}
 .logo{width:44px;height:44px;border-radius:0;display:flex;align-items:center;justify-content:center;position:relative}
 .logo-img{width:44px;height:44px;display:block;border-radius:0}
-.brand-text{font-weight:600;font-size:1.05rem}
+.brand-text{font-weight:600;font-size:1.05rem;color:#fff}
+.header-right{display:flex;align-items:center;gap:16px}
+.user-greeting{color:var(--primary);font-weight:600;font-size:0.95rem}
+.nav{display:flex;align-items:center}
 .nav a{color:var(--muted);margin-left:14px;text-decoration:none;padding:6px 8px;border-radius:0;font-weight:500}
-.nav a.active{color:var(--primary);background:rgba(255,122,0,0.06)}
+.nav a:hover{color:#fff}
+.nav a.active{color:var(--primary);background:rgba(255,122,0,0.1)}
 
 .wrap{padding-bottom:36px}
 .card{background:var(--card);border-radius:var(--radius);padding:20px;margin:18px 0;border:1px solid var(--glass);box-shadow:0 10px 30px rgba(15,23,42,0.08)}
@@ -56,8 +60,10 @@ body{
 }
 
 
-.preloader{position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:9999}
-.preloader-img{width:140px;height:140px;max-width:28vw}
+.preloader{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:9999}
+.preloader-img{width:120px;height:120px;max-width:28vw}
+.preloader-progress{margin-top:16px}
+.preloader-indicator{color:var(--muted);font-size:0.9rem;margin-top:12px}
 .preloader-steps{list-style:none;padding:6px 0 0 0;margin:4px 0 0 0;max-width:360px;margin-left:auto;margin-right:auto}
 .preloader-progress{display:flex;gap:6px;align-items:flex-start;justify-content:center}
 .preloader-progress .step-wrap{display:flex;flex-direction:column;align-items:center;gap:0;width:44px}

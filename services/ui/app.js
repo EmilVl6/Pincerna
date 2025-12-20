@@ -1,6 +1,29 @@
 const apiBase = "/cloud/api";
 const $ = sel => document.querySelector(sel);
 
+// Get user info from localStorage
+function getUserInfo(){
+  try{
+    const raw = localStorage.getItem('pincerna_user');
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return null;
+}
+
+// Display user greeting
+function showUserGreeting(){
+  const user = getUserInfo();
+  const greetEl = document.getElementById('user-greeting');
+  const titleEl = document.getElementById('welcome-title');
+  if(user && user.given_name){
+    if(greetEl) greetEl.textContent = 'Hi, ' + user.given_name;
+    if(titleEl) titleEl.textContent = 'Hi ' + user.given_name + '!';
+  } else if(user && user.name){
+    if(greetEl) greetEl.textContent = 'Hi, ' + user.name.split(' ')[0];
+    if(titleEl) titleEl.textContent = 'Hi ' + user.name.split(' ')[0] + '!';
+  }
+}
+
 // Preloader helper: hide the #preloader element after a small delay
 function hidePreloader(delay=700){
   const p = document.getElementById('preloader');
@@ -132,8 +155,8 @@ async function demoLogin(){
 
 function logout(){
   localStorage.removeItem('pincerna_token');
-  document.querySelectorAll('.status').forEach(el=>el.textContent = 'Signed out');
-  $('#btn-logout').hidden = true;
+  localStorage.removeItem('pincerna_user');
+  window.location.href = 'auth.html';
 }
 
 async function apiFetch(path, opts={}){
@@ -216,12 +239,13 @@ async function initFiles(){
 }
 
 document.addEventListener('DOMContentLoaded', ()=>{
-  // create progress rectangles now that DOM is ready
-  progressSteps = createProgressSteps(PROGRESS_NAMES);
-  // small perceived progress markers for init and assets
-  setTimeout(()=>{ if(progressSteps.length) markStepDone(0); }, 80);
-  setTimeout(()=>{ if(progressSteps.length) markStepDone(1); }, 220);
-  $('#btn-login').addEventListener('click', demoLogin);
+  // Show user greeting immediately if we have user info
+  showUserGreeting();
+  
+  // Simplified preloader - just show loading then hide after init
+  const indicator = document.getElementById('preloader-indicator');
+  if(indicator) indicator.textContent = 'Connecting...';
+  
   $('#btn-logout').addEventListener('click', logout);
   $('#btn-vpn').addEventListener('click', toggleVPN);
   $('#btn-access-local').addEventListener('click', ()=>{ document.getElementById('nav-files').click(); });
@@ -239,11 +263,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
   $('#nav-about').addEventListener('click', ()=>{ const about = document.getElementById('about'); if(about) about.style.display='block'; const hero = document.getElementById('hero'); if(hero) hero.style.display='none'; const files = document.getElementById('files'); if(files) files.style.display='none'; document.getElementById('nav-home').classList.remove('active'); document.getElementById('nav-files').classList.remove('active'); document.getElementById('nav-about').classList.add('active'); });
 
   if(localStorage.getItem('pincerna_token')){
-    document.querySelectorAll('.status').forEach(el=>el.textContent = 'Token loaded from localStorage');
-    $('#btn-logout').hidden = false;
-    // mark auth step complete when token present
-    if(progressSteps && progressSteps.length) markStepDone(4);
-    initFiles();
+    // User is authenticated - initialize the app
+    if(indicator) indicator.textContent = 'Loading files...';
+    initFiles().then(()=>{
+      hidePreloader(400);
+    }).catch(()=>{
+      hidePreloader(400);
+    });
+  } else {
+    // No token - redirect to auth
+    window.location.href = 'auth.html';
   }
   const vpn = localStorage.getItem('pincerna_vpn') === '1';
   updateVPNUI(vpn);

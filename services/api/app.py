@@ -235,6 +235,31 @@ def verify_google():
 	return jsonify(token=token)
 
 
+def _access_denied_page(message=None):
+	"""Return a clean, centered access denied page."""
+	text = message or "Sorry, you don't have access"
+	return f'''<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Access Denied</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+html,body{{height:100%;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}}
+body{{display:flex;align-items:center;justify-content:center;background:#000;color:#fff}}
+.message{{text-align:center;padding:40px}}
+h1{{font-size:1.5rem;font-weight:500;letter-spacing:-0.02em}}
+</style>
+</head>
+<body>
+<div class="message">
+<h1>{text}</h1>
+</div>
+</body>
+</html>'''
+
+
 def _make_redirect_uri():
 	# Build a redirect URI that points back to this server's /cloud/api/oauth/callback
 	# request.host_url includes scheme+host+port with trailing slash
@@ -319,7 +344,7 @@ def oauth_callback():
 	email = payload.get('email')
 	verified = payload.get('email_verified') in ('true', True, '1')
 	if not email or not verified:
-		return 'Email not verified', 400
+		return _access_denied_page('Email not verified'), 400
 	# check allowed
 	try:
 		base = os.path.dirname(__file__)
@@ -329,19 +354,26 @@ def oauth_callback():
 	except Exception:
 		allowed = ['emilvinod@gmail.com']
 	if email.lower() not in [e.lower() for e in allowed]:
-		return 'Not allowed', 403
+		return _access_denied_page(), 403
+	# get user info from payload
+	user_name = payload.get('name', '')
+	user_given = payload.get('given_name', '')
+	user_picture = payload.get('picture', '')
 	# create our JWT
-	token = jwt.encode({'user': email, 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=12)}, SECRET, algorithm='HS256')
+	token = jwt.encode({'user': email, 'name': user_name, 'given_name': user_given, 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=12)}, SECRET, algorithm='HS256')
 	# cleanup
 	try:
 		del OAUTH_STORE[state]
 		_save_oauth_store()
 	except:
 		pass
+	# user info JSON for localStorage
+	user_info = json.dumps({'email': email, 'name': user_name, 'given_name': user_given, 'picture': user_picture})
 	# respond with small page that stores token in localStorage and redirects
 	html = f"""<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head><body>
 	<script>
 	  localStorage.setItem('pincerna_token', {json.dumps(token)});
+	  localStorage.setItem('pincerna_user', {user_info});
 	  window.location.href = '/cloud/';
 	</script>
 	</body></html>"""
