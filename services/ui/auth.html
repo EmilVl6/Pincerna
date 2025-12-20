@@ -7,19 +7,18 @@
   <title>Pincerna — Sign in</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="icon" href="pincerna.svg" type="image/svg+xml">
+  <!-- Cloudflare Turnstile (replace SITE_KEY with your site key) -->
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
   <main class="auth-wrap">
     <div class="auth-card">
       <h1 class="auth-title">ID, Please!</h1>
       <div class="auth-verify">
-        <label class="cf-verify">
-          <input id="cf-check" type="checkbox">
-          <span class="cf-box">
-            <svg class="cf-check" viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </span>
-          <span class="cf-text">Let us know you're human</span>
-        </label>
+        <div id="turnstile-container" style="min-height:80px;display:flex;align-items:center;justify-content:center">
+          <!-- widget will be rendered here after fetching the public site key -->
+        </div>
+        <div class="cf-status"><span id="cf-status-text">Please complete the verification</span></div>
       </div>
       <div class="auth-actions">
         <a id="signin-btn" class="btn gbtn disabled" href="/cloud/api/oauth/start" aria-disabled="true">
@@ -31,23 +30,58 @@
   </main>
   <script>
     (function(){
-      const chk = document.getElementById('cf-check');
       const btn = document.getElementById('signin-btn');
-      const cfText = document.querySelector('.cf-text');
-      if(!chk || !btn) return;
-      chk.addEventListener('change', ()=>{
-        if(chk.checked){
-          btn.classList.remove('disabled');
-          btn.removeAttribute('aria-disabled');
-          if (cfText) cfText.innerHTML = '<span class="cf-success"><span>Success!</span></span>';
-        } else {
-          btn.classList.add('disabled');
-          btn.setAttribute('aria-disabled','true');
-          if (cfText) cfText.textContent = "Let us know you're human";
-        }
-      });
+      const statusText = document.getElementById('cf-status-text');
+      if(!btn) return;
+      
       btn.classList.add('disabled');
       btn.setAttribute('aria-disabled','true');
+
+      
+      window.onTurnstileSuccess = function(token){
+        statusText.textContent = 'Verifying...';
+        fetch('/cloud/api/verify_turnstile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token })
+        }).then(r=>r.json()).then(j=>{
+          if(j && j.success){
+            btn.classList.remove('disabled');
+            btn.removeAttribute('aria-disabled');
+            statusText.innerHTML = '<span class="cf-success">Success</span>';
+          } else {
+            btn.classList.add('disabled');
+            btn.setAttribute('aria-disabled','true');
+            statusText.innerHTML = '<span class="cf-failed">Verification failed</span>';
+          }
+        }).catch(e=>{
+          btn.classList.add('disabled');
+          btn.setAttribute('aria-disabled','true');
+          statusText.innerHTML = '<span class="cf-failed">Verification error</span>';
+        });
+      };
+      
+      fetch('/cloud/api/config').then(r=>r.json()).then(cfg=>{
+        const sitekey = cfg && cfg.turnstile_sitekey;
+        if(!sitekey){
+          statusText.textContent = 'Verification not configured';
+          return;
+        }
+        
+        function renderWhenReady(){
+          if(window.turnstile && typeof window.turnstile.render === 'function'){
+            
+            window.turnstile.render(document.getElementById('turnstile-container'), {
+              sitekey: sitekey,
+              callback: 'onTurnstileSuccess'
+            });
+            statusText.textContent = 'Please complete the verification';
+            return;
+          }
+          setTimeout(renderWhenReady, 150);
+        }
+        renderWhenReady();
+      }).catch(()=>{ statusText.textContent = 'Verification unavailable'; });
     })();
   </script>
 </body>

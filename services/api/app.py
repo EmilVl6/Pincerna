@@ -158,6 +158,46 @@ def oauth_callback_alias():
 	return oauth_callback()
 
 
+@app.route('/verify_turnstile', methods=['POST'])
+def verify_turnstile():
+	data = request.get_json() or {}
+	token = (data.get('token') or data.get('cf_turnstile_response') or '').strip()
+	if not token:
+		return jsonify(error='missing_token'), 400
+	secret = os.environ.get('TURNSTILE_SECRET')
+	if not secret:
+		return jsonify(error='turnstile_not_configured'), 500
+	post_data = urllib.parse.urlencode({'secret': secret, 'response': token}).encode('utf-8')
+	try:
+		req = urllib.request.Request('https://challenges.cloudflare.com/turnstile/v0/siteverify', data=post_data,
+									 headers={'Content-Type': 'application/x-www-form-urlencoded'})
+		with urllib.request.urlopen(req, timeout=6) as resp:
+			resp_j = json.load(resp)
+	except Exception as e:
+		logging.exception('turnstile verify failed')
+		return jsonify(error='verify_failed', detail=str(e)), 500
+	if not resp_j.get('success'):
+		return jsonify(error='not_human', detail=resp_j), 400
+	return jsonify(success=True, detail=resp_j)
+
+
+@app.route('/cloud/api/verify_turnstile', methods=['POST'])
+def verify_turnstile_alias():
+	return verify_turnstile()
+
+
+@app.route('/config')
+def config():
+	# return minimal public config for the UI
+	sitekey = os.environ.get('TURNSTILE_SITEKEY', '')
+	return jsonify(turnstile_sitekey=sitekey)
+
+
+@app.route('/cloud/api/config')
+def config_alias():
+	return config()
+
+
 @app.route('/verify_google', methods=['POST'])
 def verify_google():
 	data = request.get_json() or {}
