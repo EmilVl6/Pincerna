@@ -321,6 +321,14 @@ if [ -f "$REPO_ROOT/nginx/pincerna_auth.conf.example" ]; then
     ln -sf "$NGINX_AVAILABLE" "$NGINX_ENABLED"
 fi
 
+# Disable default nginx site that may reference snakeoil certs
+if [ -f "/etc/nginx/sites-enabled/default" ]; then
+    rm -f /etc/nginx/sites-enabled/default
+    log_success "Disabled default nginx site"
+fi
+
+# Remove any broken symlinks in sites-enabled
+find /etc/nginx/sites-enabled -xtype l -delete 2>/dev/null || true
 
 mkdir -p /var/log/nginx
 chown root:adm /var/log/nginx
