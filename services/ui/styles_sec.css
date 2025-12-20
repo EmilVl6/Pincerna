@@ -69,8 +69,8 @@ body{
 
 /* auth page */
 .auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center}
-.auth-card{width:360px;padding:28px 28px;border-radius:var(--radius);background:#fff;box-shadow:0 26px 70px rgba(0,0,0,0.42);text-align:center;display:flex;flex-direction:column;gap:22px}
-.auth-title{font-size:22px;font-weight:700;margin:0}
+.auth-card{width:380px;padding:30px 30px;border-radius:var(--radius);background:linear-gradient(180deg,#ffffff 0%, #fdf8f3 100%);border:1px solid rgba(0,0,0,0.04);box-shadow:0 32px 90px rgba(0,0,0,0.4);text-align:center;display:flex;flex-direction:column;gap:20px}
+.auth-title{font-size:22px;font-weight:700;margin:0;color:#111}
 .auth-sub{color:var(--muted);margin:0}
 .auth-actions{margin-top:0}
 .gbtn{display:inline-block;padding:12px 20px;border-radius:var(--radius);background:#fff;color:#202124;border:1px solid rgba(0,0,0,0.08);text-decoration:none;font-weight:700}
@@ -93,33 +93,34 @@ body{
 
 /* layered floating patches background */
 body::before{
-  content:'';position:fixed;inset:-10% 0 -10% 0;z-index:-2;pointer-events:none;
+  content:'';position:fixed;inset:0;z-index:-2;pointer-events:none;
   background:
-    radial-gradient(32vw 32vw at 20% 35%, rgba(255,130,0,0.66), transparent 26%),
-    radial-gradient(28vw 28vw at 70% 20%, rgba(255,165,90,0.5), transparent 24%),
-    radial-gradient(36vw 36vw at 55% 70%, rgba(0,0,0,0.72), transparent 28%);
+    linear-gradient(120deg, rgba(255,140,0,0.28) 0%, rgba(0,0,0,0.75) 40%, rgba(255,120,0,0.32) 70%, rgba(0,0,0,0.9) 100%),
+    radial-gradient(38vw 38vw at 18% 42%, rgba(255,150,40,0.38), transparent 50%),
+    radial-gradient(32vw 32vw at 76% 28%, rgba(255,120,0,0.32), transparent 52%);
   background-repeat:no-repeat;
-  filter:blur(32px) saturate(150%);
-  mix-blend-mode:normal;opacity:0.98;
-  animation:waveSlide 30s linear infinite;
+  background-size:220% 220%, cover, cover;
+  filter:saturate(150%) blur(22px);
+  mix-blend-mode:normal;opacity:0.96;
+  animation:waveDrift 28s linear infinite;
 }
 body::after{
-  content:'';position:fixed;inset:-12% 0 -12% 0;z-index:-1;pointer-events:none;
+  content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
   background:
-    radial-gradient(26vw 26vw at 15% 45%, rgba(255,140,0,0.08), transparent 30%),
-    radial-gradient(30vw 30vw at 80% 55%, rgba(255,150,80,0.07), transparent 34%),
-    radial-gradient(20vw 20vw at 50% 50%, rgba(0,0,0,0.07), transparent 36%);
-  mix-blend-mode:overlay;opacity:0.9;filter:blur(10px) contrast(1.08);
-  animation:waveSlideSoft 36s linear infinite;
+    radial-gradient(28vw 28vw at 25% 55%, rgba(255,140,0,0.12), transparent 60%),
+    radial-gradient(26vw 26vw at 78% 58%, rgba(255,150,80,0.1), transparent 58%),
+    radial-gradient(18vw 18vw at 52% 48%, rgba(0,0,0,0.1), transparent 70%);
+  mix-blend-mode:overlay;opacity:0.9;filter:blur(12px) contrast(1.08);
+  animation:waveDriftSoft 32s linear infinite;
 }
 
-@keyframes waveSlide{
-  0%{transform:translateX(0)}
-  100%{transform:translateX(-25%)}
+@keyframes waveDrift{
+  0%{transform:translate3d(0,0,0)}
+  100%{transform:translate3d(-35%,0,0)}
 }
-@keyframes waveSlideSoft{
-  0%{transform:translateX(0)}
-  100%{transform:translateX(20%)}
+@keyframes waveDriftSoft{
+  0%{transform:translate3d(0,0,0)}
+  100%{transform:translate3d(25%,0,0)}
 }
 
 /* Cloudflare verify box */
