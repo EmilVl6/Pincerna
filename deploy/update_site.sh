@@ -100,18 +100,25 @@ check_root
 # =========================================
 log_step "1/8" "Installing system dependencies"
 
-# Update package lists
-apt-get update -qq
-
-# Install required packages
+# Install required packages (only if missing)
 PACKAGES="nginx python3 python3-venv python3-pip rsync wireguard wireguard-tools openssl"
+NEED_INSTALL=""
 for pkg in $PACKAGES; do
-    if ! dpkg -l | grep -q "^ii  $pkg "; then
-        echo "Installing $pkg..."
-        apt-get install -y "$pkg" >/dev/null 2>&1
+    if ! dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
+        NEED_INSTALL="$NEED_INSTALL $pkg"
     fi
 done
-log_success "All dependencies installed"
+
+if [ -n "$NEED_INSTALL" ]; then
+    apt-get update -qq
+    for pkg in $NEED_INSTALL; do
+        echo "Installing $pkg..."
+        apt-get install -y "$pkg" >/dev/null 2>&1
+    done
+    log_success "Installed:$NEED_INSTALL"
+else
+    log_success "All dependencies already installed"
+fi
 
 # =========================================
 # Step 2: Collect & Configure Credentials
