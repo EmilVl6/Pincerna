@@ -249,7 +249,42 @@ document.addEventListener('DOMContentLoaded', ()=>{
   $('#btn-logout').addEventListener('click', logout);
   $('#btn-vpn').addEventListener('click', toggleVPN);
   $('#btn-access-local').addEventListener('click', ()=>{ document.getElementById('nav-files').click(); });
-  // Controls removed: no bound actions for data/metrics/restart here
+  
+  // Control buttons
+  const btnData = document.getElementById('btn-data');
+  const btnMetrics = document.getElementById('btn-metrics');
+  const btnRestart = document.getElementById('btn-restart');
+  
+  if(btnData) btnData.addEventListener('click', async ()=>{
+    const res = await apiFetch('/data');
+    if(res && res.message) showMessage(res.message, 'info');
+    else if(res && res.error) showMessage(res.error, 'error');
+    else showMessage('Data fetched', 'info');
+  });
+  
+  if(btnMetrics) btnMetrics.addEventListener('click', async ()=>{
+    const metricsSection = document.getElementById('metrics');
+    if(metricsSection) metricsSection.style.display = 'block';
+    try{
+      const res = await apiFetch('/metrics');
+      if(res && (res.cpu !== undefined || res.memory !== undefined)){
+        updateMetrics({cpu: res.cpu || 0, mem: res.memory || 0, disk: 0});
+        showMessage('Metrics loaded', 'info');
+      } else {
+        updateMetrics(sampleMetrics());
+        showMessage('Using sample metrics', 'info');
+      }
+    }catch(e){
+      updateMetrics(sampleMetrics());
+    }
+  });
+  
+  if(btnRestart) btnRestart.addEventListener('click', async ()=>{
+    if(!confirm('Are you sure you want to restart the service?')) return;
+    const res = await apiFetch('/restart', {method:'POST'});
+    if(res && res.error) showMessage(res.error, 'error');
+    else showMessage('Restart command sent', 'info');
+  });
 
   $('#nav-home').addEventListener('click', ()=>{
     // show main hero/dashboard
@@ -264,7 +299,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   if(localStorage.getItem('pincerna_token')){
     // User is authenticated - initialize the app
-    if(indicator) indicator.textContent = 'Loading files...';
+    if(indicator) indicator.textContent = 'Loading';
     initFiles().then(()=>{
       hidePreloader(400);
     }).catch(()=>{

@@ -28,6 +28,8 @@ body{
 .brand-text{font-weight:600;font-size:1.05rem;color:#fff}
 .header-right{display:flex;align-items:center;gap:16px}
 .user-greeting{color:var(--primary);font-weight:600;font-size:0.95rem}
+.signout-link{color:#e74c3c;font-weight:600;font-size:0.9rem;text-decoration:none;margin-left:16px;padding:6px 12px;transition:opacity 0.15s}
+.signout-link:hover{opacity:0.8}
 .nav{display:flex;align-items:center}
 .nav a{color:var(--muted);margin-left:14px;text-decoration:none;padding:6px 8px;border-radius:0;font-weight:500}
 .nav a:hover{color:#fff}
@@ -138,6 +140,21 @@ body::after{
 .cf-success{display:inline-flex;align-items:center;gap:8px;color:#fff;background:var(--primary);padding:6px 10px;border-radius:0}
 .cf-cloud{width:20px;height:14px}
 
-
+/* auth card accent */
 .auth-card{border:1px solid rgba(11,11,11,0.03)}
 .auth-title{color:#0b0b0b}
+
+/* Toast notifications */
+.toast{position:fixed;bottom:24px;right:24px;background:#222;color:#fff;padding:12px 20px;font-weight:500;z-index:10000;box-shadow:0 8px 24px rgba(0,0,0,0.3);animation:toastIn 0.2s ease}
+.toast.error{background:#e74c3c}
+.toast.info{background:#333}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+/* File entries */
+.file-entry{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(0,0,0,0.05)}
+.file-entry:last-child{border-bottom:none}
+.file-entry .meta{font-size:0.85rem;color:var(--muted)}
+.file-entry .actions{display:flex;gap:8px}
+
+/* Warn button */
+.btn.warn{background:#e74c3c;color:#fff;border:none}
