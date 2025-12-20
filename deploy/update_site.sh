@@ -43,6 +43,14 @@ if [ -f "$REQ_FILE" ]; then
   echo "Installing Python requirements from $REQ_FILE"
   sudo "$VENV_PATH/bin/pip" install -r "$REQ_FILE" || true
 fi
+sudo chown -R www-data:www-data "$VENV_PATH" || true
+
+API_LOG="$REPO_ROOT/api.log"
+if [ ! -f "$API_LOG" ]; then
+  sudo touch "$API_LOG"
+fi
+sudo chown www-data:www-data "$API_LOG" || true
+sudo chmod 640 "$API_LOG" || true
 
 echo "Writing systemd unit to ${SYSTEMD_UNIT_PATH}"
 sudo tee "$SYSTEMD_UNIT_PATH" > /dev/null <<EOF
@@ -75,6 +83,21 @@ if [ -f "$REPO_ROOT/nginx/pincerna_auth.conf.example" ]; then
   echo "Installing nginx site from repo example"
   sudo install -m 644 "$REPO_ROOT/nginx/pincerna_auth.conf.example" "$NGINX_SITE_AVAILABLE"
   sudo ln -sf "$NGINX_SITE_AVAILABLE" "$NGINX_SITE_ENABLED"
+  
+  if sudo grep -q "listen 443" "$NGINX_SITE_AVAILABLE" && ! sudo grep -q "ssl_certificate" "$NGINX_SITE_AVAILABLE"; then
+    SSLCERT=/etc/ssl/certs/cloud.emilvinod.com.crt
+    SSLKEY=/etc/ssl/private/cloud.emilvinod.com.key
+    if [ ! -f "$SSLCERT" ] || [ ! -f "$SSLKEY" ]; then
+      echo "Creating temporary self-signed certificate at $SSLCERT"
+      sudo mkdir -p /etc/ssl/private /etc/ssl/certs
+      sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        -keyout "$SSLKEY" -out "$SSLCERT" -subj "/CN=cloud.emilvinod.com" || true
+      sudo chmod 640 "$SSLKEY" || true
+      sudo chmod 644 "$SSLCERT" || true
+    fi
+    
+    sudo sed -i "/server_name cloud.emilvinod.com;/a \    ssl_certificate $SSLCERT;\n    ssl_certificate_key $SSLKEY;" "$NGINX_SITE_AVAILABLE" || true
+  fi
 fi
 
 
