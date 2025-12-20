@@ -91,4 +91,24 @@ body{
 .preloader-progress .step.done{background:var(--primary)}
 .preloader-progress .step.error{background:#ff6b6b}
 
+/* Google-style login button with logo */
+.gbtn{display:inline-flex;align-items:center;gap:12px;padding:10px 18px;border-radius:12px;background:#0b0b0b;color:#fff;border:none}
+.glogo{flex:0 0 auto}
+.gbtn-text{font-weight:700}
+.gbtn.disabled{opacity:0.6;pointer-events:none}
+
+/* Cloudflare verify box */
+.auth-verify{display:flex;justify-content:center;margin-bottom:14px}
+.cf-verify{display:inline-flex;align-items:center;gap:10px;border-radius:8px;padding:8px 12px;background:#fff;border:1px solid rgba(15,23,42,0.04);box-shadow:0 6px 18px rgba(2,6,23,0.03);cursor:pointer}
+.cf-verify input{display:none}
+.cf-box{width:34px;height:24px;border-radius:6px;background:#f7f7f9;border:1px solid rgba(15,23,42,0.06);display:flex;align-items:center;justify-content:center}
+.cf-check{display:none}
+.cf-verify input:checked + .cf-box{background:#16a34a;border-color:rgba(0,0,0,0.04)}
+.cf-verify input:checked + .cf-box .cf-check{display:block}
+.cf-text{color:var(--muted);font-weight:600}
+
+/* auth card accent */
+.auth-card{border:1px solid rgba(11,11,11,0.03)}
+.auth-title{color:#0b0b0b}
+
 
