@@ -161,3 +161,81 @@ body::after{
 /* Warn button */
 .btn.warn{background:#e74c3c;color:#fff;border:none}
 .btn.warn:hover{background:#c0392b}
+
+/* ========================================= */
+/* Metric Widgets - Pixel Style */
+/* ========================================= */
+.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));gap:12px;margin-bottom:16px}
+.metric-widget{background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);border:2px solid #0f3460;padding:16px;text-align:center;position:relative;overflow:hidden}
+.metric-widget::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg, transparent, var(--primary), transparent)}
+.metric-icon{font-size:24px;margin-bottom:8px;filter:drop-shadow(0 0 8px rgba(255,130,0,0.5))}
+.metric-value{font-size:28px;font-weight:700;color:#fff;font-family:'Courier New', monospace;text-shadow:0 0 10px rgba(255,130,0,0.3)}
+.metric-label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--primary);margin-top:4px;font-weight:600}
+.metric-sub{font-size:10px;color:var(--muted);margin-top:4px}
+.metrics-refresh{display:flex;align-items:center;gap:12px;margin-top:12px}
+.metrics-refresh .meta{color:var(--muted);font-size:0.85rem}
+
+/* VPN Panel */
+.vpn-stats{display:flex;flex-direction:column;gap:16px}
+.vpn-status-indicator{display:flex;align-items:center;gap:12px;padding:12px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.05)}
+.vpn-dot{width:12px;height:12px;background:#666;animation:none}
+.vpn-status-indicator.connected .vpn-dot{background:#22c55e;box-shadow:0 0 12px #22c55e;animation:pulse 2s infinite}
+.vpn-status-indicator.disconnected .vpn-dot{background:#ef4444}
+#vpn-status-text{font-weight:600;color:#fff}
+.vpn-details{display:grid;grid-template-columns:repeat(3, 1fr);gap:12px}
+.vpn-stat{background:rgba(0,0,0,0.15);padding:12px;text-align:center;border:1px solid rgba(255,255,255,0.03)}
+.vpn-stat-label{display:block;font-size:10px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.vpn-stat-value{font-size:18px;font-weight:700;color:#fff;font-family:'Courier New', monospace}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+
+/* ========================================= */
+/* File Manager - Drive Style */
+/* ========================================= */
+.file-controls{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:12px}
+.file-actions-left{display:flex;gap:8px;flex-wrap:wrap}
+.file-path-display{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.1);padding:6px 12px}
+.file-path-label{color:var(--muted);font-size:0.85rem}
+
+/* Upload Progress */
+.upload-progress{margin:12px 0;padding:12px;background:rgba(255,130,0,0.1);border:1px solid rgba(255,130,0,0.2)}
+.upload-progress-bar{height:4px;background:rgba(0,0,0,0.2);overflow:hidden}
+.upload-progress-fill{height:100%;background:var(--primary);width:0%;transition:width 0.3s ease}
+#upload-status{display:block;margin-top:8px;font-size:0.85rem;color:var(--muted)}
+
+/* File List */
+.file-list{border:1px solid rgba(0,0,0,0.05);background:rgba(255,255,255,0.02)}
+.file-entry{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid rgba(0,0,0,0.05);cursor:default;transition:background 0.15s}
+.file-entry:last-child{border-bottom:none}
+.file-entry:hover{background:rgba(255,130,0,0.05)}
+.file-entry.selected{background:rgba(255,130,0,0.12);border-left:3px solid var(--primary)}
+.file-entry .file-info{display:flex;align-items:center;gap:12px;flex:1;min-width:0}
+.file-entry .file-icon{font-size:24px;flex-shrink:0}
+.file-entry .file-details{flex:1;min-width:0}
+.file-entry .file-name{font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-entry .file-meta{font-size:0.8rem;color:var(--muted);margin-top:2px}
+.file-entry .actions{display:flex;gap:6px;opacity:0;transition:opacity 0.15s}
+.file-entry:hover .actions{opacity:1}
+.file-entry.file-dir{cursor:pointer}
+.file-entry.file-dir:hover{background:rgba(255,130,0,0.08)}
+.file-entry.file-dir .file-name{color:var(--primary)}
+
+/* Context Menu */
+.context-menu{position:fixed;background:#1a1a2e;border:1px solid #0f3460;box-shadow:0 8px 32px rgba(0,0,0,0.5);z-index:10001;min-width:160px}
+.context-item{padding:10px 16px;color:#fff;cursor:pointer;font-size:0.9rem;display:flex;align-items:center;gap:8px}
+.context-item:hover{background:rgba(255,130,0,0.2)}
+.context-item.danger{color:#ef4444}
+.context-item.danger:hover{background:rgba(239,68,68,0.2)}
+.context-divider{height:1px;background:rgba(255,255,255,0.1);margin:4px 0}
+
+/* Rename Input */
+.rename-input{background:rgba(0,0,0,0.2);border:1px solid var(--primary);color:#fff;padding:4px 8px;font-size:0.9rem;width:200px}
+
+/* Move Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10002;display:flex;align-items:center;justify-content:center}
+.modal{background:#1a1a2e;border:1px solid #0f3460;padding:20px;min-width:300px;max-width:90vw}
+.modal h3{margin:0 0 16px 0;color:#fff}
+.modal-folder-list{max-height:300px;overflow-y:auto;margin-bottom:16px}
+.modal-folder{padding:10px;cursor:pointer;color:#fff;display:flex;align-items:center;gap:8px}
+.modal-folder:hover{background:rgba(255,130,0,0.2)}
+.modal-folder.selected{background:rgba(255,130,0,0.3)}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end}

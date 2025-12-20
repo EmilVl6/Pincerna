@@ -1,445 +1,668 @@
+// Pincerna Cloud Dashboard - Main Application
 const apiBase = "/cloud/api";
 const $ = sel => document.querySelector(sel);
 
-// Get user info from localStorage
-function getUserInfo(){
-  try{
+// =========================================
+// User & Auth
+// =========================================
+function getUserInfo() {
+  try {
     const raw = localStorage.getItem('pincerna_user');
-    if(raw) return JSON.parse(raw);
-  }catch(e){}
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
   return null;
 }
 
-// Display user greeting
-function showUserGreeting(){
+function showUserGreeting() {
   const user = getUserInfo();
   const greetEl = document.getElementById('user-greeting');
   const titleEl = document.getElementById('welcome-title');
-  if(user && user.given_name){
-    if(greetEl) greetEl.textContent = 'Hi, ' + user.given_name;
-    if(titleEl) titleEl.textContent = 'Hi ' + user.given_name + '!';
-  } else if(user && user.name){
-    if(greetEl) greetEl.textContent = 'Hi, ' + user.name.split(' ')[0];
-    if(titleEl) titleEl.textContent = 'Hi ' + user.name.split(' ')[0] + '!';
+  if (user && user.given_name) {
+    if (greetEl) greetEl.textContent = 'Hi, ' + user.given_name;
+    if (titleEl) titleEl.textContent = 'Hi ' + user.given_name + '!';
+  } else if (user && user.name) {
+    if (greetEl) greetEl.textContent = 'Hi, ' + user.name.split(' ')[0];
+    if (titleEl) titleEl.textContent = 'Hi ' + user.name.split(' ')[0] + '!';
   }
 }
 
-// Preloader helper: hide the #preloader element after a small delay
-function hidePreloader(delay=700){
-  const p = document.getElementById('preloader');
-  if(!p) return;
-  setTimeout(()=>{
-    p.style.transition = 'opacity 220ms ease';
-    p.style.opacity = '0';
-    setTimeout(()=>{ p.style.display='none'; }, 240);
-  }, delay);
-}
-
-function showMessage(msg, level='info', timeout=4000){
-  const t = document.createElement('div');
-  t.className = 'toast ' + (level||'info');
-  t.textContent = typeof msg === 'string' ? msg : JSON.stringify(msg);
-  document.body.appendChild(t);
-  setTimeout(()=>{ t.style.opacity = '0'; setTimeout(()=>t.remove(),300) }, timeout);
-  document.querySelectorAll('.status').forEach(el=>el.textContent = typeof msg === 'string' ? msg : JSON.stringify(msg));
-}
-
-// Progress rectangles for preloader
-function createProgressSteps(names){
-  try{
-    const list = document.getElementById('preloader-steps'); if(!list) return [];
-    list.innerHTML = '';
-    list.classList.add('preloader-progress');
-    return names.map(n=>{
-      const li = document.createElement('li'); li.className = 'step-wrap';
-      const rect = document.createElement('div'); rect.className = 'step';
-      li.appendChild(rect);
-      list.appendChild(li);
-      return {li, rect, name: n};
-    });
-  }catch(e){ return [] }
-}
-
-function setIndicator(text, isError){
-  try{
-    const ind = document.getElementById('preloader-indicator'); if(!ind) return;
-    ind.textContent = text || '';
-    if(isError) ind.classList.add('error'); else ind.classList.remove('error');
-  }catch(e){}
-}
-
-function markStepDone(i){
-  try{
-    if(preloaderFailed) return;
-    if(!progressSteps[i]) return;
-    progressSteps[i].rect.classList.add('done');
-    const next = nextIncomplete();
-    if(next === -1) setIndicator('Ready');
-    else setIndicator(progressSteps[next].name);
-  }catch(e){}
-}
-
-function markStepError(i){
-  try{
-    if(!progressSteps[i]) return;
-    preloaderFailed = true;
-    progressSteps[i].rect.classList.add('error');
-    setIndicator(progressSteps[i].name + ' — failed', true);
-  }catch(e){}
-}
-
-function _fetchWithTimeout(url, opts={}, timeout=3000){
-  return new Promise((resolve, reject)=>{
-    const t = setTimeout(()=>reject(new Error('timeout')), timeout);
-    fetch(url, opts).then(r=>{ clearTimeout(t); resolve(r); }).catch(e=>{ clearTimeout(t); reject(e); });
-  });
-}
-
-async function animateProgress(delayMs=220){
-  for(let i=0;i<progressSteps.length;i++){
-    if(preloaderFailed) break;
-    const step = progressSteps[i];
-    setIndicator(step.name);
-    // handler for specific steps
-    try{
-      if(i === 3){
-        // Connecting to backend: check health endpoint
-        try{
-          const res = await _fetchWithTimeout(apiBase + '/health', {}, 3000);
-          if(!res || !res.ok){ markStepError(i); break; }
-          markStepDone(i);
-        }catch(e){ markStepError(i); break; }
-      } else if(i === 4){
-        // Authenticating: ensure token exists
-        const token = localStorage.getItem('pincerna_token');
-        if(!token){ markStepError(i); break; }
-        markStepDone(i);
-      } else {
-        // simple progress mark after delay
-        await new Promise(r=>setTimeout(r, delayMs));
-        markStepDone(i);
-      }
-    }catch(e){ markStepError(i); break; }
-  }
-  if(!preloaderFailed) hidePreloader(300);
-}
-
-function nextIncomplete(){ try{ return progressSteps.findIndex(s=>!s.rect.classList.contains('done') && !s.rect.classList.contains('error')); }catch(e){return -1} }
-
-const PROGRESS_NAMES = ['Initializing interface','Loading assets','Resolving tunnel','Connecting to backend','Authenticating','Loading files','Ready'];
-let progressSteps = [];
-let preloaderFailed = false;
-
-// Failsafe: if steps are still incomplete after 6s, mark the next step as error (unless already failed)
-setTimeout(()=>{
-  if(preloaderFailed) return;
-  const idx = nextIncomplete();
-  if(idx !== -1){ markStepError(idx); }
-}, 6000);
-
-async function demoLogin(){
-  try{
-    let token = 'demo-token';
-    try{
-      const res = await fetch(apiBase + '/login', {method:'POST'});
-      if(res.ok){ const j = await res.json(); token = j.token || token }
-    }catch(e){}
-    localStorage.setItem('pincerna_token', token);
-    document.querySelectorAll('.status').forEach(el=>el.textContent = 'Signed in (demo)');
-    $('#btn-logout').hidden = false;
-    if(progressSteps && progressSteps.length) markStepDone(4); // auth
-    if(progressSteps && progressSteps.length) markStepDone(5); // files
-    await initFiles();
-  }catch(err){ showMessage(err.message || 'Login failed','error') }
-}
-
-function logout(){
+function logout() {
   localStorage.removeItem('pincerna_token');
   localStorage.removeItem('pincerna_user');
   window.location.href = 'auth.html';
 }
 
-async function apiFetch(path, opts={}){
+// =========================================
+// Preloader
+// =========================================
+function hidePreloader(delay = 700) {
+  const p = document.getElementById('preloader');
+  if (!p) return;
+  setTimeout(() => {
+    p.style.transition = 'opacity 220ms ease';
+    p.style.opacity = '0';
+    setTimeout(() => { p.style.display = 'none'; }, 240);
+  }, delay);
+}
+
+// =========================================
+// Toast Messages
+// =========================================
+function showMessage(msg, level = 'info', timeout = 4000) {
+  const t = document.createElement('div');
+  t.className = 'toast ' + (level || 'info');
+  t.textContent = typeof msg === 'string' ? msg : JSON.stringify(msg);
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300) }, timeout);
+}
+
+// =========================================
+// API Helper
+// =========================================
+async function apiFetch(path, opts = {}) {
   const headers = opts.headers || {};
   const token = localStorage.getItem('pincerna_token');
-  if(token) headers['Authorization'] = token;
-  try{
-    const res = await fetch(apiBase + path, {...opts, headers});
+  if (token) headers['Authorization'] = token;
+  try {
+    const res = await fetch(apiBase + path, { ...opts, headers });
     const txt = await res.text();
-    if(typeof txt === 'string' && txt.trim().startsWith('<')) return {error:'server_returned_html'};
-    try{ return JSON.parse(txt) }catch(e){ return txt }
-  }catch(e){ return {error: e.message} }
+    if (typeof txt === 'string' && txt.trim().startsWith('<')) return { error: 'server_returned_html' };
+    try { return JSON.parse(txt) } catch (e) { return txt }
+  } catch (e) { return { error: e.message } }
 }
 
-let currentPath = '/';
-async function listFiles(path=currentPath){
-  currentPath = path;
-  const q = '?path=' + encodeURIComponent(path);
-  const res = await apiFetch('/files' + q);
-  // Update path display
-  const pathEl = document.getElementById('files-path');
-  if(pathEl) pathEl.textContent = path;
-  return res;
-}
-
-function renderFileList(items, path){
-  const out = document.getElementById('file-list');
-  out.innerHTML = '';
-  
-  // Add "up" directory if not at root
-  if(path && path !== '/'){
-    const upDiv = document.createElement('div');
-    upDiv.className = 'file-entry file-dir';
-    upDiv.innerHTML = '<div><strong>📁 ..</strong><div class="meta">Parent directory</div></div>';
-    upDiv.style.cursor = 'pointer';
-    upDiv.addEventListener('click', ()=>{
-      const parent = path.split('/').slice(0,-1).join('/') || '/';
-      listFiles(parent).then(res => { if(res && res.files) renderFileList(res.files, parent); });
-    });
-    out.appendChild(upDiv);
-  }
-  
-  if(!items || !Array.isArray(items) || items.length===0){
-    if(path === '/') out.innerHTML += '<div class="file-entry"><div>No files.</div></div>';
-    return;
-  }
-  
-  items.forEach(item=>{
-    const div = document.createElement('div');
-    div.className = 'file-entry' + (item.is_dir ? ' file-dir' : '');
-    const left = document.createElement('div');
-    const nameEl = document.createElement('strong');
-    nameEl.textContent = (item.is_dir ? '📁 ' : '📄 ') + item.name;
-    const metaEl = document.createElement('div');
-    metaEl.className = 'meta';
-    metaEl.textContent = (item.size||'') + (item.size && item.mtime ? ' • ' : '') + (item.mtime||'');
-    left.appendChild(nameEl);
-    left.appendChild(metaEl);
-    
-    if(item.is_dir){
-      div.style.cursor = 'pointer';
-      div.addEventListener('click', ()=>{
-        listFiles(item.path).then(res => { if(res && res.files) renderFileList(res.files, item.path); });
-      });
-      div.appendChild(left);
-    } else {
-      const actions = document.createElement('div'); actions.className='actions';
-      const dl = document.createElement('button'); dl.className='btn'; dl.textContent='Download';
-      dl.addEventListener('click', (e)=>{ e.stopPropagation(); window.open(apiBase + '/files/download?path=' + encodeURIComponent(item.path), '_blank'); });
-      const del = document.createElement('button'); del.className='btn warn'; del.textContent='Delete';
-      del.addEventListener('click', async (e)=>{ e.stopPropagation(); if(confirm('Delete '+item.name+'?')){ await apiFetch('/files?path='+encodeURIComponent(item.path), {method:'DELETE'}); refreshFiles(); } });
-      actions.appendChild(dl); actions.appendChild(del);
-      div.appendChild(left); div.appendChild(actions);
-    }
-    out.appendChild(div);
-  });
-}
-
-async function refreshFiles(){
-  const res = await listFiles(currentPath);
-  if(res && res.files) renderFileList(res.files, currentPath);
-  else if(res && res.error === 'server_returned_html') showMessage('Backend not connected','error');
-  else if(res && res.error) showMessage(res.error, 'error');
-  return res;
-}
-
-async function initFiles(){
-  try{
-    const input = document.getElementById('file-input');
-    if(input) input.addEventListener('change', async (ev)=>{
-      const f = ev.target.files[0]; if(!f) return;
-      const fd = new FormData(); fd.append('file', f); fd.append('path', currentPath);
-      await fetch(apiBase + '/files/upload', {method:'POST', body:fd});
-      document.getElementById('file-input').value = '';
-      await refreshFiles();
-    });
-    const btn = document.getElementById('btn-refresh-files'); if(btn) btn.addEventListener('click', refreshFiles);
-    if(progressSteps && progressSteps.length) markStepDone(3); // connecting
-    const res = await refreshFiles();
-    if(res && res.files){
-      if(progressSteps && progressSteps.length) markStepDone(5); // files
-      if(progressSteps && progressSteps.length) markStepDone(6); // ready
-    } else {
-      if(progressSteps && progressSteps.length) markStepDone(6); // ready
-    }
-    // hide preloader when initial load completes
-    hidePreloader(500);
-  }catch(e){ const idx = nextIncomplete(); if(idx !== -1) markStepError(idx); hidePreloader(800); }
-}
-
-// Navigation - clean section switching (global so it works everywhere)
+// =========================================
+// Navigation
+// =========================================
 function showSection(sectionId) {
-  // Hide all sections
-  ['hero', 'controls', 'files', 'metrics', 'about'].forEach(id => {
+  ['hero', 'controls', 'files', 'metrics', 'about', 'vpn-panel'].forEach(id => {
     const el = document.getElementById(id);
-    if(el) el.style.display = 'none';
+    if (el) el.style.display = 'none';
   });
-  // Remove active from all nav
   document.querySelectorAll('.nav a').forEach(a => a.classList.remove('active'));
-  
-  // Show requested section(s)
-  if(sectionId === 'home') {
+
+  if (sectionId === 'home') {
     const hero = document.getElementById('hero');
     const controls = document.getElementById('controls');
-    if(hero) hero.style.display = 'block';
-    if(controls) controls.style.display = 'block';
+    if (hero) hero.style.display = 'block';
+    if (controls) controls.style.display = 'block';
     const navHome = document.getElementById('nav-home');
-    if(navHome) navHome.classList.add('active');
-  } else if(sectionId === 'files') {
+    if (navHome) navHome.classList.add('active');
+  } else if (sectionId === 'files') {
     const files = document.getElementById('files');
-    if(files) files.style.display = 'block';
+    if (files) files.style.display = 'block';
     const navFiles = document.getElementById('nav-files');
-    if(navFiles) navFiles.classList.add('active');
-  } else if(sectionId === 'about') {
+    if (navFiles) navFiles.classList.add('active');
+  } else if (sectionId === 'about') {
     const about = document.getElementById('about');
-    if(about) about.style.display = 'block';
+    if (about) about.style.display = 'block';
     const navAbout = document.getElementById('nav-about');
-    if(navAbout) navAbout.classList.add('active');
+    if (navAbout) navAbout.classList.add('active');
   }
 }
 
-document.addEventListener('DOMContentLoaded', ()=>{
-  // Show dashboard immediately
-  showSection('home');
-  
-  // Show user greeting immediately if we have user info
-  showUserGreeting();
-  
-  // Simplified preloader - just show loading then hide after init
-  const indicator = document.getElementById('preloader-indicator');
-  if(indicator) indicator.textContent = 'Connecting...';
-  
-  $('#btn-logout').addEventListener('click', logout);
-  $('#btn-vpn').addEventListener('click', toggleVPN);
-  $('#btn-access-local').addEventListener('click', ()=>{ document.getElementById('nav-files').click(); });
-  
-  // Control buttons
-  const btnData = document.getElementById('btn-data');
-  const btnMetrics = document.getElementById('btn-metrics');
-  const btnRestart = document.getElementById('btn-restart');
-  
-  if(btnData) btnData.addEventListener('click', async ()=>{
-    const res = await apiFetch('/data');
-    if(res && res.message) showMessage(res.message, 'info');
-    else if(res && res.error) showMessage(res.error, 'error');
-    else showMessage('Data fetched', 'info');
-  });
-  
-  if(btnMetrics) btnMetrics.addEventListener('click', async ()=>{
-    const metricsSection = document.getElementById('metrics');
-    if(metricsSection) metricsSection.style.display = 'block';
-    try{
-      const res = await apiFetch('/metrics');
-      if(res && (res.cpu !== undefined || res.memory !== undefined)){
-        updateMetrics({cpu: res.cpu || 0, mem: res.memory || 0, disk: 0});
-        showMessage('Metrics loaded', 'info');
-      } else {
-        updateMetrics(sampleMetrics());
-        showMessage('Using sample metrics', 'info');
+// =========================================
+// Metrics - Pixel Widgets
+// =========================================
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function formatUptime(seconds) {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+}
+
+async function loadMetrics() {
+  try {
+    const res = await apiFetch('/metrics');
+    if (res && res.cpu !== undefined) {
+      // CPU
+      const cpuEl = document.getElementById('metric-cpu');
+      const cpuTempEl = document.getElementById('metric-cpu-temp');
+      if (cpuEl) cpuEl.textContent = res.cpu + '%';
+      if (cpuTempEl) cpuTempEl.textContent = res.cpu_temp ? `${res.cpu_temp}°C` : '';
+
+      // Memory
+      const memEl = document.getElementById('metric-memory');
+      const memDetailEl = document.getElementById('metric-memory-detail');
+      if (memEl) memEl.textContent = res.memory + '%';
+      if (memDetailEl && res.memory_used && res.memory_total) {
+        memDetailEl.textContent = `${formatBytes(res.memory_used)} / ${formatBytes(res.memory_total)}`;
       }
-    }catch(e){
-      updateMetrics(sampleMetrics());
+
+      // Disk
+      const diskEl = document.getElementById('metric-disk');
+      const diskDetailEl = document.getElementById('metric-disk-detail');
+      if (diskEl) diskEl.textContent = res.disk + '%';
+      if (diskDetailEl && res.disk_used && res.disk_total) {
+        diskDetailEl.textContent = `${formatBytes(res.disk_used)} / ${formatBytes(res.disk_total)}`;
+      }
+
+      // Network
+      const netEl = document.getElementById('metric-network');
+      const netDetailEl = document.getElementById('metric-network-detail');
+      if (netEl && res.net_recv !== undefined) {
+        netEl.textContent = formatBytes(res.net_recv);
+      }
+      if (netDetailEl && res.net_sent !== undefined) {
+        netDetailEl.textContent = `↑ ${formatBytes(res.net_sent)}`;
+      }
+
+      // Uptime
+      const uptimeEl = document.getElementById('metric-uptime');
+      const loadEl = document.getElementById('metric-load');
+      if (uptimeEl && res.uptime) uptimeEl.textContent = formatUptime(res.uptime);
+      if (loadEl && res.load_avg) loadEl.textContent = `Load: ${res.load_avg.join(', ')}`;
+
+      // Processes
+      const procEl = document.getElementById('metric-processes');
+      const coresEl = document.getElementById('metric-cores');
+      if (procEl && res.process_count) procEl.textContent = res.process_count;
+      if (coresEl && res.cpu_count) coresEl.textContent = `${res.cpu_count} cores`;
+
+      // Last update
+      const lastUpdate = document.getElementById('metrics-last-update');
+      if (lastUpdate) lastUpdate.textContent = `Updated: ${new Date().toLocaleTimeString()}`;
+
+      // Show metrics section
+      const metricsSection = document.getElementById('metrics');
+      if (metricsSection) metricsSection.style.display = 'block';
     }
-  });
-  
-  if(btnRestart) btnRestart.addEventListener('click', async ()=>{
-    if(!confirm('Are you sure you want to restart the service?')) return;
-    const res = await apiFetch('/restart', {method:'POST'});
-    if(res && res.error) showMessage(res.error, 'error');
-    else showMessage('Restart command sent', 'info');
-  });
-
-  $('#nav-home').addEventListener('click', (e) => { e.preventDefault(); showSection('home'); });
-  $('#nav-files').addEventListener('click', (e) => { e.preventDefault(); showSection('files'); refreshFiles(); });
-  $('#nav-about').addEventListener('click', (e) => { e.preventDefault(); showSection('about'); });
-
-  if(localStorage.getItem('pincerna_token')){
-    // User is authenticated - app is ready
-    // Check backend health and hide preloader
-    fetch(apiBase + '/health').then(r => {
-      if(r.ok) {
-        hidePreloader(300);
-      } else {
-        if(indicator) indicator.textContent = 'Backend unavailable';
-        hidePreloader(1500);
-      }
-    }).catch(() => {
-      if(indicator) indicator.textContent = 'Cannot connect to server';
-      hidePreloader(1500);
-    });
-  } else {
-    // No token - redirect to auth
-    window.location.href = 'auth.html';
-  }
-  // Check VPN status from server
-  checkVPNStatus();
-});
-
-function updateVPNUI(connected){
-  const btn = document.getElementById('btn-vpn');
-  if(!btn) return;
-  if(connected){ 
-    btn.textContent = 'VPN Connected ✓'; 
-    btn.classList.add('active');
-    btn.style.background = '#22c55e';
-  } else { 
-    btn.textContent = 'Start VPN'; 
-    btn.classList.remove('active');
-    btn.style.background = '';
+  } catch (e) {
+    showMessage('Failed to load metrics', 'error');
   }
 }
 
-async function checkVPNStatus(){
-  try{
+// =========================================
+// VPN Control
+// =========================================
+let vpnConnected = false;
+
+async function checkVPNStatus() {
+  try {
     const res = await apiFetch('/vpn/status');
-    if(res && res.connected !== undefined){
+    if (res && res.connected !== undefined) {
+      vpnConnected = res.connected;
       updateVPNUI(res.connected);
     }
-  }catch(e){}
+  } catch (e) {}
 }
 
-async function toggleVPN(){
+async function getVPNStats() {
+  try {
+    const res = await apiFetch('/vpn/stats');
+    if (res) {
+      // Update VPN panel stats
+      const peersEl = document.getElementById('vpn-peers');
+      const rxEl = document.getElementById('vpn-rx');
+      const txEl = document.getElementById('vpn-tx');
+      
+      if (peersEl) peersEl.textContent = res.peer_count || 0;
+      if (rxEl) rxEl.textContent = formatBytes(res.transfer_rx || 0);
+      if (txEl) txEl.textContent = formatBytes(res.transfer_tx || 0);
+    }
+  } catch (e) {}
+}
+
+function updateVPNUI(connected) {
   const btn = document.getElementById('btn-vpn');
-  if(btn) btn.textContent = 'Connecting...';
-  try{
-    const res = await apiFetch('/vpn/toggle', {method:'POST'});
-    if(res && res.connected !== undefined){
+  const indicator = document.getElementById('vpn-indicator');
+  const statusText = document.getElementById('vpn-status-text');
+  const vpnPanel = document.getElementById('vpn-panel');
+  
+  if (btn) {
+    if (connected) {
+      btn.textContent = 'VPN Connected ✓';
+      btn.classList.add('active');
+      btn.style.background = '#22c55e';
+    } else {
+      btn.textContent = 'Start VPN';
+      btn.classList.remove('active');
+      btn.style.background = '';
+    }
+  }
+  
+  if (indicator) {
+    indicator.className = 'vpn-status-indicator ' + (connected ? 'connected' : 'disconnected');
+  }
+  if (statusText) {
+    statusText.textContent = connected ? 'Connected' : 'Disconnected';
+  }
+  
+  // Show/hide VPN panel
+  if (vpnPanel) {
+    vpnPanel.style.display = connected ? 'block' : 'none';
+    if (connected) getVPNStats();
+  }
+}
+
+async function toggleVPN() {
+  const btn = document.getElementById('btn-vpn');
+  if (btn) btn.textContent = vpnConnected ? 'Disconnecting...' : 'Connecting...';
+  
+  try {
+    const res = await apiFetch('/vpn/toggle', { method: 'POST' });
+    if (res && res.connected !== undefined) {
+      vpnConnected = res.connected;
       updateVPNUI(res.connected);
       showMessage(res.message || (res.connected ? 'VPN connected' : 'VPN disconnected'), 'info');
-    } else if(res && res.error){
+      if (res.connected) getVPNStats();
+    } else if (res && res.error) {
       showMessage(res.error, 'error');
       checkVPNStatus();
     }
-  }catch(e){
+  } catch (e) {
     showMessage('VPN toggle failed', 'error');
     checkVPNStatus();
   }
 }
 
-function sampleMetrics(){
-  const now = Date.now();
-  return {cpu: Math.round(20 + Math.random()*60), mem: Math.round(30 + Math.random()*50), disk: Math.round(40 + Math.random()*40), time: now, cpuHistory: Array.from({length:60}, ()=>Math.round(10+Math.random()*80))};
+// =========================================
+// File Manager - Drive Style
+// =========================================
+let currentPath = '/';
+let selectedFile = null;
+
+async function listFiles(path = currentPath) {
+  currentPath = path;
+  const q = '?path=' + encodeURIComponent(path);
+  const res = await apiFetch('/files' + q);
+  const pathEl = document.getElementById('files-path');
+  if (pathEl) pathEl.textContent = path;
+  return res;
 }
 
-function updateMetrics(data){
-  const canvas = document.getElementById('metrics-canvas');
-  if(!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const w = canvas.width; const h = canvas.height; ctx.clearRect(0,0,w,h);
-  const pad = 24; const innerW = w - pad*2;
-  const barW = Math.floor(innerW/3 - 16);
-  const bars = [ {label:'CPU', val: data.cpu}, {label:'Mem', val: data.mem}, {label:'Disk', val: data.disk} ];
-  bars.forEach((b,i)=>{
-    const x = pad + i*(barW+24);
-    const y = h - pad - 40;
-    ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fillRect(x,y - 120, barW, 120);
-    ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fillRect(x,y - Math.round(120 * (b.val/100)), barW, Math.round(120 * (b.val/100)));
-    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--coco').trim(); ctx.fillRect(x, y - Math.round(120 * (b.val/100)), barW, 6);
-    ctx.fillStyle = '#e6eef8'; ctx.font = '18px sans-serif'; ctx.fillText(b.label, x, y + 22);
-    ctx.fillStyle = 'var(--muted)'; ctx.font = '14px sans-serif'; ctx.fillText(b.val + '%', x, y - Math.round(120 * (b.val/100)) - 8);
-  });
-  const hist = data.cpuHistory && data.cpuHistory.length ? data.cpuHistory : Array.from({length:60}, ()=>Math.round(10+Math.random()*80));
-  const gx = pad; const gy = pad; const gw = innerW; const gh = 80; ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.beginPath();
-  hist.forEach((v,i)=>{ const px = gx + i*(gw/hist.length); const py = gy + gh - (v/100)*gh; if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py); }); ctx.stroke();
-  ctx.fillStyle = 'var(--muted)'; ctx.font='14px sans-serif'; ctx.fillText('CPU history (last samples)', gx, gy-6);
+function getFileIcon(name, isDir) {
+  if (isDir) return '📁';
+  const ext = name.split('.').pop().toLowerCase();
+  const icons = {
+    'pdf': '📕', 'doc': '📘', 'docx': '📘', 'txt': '📄', 'md': '📝',
+    'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🖼️', 'svg': '🖼️', 'webp': '🖼️',
+    'mp3': '🎵', 'wav': '🎵', 'flac': '🎵', 'ogg': '🎵',
+    'mp4': '🎬', 'mkv': '🎬', 'avi': '🎬', 'mov': '🎬', 'webm': '🎬',
+    'zip': '📦', 'rar': '📦', '7z': '📦', 'tar': '📦', 'gz': '📦',
+    'js': '⚡', 'py': '🐍', 'html': '🌐', 'css': '🎨', 'json': '📋',
+    'exe': '⚙️', 'sh': '⚙️', 'bat': '⚙️'
+  };
+  return icons[ext] || '📄';
 }
+
+function renderFileList(items, path) {
+  const out = document.getElementById('file-list');
+  out.innerHTML = '';
+
+  // Add "up" directory if not at root
+  if (path && path !== '/') {
+    const upDiv = document.createElement('div');
+    upDiv.className = 'file-entry file-dir';
+    upDiv.innerHTML = `
+      <div class="file-info">
+        <span class="file-icon">📁</span>
+        <div class="file-details">
+          <div class="file-name">..</div>
+          <div class="file-meta">Parent directory</div>
+        </div>
+      </div>
+    `;
+    upDiv.addEventListener('click', () => {
+      const parent = path.split('/').slice(0, -1).join('/') || '/';
+      listFiles(parent).then(res => { if (res && res.files) renderFileList(res.files, parent); });
+    });
+    out.appendChild(upDiv);
+  }
+
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    if (path === '/') out.innerHTML += '<div class="file-entry"><div class="file-info"><span class="file-icon">📂</span><div class="file-details"><div class="file-name">Empty folder</div></div></div></div>';
+    return;
+  }
+
+  items.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'file-entry' + (item.is_dir ? ' file-dir' : '');
+    div.dataset.path = item.path;
+    div.dataset.name = item.name;
+    div.dataset.isDir = item.is_dir;
+
+    const icon = getFileIcon(item.name, item.is_dir);
+    
+    div.innerHTML = `
+      <div class="file-info">
+        <span class="file-icon">${icon}</span>
+        <div class="file-details">
+          <div class="file-name">${item.name}</div>
+          <div class="file-meta">${item.size || ''} ${item.size && item.mtime ? '•' : ''} ${item.mtime || ''}</div>
+        </div>
+      </div>
+      <div class="actions">
+        ${!item.is_dir ? '<button class="btn btn-download" title="Download">📥</button>' : ''}
+        <button class="btn btn-rename" title="Rename">✏️</button>
+        <button class="btn btn-delete warn" title="Delete">🗑️</button>
+      </div>
+    `;
+
+    if (item.is_dir) {
+      div.addEventListener('click', (e) => {
+        if (e.target.closest('.actions')) return;
+        listFiles(item.path).then(res => { if (res && res.files) renderFileList(res.files, item.path); });
+      });
+    }
+
+    // Action buttons
+    const downloadBtn = div.querySelector('.btn-download');
+    const renameBtn = div.querySelector('.btn-rename');
+    const deleteBtn = div.querySelector('.btn-delete');
+
+    if (downloadBtn) {
+      downloadBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.open(apiBase + '/files/download?path=' + encodeURIComponent(item.path), '_blank');
+      });
+    }
+
+    if (renameBtn) {
+      renameBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        renameFile(item);
+      });
+    }
+
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteFile(item);
+      });
+    }
+
+    // Right-click context menu
+    div.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showContextMenu(e, item);
+    });
+
+    out.appendChild(div);
+  });
+}
+
+// Context Menu
+function showContextMenu(e, item) {
+  selectedFile = item;
+  const menu = document.getElementById('file-context-menu');
+  if (!menu) return;
+  
+  menu.style.display = 'block';
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+
+  // Hide download for directories
+  const downloadItem = document.getElementById('ctx-download');
+  if (downloadItem) downloadItem.style.display = item.is_dir ? 'none' : 'flex';
+}
+
+function hideContextMenu() {
+  const menu = document.getElementById('file-context-menu');
+  if (menu) menu.style.display = 'none';
+}
+
+// File Operations
+async function deleteFile(item) {
+  if (!confirm(`Delete "${item.name}"?`)) return;
+  const res = await apiFetch('/files?path=' + encodeURIComponent(item.path), { method: 'DELETE' });
+  if (res && res.success) {
+    showMessage(`Deleted "${item.name}"`, 'info');
+    refreshFiles();
+  } else {
+    showMessage(res.error || 'Delete failed', 'error');
+  }
+}
+
+function renameFile(item) {
+  const newName = prompt('Enter new name:', item.name);
+  if (!newName || newName === item.name) return;
+  
+  // Call rename API
+  renameFileAPI(item.path, newName);
+}
+
+async function renameFileAPI(oldPath, newName) {
+  const res = await apiFetch('/files/rename', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: oldPath, new_name: newName })
+  });
+  if (res && res.success) {
+    showMessage('Renamed successfully', 'info');
+    refreshFiles();
+  } else {
+    showMessage(res.error || 'Rename failed', 'error');
+  }
+}
+
+async function createFolder() {
+  const name = prompt('Folder name:');
+  if (!name) return;
+  
+  const res = await apiFetch('/files/mkdir', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: currentPath, name: name })
+  });
+  if (res && res.success) {
+    showMessage(`Created folder "${name}"`, 'info');
+    refreshFiles();
+  } else {
+    showMessage(res.error || 'Failed to create folder', 'error');
+  }
+}
+
+async function moveFile(item, destPath) {
+  const res = await apiFetch('/files/move', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: item.path, destination: destPath })
+  });
+  if (res && res.success) {
+    showMessage(`Moved "${item.name}"`, 'info');
+    refreshFiles();
+  } else {
+    showMessage(res.error || 'Move failed', 'error');
+  }
+}
+
+// Upload with progress
+async function uploadFile(file) {
+  const progressDiv = document.getElementById('upload-progress');
+  const progressFill = document.getElementById('upload-fill');
+  const statusText = document.getElementById('upload-status');
+  
+  if (progressDiv) progressDiv.style.display = 'block';
+  if (statusText) statusText.textContent = `Uploading ${file.name}...`;
+  if (progressFill) progressFill.style.width = '0%';
+  
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('path', currentPath);
+  
+  try {
+    const xhr = new XMLHttpRequest();
+    
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable && progressFill) {
+        const percent = Math.round((e.loaded / e.total) * 100);
+        progressFill.style.width = percent + '%';
+        if (statusText) statusText.textContent = `Uploading ${file.name}... ${percent}%`;
+      }
+    });
+    
+    xhr.addEventListener('load', () => {
+      if (xhr.status === 200) {
+        if (statusText) statusText.textContent = `Uploaded ${file.name} ✓`;
+        setTimeout(() => {
+          if (progressDiv) progressDiv.style.display = 'none';
+        }, 2000);
+        refreshFiles();
+      } else {
+        if (statusText) statusText.textContent = `Upload failed`;
+        showMessage('Upload failed', 'error');
+      }
+    });
+    
+    xhr.addEventListener('error', () => {
+      if (statusText) statusText.textContent = `Upload error`;
+      showMessage('Upload failed', 'error');
+    });
+    
+    const token = localStorage.getItem('pincerna_token');
+    xhr.open('POST', apiBase + '/files/upload');
+    if (token) xhr.setRequestHeader('Authorization', token);
+    xhr.send(formData);
+    
+  } catch (e) {
+    showMessage('Upload failed: ' + e.message, 'error');
+    if (progressDiv) progressDiv.style.display = 'none';
+  }
+}
+
+async function refreshFiles() {
+  const res = await listFiles(currentPath);
+  if (res && res.files) renderFileList(res.files, currentPath);
+  else if (res && res.error === 'server_returned_html') showMessage('Backend not connected', 'error');
+  else if (res && res.error) showMessage(res.error, 'error');
+  return res;
+}
+
+// =========================================
+// Initialization
+// =========================================
+document.addEventListener('DOMContentLoaded', () => {
+  showSection('home');
+  showUserGreeting();
+
+  const indicator = document.getElementById('preloader-indicator');
+  if (indicator) indicator.textContent = 'Connecting...';
+
+  // Auth check
+  if (!localStorage.getItem('pincerna_token')) {
+    window.location.href = 'auth.html';
+    return;
+  }
+
+  // Event listeners
+  $('#btn-logout').addEventListener('click', logout);
+  $('#btn-vpn').addEventListener('click', toggleVPN);
+  $('#btn-access-local').addEventListener('click', () => { document.getElementById('nav-files').click(); });
+
+  // Metrics button
+  const btnMetrics = document.getElementById('btn-metrics');
+  if (btnMetrics) btnMetrics.addEventListener('click', loadMetrics);
+
+  // Refresh metrics button
+  const btnRefreshMetrics = document.getElementById('btn-refresh-metrics');
+  if (btnRefreshMetrics) btnRefreshMetrics.addEventListener('click', loadMetrics);
+
+  // Restart button
+  const btnRestart = document.getElementById('btn-restart');
+  if (btnRestart) {
+    btnRestart.addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to restart the service?')) return;
+      const res = await apiFetch('/restart', { method: 'POST' });
+      if (res && res.error) showMessage(res.error, 'error');
+      else showMessage('Restart command sent', 'info');
+    });
+  }
+
+  // Navigation
+  $('#nav-home').addEventListener('click', (e) => { e.preventDefault(); showSection('home'); });
+  $('#nav-files').addEventListener('click', (e) => { e.preventDefault(); showSection('files'); refreshFiles(); });
+  $('#nav-about').addEventListener('click', (e) => { e.preventDefault(); showSection('about'); });
+
+  // File upload
+  const fileInput = document.getElementById('file-input');
+  if (fileInput) {
+    fileInput.addEventListener('change', (ev) => {
+      const files = ev.target.files;
+      for (let i = 0; i < files.length; i++) {
+        uploadFile(files[i]);
+      }
+      fileInput.value = '';
+    });
+  }
+
+  // New folder button
+  const btnNewFolder = document.getElementById('btn-new-folder');
+  if (btnNewFolder) btnNewFolder.addEventListener('click', createFolder);
+
+  // Refresh files button
+  const btnRefreshFiles = document.getElementById('btn-refresh-files');
+  if (btnRefreshFiles) btnRefreshFiles.addEventListener('click', refreshFiles);
+
+  // Context menu handlers
+  document.addEventListener('click', hideContextMenu);
+  
+  const ctxDownload = document.getElementById('ctx-download');
+  const ctxRename = document.getElementById('ctx-rename');
+  const ctxDelete = document.getElementById('ctx-delete');
+  const ctxMove = document.getElementById('ctx-move');
+
+  if (ctxDownload) {
+    ctxDownload.addEventListener('click', () => {
+      if (selectedFile && !selectedFile.is_dir) {
+        window.open(apiBase + '/files/download?path=' + encodeURIComponent(selectedFile.path), '_blank');
+      }
+      hideContextMenu();
+    });
+  }
+
+  if (ctxRename) {
+    ctxRename.addEventListener('click', () => {
+      if (selectedFile) renameFile(selectedFile);
+      hideContextMenu();
+    });
+  }
+
+  if (ctxDelete) {
+    ctxDelete.addEventListener('click', () => {
+      if (selectedFile) deleteFile(selectedFile);
+      hideContextMenu();
+    });
+  }
+
+  if (ctxMove) {
+    ctxMove.addEventListener('click', () => {
+      if (selectedFile) {
+        const dest = prompt('Move to (full path):', '/');
+        if (dest) moveFile(selectedFile, dest);
+      }
+      hideContextMenu();
+    });
+  }
+
+  // Backend health check
+  fetch(apiBase + '/health').then(r => {
+    if (r.ok) {
+      hidePreloader(300);
+    } else {
+      if (indicator) indicator.textContent = 'Backend unavailable';
+      hidePreloader(1500);
+    }
+  }).catch(() => {
+    if (indicator) indicator.textContent = 'Cannot connect to server';
+    hidePreloader(1500);
+  });
+
+  // Check VPN status
+  checkVPNStatus();
+  
+  // Auto-refresh VPN stats every 30s if connected
+  setInterval(() => {
+    if (vpnConnected) getVPNStats();
+  }, 30000);
+});

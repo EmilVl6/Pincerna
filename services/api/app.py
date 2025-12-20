@@ -412,10 +412,124 @@ def data():
 
 @app.route("/metrics")
 def metrics():
+	import time
+	cpu_percent = psutil.cpu_percent(interval=0.1)
+	mem = psutil.virtual_memory()
+	disk = psutil.disk_usage('/')
+	net = psutil.net_io_counters()
+	boot_time = psutil.boot_time()
+	uptime_seconds = time.time() - boot_time
+	
+	# Get CPU temp if available (Raspberry Pi)
+	cpu_temp = None
+	try:
+		temps = psutil.sensors_temperatures()
+		if 'cpu_thermal' in temps:
+			cpu_temp = temps['cpu_thermal'][0].current
+		elif 'coretemp' in temps:
+			cpu_temp = temps['coretemp'][0].current
+	except:
+		pass
+	
+	# Get load average
+	try:
+		load_avg = [round(x, 2) for x in psutil.getloadavg()]
+	except:
+		load_avg = [0, 0, 0]
+	
+	# Get process count
+	try:
+		process_count = len(psutil.pids())
+	except:
+		process_count = 0
+	
 	return jsonify(
-		cpu=psutil.cpu_percent(),
-		memory=psutil.virtual_memory().percent
+		cpu=round(cpu_percent, 1),
+		cpu_count=psutil.cpu_count(),
+		cpu_temp=round(cpu_temp, 1) if cpu_temp else None,
+		memory=round(mem.percent, 1),
+		memory_used=mem.used,
+		memory_total=mem.total,
+		memory_available=mem.available,
+		disk=round(disk.percent, 1),
+		disk_used=disk.used,
+		disk_total=disk.total,
+		disk_free=disk.free,
+		net_sent=net.bytes_sent,
+		net_recv=net.bytes_recv,
+		uptime=int(uptime_seconds),
+		load_avg=load_avg,
+		process_count=process_count
 	)
+
+@app.route("/vpn/stats")
+@protected
+def vpn_stats():
+	"""Get detailed VPN statistics"""
+	import subprocess
+	try:
+		# Check if wg0 is up
+		result = subprocess.run(['ip', 'link', 'show', 'wg0'], capture_output=True, text=True)
+		is_up = result.returncode == 0 and 'UP' in result.stdout
+		
+		if not is_up:
+			return jsonify(connected=False, peers=[], transfer_rx=0, transfer_tx=0)
+		
+		# Get WireGuard stats
+		wg_result = subprocess.run(['sudo', 'wg', 'show', 'wg0'], capture_output=True, text=True)
+		if wg_result.returncode != 0:
+			return jsonify(connected=True, peers=[], transfer_rx=0, transfer_tx=0)
+		
+		# Parse wg show output
+		lines = wg_result.stdout.strip().split('\n')
+		peers = []
+		current_peer = None
+		total_rx = 0
+		total_tx = 0
+		
+		for line in lines:
+			line = line.strip()
+			if line.startswith('peer:'):
+				if current_peer:
+					peers.append(current_peer)
+				current_peer = {'public_key': line.split(':')[1].strip()[:16] + '...'}
+			elif current_peer:
+				if 'endpoint:' in line:
+					current_peer['endpoint'] = line.split(':')[1].strip() + ':' + line.split(':')[2].strip() if ':' in line.split(':')[1] else line.split(':')[1].strip()
+				elif 'latest handshake:' in line:
+					current_peer['last_handshake'] = line.split(':', 1)[1].strip()
+				elif 'transfer:' in line:
+					parts = line.split(':')[1].strip().split(',')
+					if len(parts) >= 2:
+						rx_str = parts[0].strip()
+						tx_str = parts[1].strip()
+						current_peer['transfer'] = f"{rx_str} / {tx_str}"
+						# Parse bytes for totals
+						try:
+							rx_val = float(rx_str.split()[0])
+							tx_val = float(tx_str.split()[0])
+							rx_unit = rx_str.split()[1] if len(rx_str.split()) > 1 else 'B'
+							tx_unit = tx_str.split()[1] if len(tx_str.split()) > 1 else 'B'
+							multipliers = {'B': 1, 'KiB': 1024, 'MiB': 1024**2, 'GiB': 1024**3}
+							total_rx += rx_val * multipliers.get(rx_unit, 1)
+							total_tx += tx_val * multipliers.get(tx_unit, 1)
+						except:
+							pass
+				elif 'allowed ips:' in line:
+					current_peer['allowed_ips'] = line.split(':')[1].strip()
+		
+		if current_peer:
+			peers.append(current_peer)
+		
+		return jsonify(
+			connected=True,
+			peers=peers,
+			peer_count=len(peers),
+			transfer_rx=int(total_rx),
+			transfer_tx=int(total_tx)
+		)
+	except Exception as e:
+		return jsonify(connected=False, error=str(e))
 
 @app.route("/restart", methods=["POST"])
 @protected
@@ -524,6 +638,111 @@ def delete_file():
 		else:
 			os.remove(full_path)
 		return jsonify(success=True)
+	except Exception as e:
+		return jsonify(error=str(e)), 500
+
+@app.route("/files/rename", methods=["POST"])
+@protected
+def rename_file_endpoint():
+	data = request.get_json() or {}
+	path = data.get('path', '')
+	new_name = data.get('new_name', '')
+	
+	if not path or not new_name:
+		return jsonify(error='Missing path or new_name'), 400
+	
+	full_path = _safe_path(path)
+	if not full_path or not os.path.exists(full_path):
+		return jsonify(error='File not found'), 404
+	
+	# Secure the new name
+	from werkzeug.utils import secure_filename
+	safe_name = secure_filename(new_name)
+	if not safe_name:
+		return jsonify(error='Invalid filename'), 400
+	
+	# Get parent directory and create new path
+	parent_dir = os.path.dirname(full_path)
+	new_full_path = os.path.join(parent_dir, safe_name)
+	
+	# Check if destination already exists
+	if os.path.exists(new_full_path):
+		return jsonify(error='A file with that name already exists'), 400
+	
+	try:
+		os.rename(full_path, new_full_path)
+		return jsonify(success=True, new_path=new_full_path)
+	except Exception as e:
+		return jsonify(error=str(e)), 500
+
+@app.route("/files/mkdir", methods=["POST"])
+@protected
+def make_directory():
+	data = request.get_json() or {}
+	path = data.get('path', '/')
+	name = data.get('name', '')
+	
+	if not name:
+		return jsonify(error='Missing folder name'), 400
+	
+	# Secure the folder name
+	from werkzeug.utils import secure_filename
+	safe_name = secure_filename(name)
+	if not safe_name:
+		return jsonify(error='Invalid folder name'), 400
+	
+	full_path = _safe_path(path)
+	if not full_path:
+		return jsonify(error='Invalid path'), 400
+	
+	new_folder = os.path.join(full_path, safe_name)
+	
+	# Ensure it's still within allowed directory
+	base_dir = _get_files_base()
+	if not new_folder.startswith(base_dir):
+		return jsonify(error='Invalid path'), 400
+	
+	if os.path.exists(new_folder):
+		return jsonify(error='Folder already exists'), 400
+	
+	try:
+		os.makedirs(new_folder)
+		return jsonify(success=True, path=new_folder)
+	except Exception as e:
+		return jsonify(error=str(e)), 500
+
+@app.route("/files/move", methods=["POST"])
+@protected
+def move_file_endpoint():
+	data = request.get_json() or {}
+	src_path = data.get('path', '')
+	dest_path = data.get('destination', '')
+	
+	if not src_path or not dest_path:
+		return jsonify(error='Missing path or destination'), 400
+	
+	full_src = _safe_path(src_path)
+	full_dest = _safe_path(dest_path)
+	
+	if not full_src or not os.path.exists(full_src):
+		return jsonify(error='Source not found'), 404
+	
+	if not full_dest:
+		return jsonify(error='Invalid destination'), 400
+	
+	# If destination is a directory, move into it
+	if os.path.isdir(full_dest):
+		filename = os.path.basename(full_src)
+		full_dest = os.path.join(full_dest, filename)
+	
+	# Check if destination already exists
+	if os.path.exists(full_dest):
+		return jsonify(error='Destination already exists'), 400
+	
+	try:
+		import shutil
+		shutil.move(full_src, full_dest)
+		return jsonify(success=True, new_path=full_dest)
 	except Exception as e:
 		return jsonify(error=str(e)), 500
 
