@@ -21,7 +21,8 @@ SECRET = "bartendershandbook"
 EMAIL_CODES = {}
 
 OAUTH_STORE = {}
-OAUTH_STATE_FILE = os.path.join(os.path.dirname(__file__), 'oauth_state.json')
+# Use /tmp for oauth state - always writable and works across workers
+OAUTH_STATE_FILE = '/tmp/pincerna_oauth_state.json'
 
 def _load_oauth_store():
 	global OAUTH_STORE
@@ -31,15 +32,16 @@ def _load_oauth_store():
 				OAUTH_STORE = json.load(f)
 		else:
 			OAUTH_STORE = {}
-	except Exception:
+	except Exception as e:
+		logging.warning(f'Failed to load oauth state: {e}')
 		OAUTH_STORE = {}
 
 def _save_oauth_store():
 	try:
 		with open(OAUTH_STATE_FILE, 'w', encoding='utf-8') as f:
 			json.dump(OAUTH_STORE, f)
-	except Exception:
-		logging.exception('failed to save oauth state')
+	except Exception as e:
+		logging.exception(f'failed to save oauth state to {OAUTH_STATE_FILE}: {e}')
 
 
 _load_oauth_store()
