@@ -16,10 +16,7 @@ import base64
 
 app = Flask(__name__)
 SECRET = "bartendershandbook"
-
-# Temporary in-memory store for email codes: { email: {code:str, expires:int} }
 EMAIL_CODES = {}
-# Persist OAUTH state to a small file so restarts don't lose pending flows
 OAUTH_STORE = {}
 OAUTH_STATE_FILE = os.path.join(os.path.dirname(__file__), 'oauth_state.json')
 
@@ -41,9 +38,7 @@ def _save_oauth_store():
 	except Exception:
 		logging.exception('failed to save oauth state')
 
-# load existing store at startup
 _load_oauth_store()
-
 logging.basicConfig(filename="api.log", level=logging.INFO)
 
 @app.route("/login", methods=["POST"])
@@ -54,11 +49,7 @@ def login():
 	}, SECRET, algorithm="HS256")
 	return jsonify(token=token)
 
-
 def send_smtp_mail(to_addr: str, subject: str, body: str):
-	"""Send mail using configured SMTP. Configuration via env vars:
-	SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM
-	"""
 	host = os.environ.get('SMTP_HOST')
 	port = int(os.environ.get('SMTP_PORT', '0') or 0)
 	user = os.environ.get('SMTP_USER')
@@ -71,7 +62,6 @@ def send_smtp_mail(to_addr: str, subject: str, body: str):
 	msg['From'] = mail_from
 	msg['To'] = to_addr
 	msg.set_content(body)
-	# connect
 	if port == 465:
 		with smtplib.SMTP_SSL(host, port) as s:
 			if user and pwd:
@@ -89,29 +79,23 @@ def send_smtp_mail(to_addr: str, subject: str, body: str):
 				s.login(user, pwd)
 			s.send_message(msg)
 
-
 @app.route('/send_code', methods=['POST'])
 def send_code():
 	data = request.get_json() or {}
 	email = (data.get('email') or '').strip().lower()
-	# only allow emilvinod@gmail.com for now
 	if email != 'emilvinod@gmail.com':
 		return jsonify(error='unknown_account'), 400
-	# generate code
 	code = str(int(100000 + (int(time.time()*1000) % 900000)))
 	expires = int(time.time()) + 10*60
 	EMAIL_CODES[email] = {'code': code, 'expires': expires}
-	# attempt to send via SMTP
 	try:
 		subject = 'Pincerna sign-in code'
 		body = f'Your Pincerna sign-in code is: {code}\n\nThis code expires in 10 minutes.'
 		send_smtp_mail(email, subject, body)
 		return jsonify(status='sent')
 	except Exception as e:
-		# if SMTP not configured or send failed, return helpful message
 		logging.exception('send_code failed')
 		return jsonify(error='send_failed', detail=str(e)), 500
-
 
 @app.route('/verify_code', methods=['POST'])
 def verify_code():
@@ -126,17 +110,14 @@ def verify_code():
 		return jsonify(error='expired'), 400
 	if code != stored.get('code'):
 		return jsonify(error='invalid'), 400
-	# success — issue JWT token
 	token = jwt.encode({
 		'user': email,
 		'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=12)
 	}, SECRET, algorithm='HS256')
-	# remove stored code
 	try: del EMAIL_CODES[email]
 	except: pass
 	return jsonify(token=token)
 
-# Aliases under /cloud/api/ to match proxy prefix used by nginx/UI
 @app.route('/cloud/api/send_code', methods=['POST'])
 def send_code_alias():
 	return send_code()
@@ -156,7 +137,6 @@ def oauth_start_alias():
 @app.route('/cloud/api/oauth/callback')
 def oauth_callback_alias():
 	return oauth_callback()
-
 
 @app.route('/verify_turnstile', methods=['POST'])
 def verify_turnstile():
@@ -180,23 +160,18 @@ def verify_turnstile():
 		return jsonify(error='not_human', detail=resp_j), 400
 	return jsonify(success=True, detail=resp_j)
 
-
 @app.route('/cloud/api/verify_turnstile', methods=['POST'])
 def verify_turnstile_alias():
 	return verify_turnstile()
 
-
 @app.route('/config')
 def config():
-	# return minimal public config for the UI
 	sitekey = os.environ.get('TURNSTILE_SITEKEY', '')
 	return jsonify(turnstile_sitekey=sitekey)
-
 
 @app.route('/cloud/api/config')
 def config_alias():
 	return config()
-
 
 @app.route('/verify_google', methods=['POST'])
 def verify_google():
@@ -204,7 +179,6 @@ def verify_google():
 	id_token = (data.get('id_token') or '').strip()
 	if not id_token:
 		return jsonify(error='missing_token'), 400
-	# verify with Google's tokeninfo endpoint
 	try:
 		url = 'https://oauth2.googleapis.com/tokeninfo?' + urllib.parse.urlencode({'id_token': id_token})
 		with urllib.request.urlopen(url, timeout=8) as resp:
@@ -212,12 +186,10 @@ def verify_google():
 	except Exception as e:
 		logging.exception('google tokeninfo failed')
 		return jsonify(error='token_verification_failed', detail=str(e)), 400
-	# payload includes email and email_verified
 	email = payload.get('email')
 	verified = payload.get('email_verified') in ('true', True, '1')
 	if not email or not verified:
 		return jsonify(error='email_not_verified'), 400
-	# check allowed list
 	try:
 		base = os.path.dirname(__file__)
 		allowed_path = os.path.join(base, 'allowed_users.json')
@@ -227,16 +199,13 @@ def verify_google():
 		allowed = ['emilvinod@gmail.com']
 	if email.lower() not in [e.lower() for e in allowed]:
 		return jsonify(error='not_allowed'), 403
-	# issue token
 	token = jwt.encode({
 		'user': email,
 		'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=12)
 	}, SECRET, algorithm='HS256')
 	return jsonify(token=token)
 
-
 def _access_denied_page(message=None):
-	"""Return a clean, centered access denied page."""
 	text = message or "Sorry, you don't have access"
 	return f'''<!doctype html>
 <html lang="en">
@@ -259,25 +228,18 @@ h1{{font-size:1.5rem;font-weight:500;letter-spacing:-0.02em}}
 </body>
 </html>'''
 
-
 def _make_redirect_uri():
-	# Build a redirect URI that points back to this server's /cloud/api/oauth/callback
-	# request.host_url includes scheme+host+port with trailing slash
 	return urllib.parse.urljoin(request.host_url, 'cloud/api/oauth/callback')
-
 
 @app.route('/oauth/start')
 def oauth_start():
-	# Start PKCE OAuth flow: generate state and code_verifier, store and redirect to Google
 	client_id = os.environ.get('GOOGLE_CLIENT_ID')
 	if not client_id:
 		return jsonify(error='missing_client_id'), 500
 	state = secrets.token_urlsafe(16)
 	code_verifier = secrets.token_urlsafe(64)
-	# compute code_challenge (base64url of SHA256)
 	sha = hashlib.sha256(code_verifier.encode('utf-8')).digest()
 	code_challenge = base64.urlsafe_b64encode(sha).rstrip(b'=').decode('ascii')
-	# store
 	OAUTH_STORE[state] = {'code_verifier': code_verifier, 'expires': int(time.time()) + 600}
 	_save_oauth_store()
 	params = {
@@ -294,31 +256,23 @@ def oauth_start():
 	auth_url = 'https://accounts.google.com/o/oauth2/v2/auth?' + urllib.parse.urlencode(params)
 	return ('', 302, {'Location': auth_url})
 
-
 @app.route('/oauth/callback')
 def oauth_callback():
-	# Handle errors from Google (user cancelled, denied access, etc.)
 	error = request.args.get('error')
 	error_desc = request.args.get('error_description', '')
 	if error:
 		if error == 'access_denied':
 			return _access_denied_page("Sign in was cancelled"), 200
 		return _access_denied_page(f"Authentication failed"), 200
-	
 	code = request.args.get('code')
 	state = request.args.get('state')
 	if not code or not state:
 		return _access_denied_page("Missing authentication data"), 200
-	
-	# Reload oauth store from disk to handle server restarts
 	_load_oauth_store()
 	stored = OAUTH_STORE.get(state)
 	if not stored or stored.get('expires',0) < int(time.time()):
-		# State expired or missing - redirect back to auth to try again
 		return ('', 302, {'Location': '/cloud/auth.html'})
-	
 	code_verifier = stored.get('code_verifier')
-	# exchange
 	token_url = 'https://oauth2.googleapis.com/token'
 	client_id = os.environ.get('GOOGLE_CLIENT_ID')
 	client_secret = os.environ.get('GOOGLE_CLIENT_SECRET')
@@ -342,7 +296,6 @@ def oauth_callback():
 	id_token = resp_j.get('id_token')
 	if not id_token:
 		return _access_denied_page('Authentication failed'), 200
-	# verify id_token via tokeninfo
 	try:
 		url = 'https://oauth2.googleapis.com/tokeninfo?' + urllib.parse.urlencode({'id_token': id_token})
 		with urllib.request.urlopen(url, timeout=8) as r:
@@ -354,7 +307,6 @@ def oauth_callback():
 	verified = payload.get('email_verified') in ('true', True, '1')
 	if not email or not verified:
 		return _access_denied_page('Email not verified'), 200
-	# check allowed
 	try:
 		base = os.path.dirname(__file__)
 		allowed_path = os.path.join(base, 'allowed_users.json')
@@ -364,21 +316,16 @@ def oauth_callback():
 		allowed = ['emilvinod@gmail.com']
 	if email.lower() not in [e.lower() for e in allowed]:
 		return _access_denied_page(), 403
-	# get user info from payload
 	user_name = payload.get('name', '')
 	user_given = payload.get('given_name', '')
 	user_picture = payload.get('picture', '')
-	# create our JWT
 	token = jwt.encode({'user': email, 'name': user_name, 'given_name': user_given, 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=12)}, SECRET, algorithm='HS256')
-	# cleanup
 	try:
 		del OAUTH_STORE[state]
 		_save_oauth_store()
 	except:
 		pass
-	# user info JSON for localStorage
 	user_info = json.dumps({'email': email, 'name': user_name, 'given_name': user_given, 'picture': user_picture})
-	# respond with small page that stores token in localStorage and redirects
 	html = f"""<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head><body>
 	<script>
 	  localStorage.setItem('pincerna_token', {json.dumps(token)});
@@ -412,15 +359,12 @@ def data():
 
 @app.route("/metrics")
 def metrics():
-	import time
 	cpu_percent = psutil.cpu_percent(interval=0.1)
 	mem = psutil.virtual_memory()
 	disk = psutil.disk_usage('/')
 	net = psutil.net_io_counters()
 	boot_time = psutil.boot_time()
 	uptime_seconds = time.time() - boot_time
-	
-	# Get CPU temp if available (Raspberry Pi)
 	cpu_temp = None
 	try:
 		temps = psutil.sensors_temperatures()
@@ -430,19 +374,14 @@ def metrics():
 			cpu_temp = temps['coretemp'][0].current
 	except:
 		pass
-	
-	# Get load average
 	try:
 		load_avg = [round(x, 2) for x in psutil.getloadavg()]
 	except:
 		load_avg = [0, 0, 0]
-	
-	# Get process count
 	try:
 		process_count = len(psutil.pids())
 	except:
 		process_count = 0
-	
 	return jsonify(
 		cpu=round(cpu_percent, 1),
 		cpu_count=psutil.cpu_count(),
@@ -465,28 +404,20 @@ def metrics():
 @app.route("/vpn/stats")
 @protected
 def vpn_stats():
-	"""Get detailed VPN statistics"""
 	import subprocess
 	try:
-		# Check if wg0 is up
 		result = subprocess.run(['ip', 'link', 'show', 'wg0'], capture_output=True, text=True)
 		is_up = result.returncode == 0 and 'UP' in result.stdout
-		
 		if not is_up:
 			return jsonify(connected=False, peers=[], transfer_rx=0, transfer_tx=0)
-		
-		# Get WireGuard stats
 		wg_result = subprocess.run(['sudo', 'wg', 'show', 'wg0'], capture_output=True, text=True)
 		if wg_result.returncode != 0:
 			return jsonify(connected=True, peers=[], transfer_rx=0, transfer_tx=0)
-		
-		# Parse wg show output
 		lines = wg_result.stdout.strip().split('\n')
 		peers = []
 		current_peer = None
 		total_rx = 0
 		total_tx = 0
-		
 		for line in lines:
 			line = line.strip()
 			if line.startswith('peer:'):
@@ -504,7 +435,6 @@ def vpn_stats():
 						rx_str = parts[0].strip()
 						tx_str = parts[1].strip()
 						current_peer['transfer'] = f"{rx_str} / {tx_str}"
-						# Parse bytes for totals
 						try:
 							rx_val = float(rx_str.split()[0])
 							tx_val = float(tx_str.split()[0])
@@ -517,10 +447,8 @@ def vpn_stats():
 							pass
 				elif 'allowed ips:' in line:
 					current_peer['allowed_ips'] = line.split(':')[1].strip()
-		
 		if current_peer:
 			peers.append(current_peer)
-		
 		return jsonify(
 			connected=True,
 			peers=peers,
@@ -534,14 +462,12 @@ def vpn_stats():
 @app.route("/restart", methods=["POST"])
 @protected
 def restart_service():
-	# Placeholder - in production this would trigger a service restart
 	return jsonify(message="Restart command received", status="ok")
 
 def _get_files_base():
 	return os.environ.get('FILES_ROOT', '/home')
 
 def _safe_path(path):
-	"""Ensure path stays within FILES_ROOT"""
 	base_dir = _get_files_base()
 	full_path = os.path.normpath(os.path.join(base_dir, path.lstrip('/')))
 	if not full_path.startswith(base_dir):
@@ -564,7 +490,6 @@ def list_files():
 					rel_path = os.path.join(path, name)
 					stat = os.stat(item_path)
 					size = stat.st_size if not os.path.isdir(item_path) else None
-					# Format size nicely
 					if size is not None:
 						if size > 1024*1024*1024:
 							size_str = f"{size/(1024*1024*1024):.1f} GB"
@@ -585,7 +510,6 @@ def list_files():
 					})
 				except (PermissionError, OSError):
 					pass
-		# Sort: directories first, then files alphabetically
 		items.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
 		return jsonify(files=items, path=path)
 	except Exception as e:
@@ -615,7 +539,6 @@ def upload_file():
 		return jsonify(error='Invalid path'), 400
 	if not os.path.isdir(full_path):
 		os.makedirs(full_path, exist_ok=True)
-	# Secure the filename
 	from werkzeug.utils import secure_filename
 	filename = secure_filename(file.filename)
 	dest = os.path.join(full_path, filename)
@@ -647,28 +570,19 @@ def rename_file_endpoint():
 	data = request.get_json() or {}
 	path = data.get('path', '')
 	new_name = data.get('new_name', '')
-	
 	if not path or not new_name:
 		return jsonify(error='Missing path or new_name'), 400
-	
 	full_path = _safe_path(path)
 	if not full_path or not os.path.exists(full_path):
 		return jsonify(error='File not found'), 404
-	
-	# Secure the new name
 	from werkzeug.utils import secure_filename
 	safe_name = secure_filename(new_name)
 	if not safe_name:
 		return jsonify(error='Invalid filename'), 400
-	
-	# Get parent directory and create new path
 	parent_dir = os.path.dirname(full_path)
 	new_full_path = os.path.join(parent_dir, safe_name)
-	
-	# Check if destination already exists
 	if os.path.exists(new_full_path):
 		return jsonify(error='A file with that name already exists'), 400
-	
 	try:
 		os.rename(full_path, new_full_path)
 		return jsonify(success=True, new_path=new_full_path)
@@ -681,30 +595,21 @@ def make_directory():
 	data = request.get_json() or {}
 	path = data.get('path', '/')
 	name = data.get('name', '')
-	
 	if not name:
 		return jsonify(error='Missing folder name'), 400
-	
-	# Secure the folder name
 	from werkzeug.utils import secure_filename
 	safe_name = secure_filename(name)
 	if not safe_name:
 		return jsonify(error='Invalid folder name'), 400
-	
 	full_path = _safe_path(path)
 	if not full_path:
 		return jsonify(error='Invalid path'), 400
-	
 	new_folder = os.path.join(full_path, safe_name)
-	
-	# Ensure it's still within allowed directory
 	base_dir = _get_files_base()
 	if not new_folder.startswith(base_dir):
 		return jsonify(error='Invalid path'), 400
-	
 	if os.path.exists(new_folder):
 		return jsonify(error='Folder already exists'), 400
-	
 	try:
 		os.makedirs(new_folder)
 		return jsonify(success=True, path=new_folder)
@@ -717,28 +622,19 @@ def move_file_endpoint():
 	data = request.get_json() or {}
 	src_path = data.get('path', '')
 	dest_path = data.get('destination', '')
-	
 	if not src_path or not dest_path:
 		return jsonify(error='Missing path or destination'), 400
-	
 	full_src = _safe_path(src_path)
 	full_dest = _safe_path(dest_path)
-	
 	if not full_src or not os.path.exists(full_src):
 		return jsonify(error='Source not found'), 404
-	
 	if not full_dest:
 		return jsonify(error='Invalid destination'), 400
-	
-	# If destination is a directory, move into it
 	if os.path.isdir(full_dest):
 		filename = os.path.basename(full_src)
 		full_dest = os.path.join(full_dest, filename)
-	
-	# Check if destination already exists
 	if os.path.exists(full_dest):
 		return jsonify(error='Destination already exists'), 400
-	
 	try:
 		import shutil
 		shutil.move(full_src, full_dest)
@@ -749,7 +645,6 @@ def move_file_endpoint():
 @app.route("/vpn/status")
 @protected
 def vpn_status():
-	# Check if WireGuard interface is up
 	try:
 		import subprocess
 		result = subprocess.run(['ip', 'link', 'show', 'wg0'], capture_output=True, text=True)
@@ -763,7 +658,6 @@ def vpn_status():
 def vpn_toggle():
 	try:
 		import subprocess
-		# Check current state
 		result = subprocess.run(['ip', 'link', 'show', 'wg0'], capture_output=True, text=True)
 		is_up = result.returncode == 0 and 'UP' in result.stdout
 		if is_up:
