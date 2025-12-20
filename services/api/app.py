@@ -401,20 +401,59 @@ def protected(f):
 	return wrapper
 
 @app.route("/health")
+@app.route("/cloud/api/health")
 def health():
 	return jsonify(status="ok")
 
 @app.route("/data")
+@app.route("/cloud/api/data")
 @protected
 def data():
 	return jsonify(message="Local Bartender (CLASSY SERVER) Breathes")
 
 @app.route("/metrics")
+@app.route("/cloud/api/metrics")
 def metrics():
 	return jsonify(
 		cpu=psutil.cpu_percent(),
 		memory=psutil.virtual_memory().percent
 	)
+
+@app.route("/restart", methods=["POST"])
+@app.route("/cloud/api/restart", methods=["POST"])
+@protected
+def restart_service():
+	# Placeholder - in production this would trigger a service restart
+	return jsonify(message="Restart command received", status="ok")
+
+@app.route("/files")
+@app.route("/cloud/api/files")
+@protected
+def list_files():
+	import glob
+	path = request.args.get('path', '/')
+	# For security, only allow listing from a specific directory
+	base_dir = os.environ.get('FILES_ROOT', '/home')
+	full_path = os.path.normpath(os.path.join(base_dir, path.lstrip('/')))
+	if not full_path.startswith(base_dir):
+		return jsonify(error='Invalid path'), 400
+	try:
+		items = []
+		if os.path.isdir(full_path):
+			for name in os.listdir(full_path):
+				item_path = os.path.join(full_path, name)
+				rel_path = os.path.join(path, name)
+				stat = os.stat(item_path)
+				items.append({
+					'name': name,
+					'path': rel_path,
+					'is_dir': os.path.isdir(item_path),
+					'size': stat.st_size if not os.path.isdir(item_path) else None,
+					'mtime': datetime.datetime.fromtimestamp(stat.st_mtime).isoformat()
+				})
+		return jsonify(files=items, path=path)
+	except Exception as e:
+		return jsonify(error=str(e)), 500
 
 if __name__ == "__main__":
 	app.run(host="0.0.0.0", port=5002)

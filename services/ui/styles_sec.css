@@ -28,8 +28,8 @@ body{
 .brand-text{font-weight:600;font-size:1.05rem;color:#fff}
 .header-right{display:flex;align-items:center;gap:16px}
 .user-greeting{color:var(--primary);font-weight:600;font-size:0.95rem}
-.signout-link{color:#e74c3c;font-weight:600;font-size:0.9rem;text-decoration:none;margin-left:16px;padding:6px 12px;transition:opacity 0.15s}
-.signout-link:hover{opacity:0.8}
+.signout-link{color:#888;font-weight:700;font-size:0.9rem;text-decoration:none;margin-left:16px;padding:6px 12px;transition:color 0.15s}
+.signout-link:hover,.signout-link:active{color:#e74c3c}
 .nav{display:flex;align-items:center}
 .nav a{color:var(--muted);margin-left:14px;text-decoration:none;padding:6px 8px;border-radius:0;font-weight:500}
 .nav a:hover{color:#fff}
