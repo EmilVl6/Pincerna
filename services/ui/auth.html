@@ -15,7 +15,7 @@
       <h1 class="auth-title">Welcome to Emil's Cloud!</h1>
       <div class="auth-body">
         <div class="auth-verify">
-          <div id="turnstile-container" style="min-height:80px;display:flex;align-items:center;justify-content:center"></div>
+          <div id="turnstile-container" style="width:100%;min-height:65px;display:flex;align-items:center;justify-content:center"></div>
         </div>
         <div class="auth-actions">
           <a id="signin-btn" class="btn gbtn disabled" href="/cloud/api/oauth/start" aria-disabled="true">
@@ -44,23 +44,16 @@
       }
 
       window.onTurnstileSuccess = function(token){
+        
+        enableSignIn();
+        
         fetch('/cloud/api/verify_turnstile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token })
-        }).then(r => r.ok ? r.json() : null)
-          .then(j => {
-            if(j && j.success){
-              enableSignIn();
-            } else {
-              console.warn('Turnstile verification failed or unavailable; enabling sign-in fallback');
-              enableSignIn();
-            }
-          })
-          .catch(err => {
-            console.warn('verify_turnstile fetch failed', err);
-            enableSignIn();
-          });
+        }).then(r => r.json()).then(j => {
+          if(j && !j.success) console.warn('server-side turnstile check', j);
+        }).catch(()=>{});
       };
 
       fetch('/cloud/api/config').then(r=>r.json()).then(cfg=>{
