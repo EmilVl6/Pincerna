@@ -121,7 +121,7 @@ function downloadFile(item) {
     return;
   }
   
-  showMessage(`Downloading ${item.name}...`, 'info', 3000);
+  showMessage(`Downloading ${item.name}`, 'info', 3000);
   
   const downloadUrl = apiBase + '/files/download?path=' + encodeURIComponent(item.path);
   
@@ -308,7 +308,7 @@ async function scanNetwork() {
   if (emptyEl) emptyEl.style.display = 'none';
   if (devicesGrid) devicesGrid.innerHTML = '';
   if (statusDot) statusDot.classList.add('scanning');
-  if (statusText) statusText.textContent = 'Scanning network...';
+  if (statusText) statusText.textContent = 'Scanning network';
   
   try {
     const res = await apiFetch('/network/scan');
@@ -670,7 +670,7 @@ async function scanDevicePorts(ip) {
   const actionsEl = document.getElementById(`actions-${ip.replace(/\./g, '-')}`);
   if (!servicesEl) return;
   
-  servicesEl.innerHTML = '<span style="font-size:0.75rem;color:var(--muted)">Scanning ports...</span>';
+  servicesEl.innerHTML = '<span style="font-size:0.75rem;color:var(--muted)">Scanning ports</span>';
   
   try {
     const res = await apiFetch(`/network/device/${ip}/ports`);
@@ -763,7 +763,7 @@ function updateVPNUI(connected, details = {}) {
 async function toggleVPN() {
   const btn = document.getElementById('btn-vpn');
   if (btn) {
-    btn.textContent = vpnConnected ? 'Disconnecting...' : 'Connecting...';
+    btn.textContent = vpnConnected ? 'Disconnecting' : 'Connecting';
     btn.disabled = true;
   }
   
@@ -1026,7 +1026,7 @@ async function uploadFile(file) {
   const statusText = document.getElementById('upload-status');
   
   if (progressDiv) progressDiv.style.display = 'block';
-  if (statusText) statusText.textContent = `Uploading ${file.name}...`;
+  if (statusText) statusText.textContent = `Uploading ${file.name}`;
   if (progressFill) progressFill.style.width = '0%';
   
   const formData = new FormData();
@@ -1040,7 +1040,7 @@ async function uploadFile(file) {
       if (e.lengthComputable && progressFill) {
         const percent = Math.round((e.loaded / e.total) * 100);
         progressFill.style.width = percent + '%';
-        if (statusText) statusText.textContent = `Uploading ${file.name}... ${percent}%`;
+        if (statusText) statusText.textContent = `Uploading ${file.name} ${percent}%`;
       }
     });
     
@@ -1086,7 +1086,7 @@ document.addEventListener('DOMContentLoaded', () => {
   showUserGreeting();
 
   const indicator = document.getElementById('preloader-indicator');
-  if (indicator) indicator.textContent = 'Connecting...';
+  if (indicator) indicator.textContent = 'Connecting';
 
     if (!localStorage.getItem('pincerna_token')) {
     window.location.href = 'auth.html';
