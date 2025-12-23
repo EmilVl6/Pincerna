@@ -248,6 +248,7 @@ let networkDevices = [];
 let isScanning = false;
 let deviceNicknames = {};
 let viewMode = 'grid'; // 'grid' or 'map'
+let networkGateway = '';  // Store gateway IP for device classification
 
 // Load saved nicknames from localStorage
 function loadDeviceNicknames() {
@@ -299,6 +300,13 @@ async function scanNetwork() {
     
     if (res && res.devices) {
       networkDevices = res.devices;
+      networkGateway = res.gateway || '';
+      
+      // Mark gateway device
+      if (networkGateway) {
+        const gatewayDevice = networkDevices.find(d => d.ip === networkGateway);
+        if (gatewayDevice) gatewayDevice.is_gateway = true;
+      }
       
       if (statusDot) {
         statusDot.classList.remove('scanning');
@@ -312,9 +320,9 @@ async function scanNetwork() {
         if (emptyEl) emptyEl.style.display = 'block';
       } else {
         if (viewMode === 'map') {
-          renderNetworkMap(res.devices, res.gateway || res.devices[0]?.ip);
+          renderNetworkMap(res.devices, networkGateway);
         } else {
-          renderNetworkDevices(res.devices);
+          renderNetworkDevices(res.devices, networkGateway);
         }
       }
     } else if (res && res.error) {
@@ -332,20 +340,32 @@ async function scanNetwork() {
   }
 }
 
-function renderNetworkDevices(devices) {
+function renderNetworkDevices(devices, gatewayIp) {
   const grid = document.getElementById('network-devices');
   if (!grid) return;
   
+  // Sort devices: gateway first, then server, then by IP
+  const sortedDevices = [...devices].sort((a, b) => {
+    if (a.ip === gatewayIp) return -1;
+    if (b.ip === gatewayIp) return 1;
+    if (a.is_server) return -1;
+    if (b.is_server) return 1;
+    return a.ip.localeCompare(b.ip, undefined, { numeric: true });
+  });
+  
   grid.className = 'network-devices-grid';
-  grid.innerHTML = devices.map(device => {
+  grid.innerHTML = `
+    <svg class="grid-lines" id="grid-svg"></svg>
+    ${sortedDevices.map(device => {
     const icon = getDeviceIcon(device);
-    const statusClass = device.is_server ? 'server' : (device.online ? 'online' : 'offline');
-    const deviceType = device.is_server ? 'This Server' : (device.hostname ? '' : 'Unknown Device');
+    const isGateway = device.ip === gatewayIp || device.is_gateway;
+    const statusClass = device.is_server ? 'server' : (isGateway ? 'gateway' : (device.online ? 'online' : 'offline'));
+    const deviceType = device.is_server ? 'This Server' : (isGateway ? 'Router/Gateway' : (device.hostname ? '' : 'Unknown Device'));
     const displayName = getDeviceDisplayName(device);
     const hasNickname = deviceNicknames[device.ip];
     
     return `
-      <div class="network-device ${statusClass}" data-ip="${device.ip}">
+      <div class="network-device ${statusClass}" data-ip="${device.ip}" id="grid-device-${device.ip.replace(/\./g, '-')}">
         <div class="device-header">
           <span class="device-icon">${icon}</span>
           <div class="device-header-info">
@@ -367,7 +387,8 @@ function renderNetworkDevices(devices) {
         </div>
       </div>
     `;
-  }).join('');
+  }).join('')}
+  `;
   
   // Add click handlers
   grid.querySelectorAll('.network-device').forEach(el => {
@@ -388,50 +409,263 @@ function renderNetworkDevices(devices) {
       const newName = prompt('Enter a nickname for this device:', currentName);
       if (newName !== null) {
         setDeviceNickname(ip, newName);
-        renderNetworkDevices(networkDevices);
+        renderNetworkDevices(networkDevices, networkGateway);
       }
     });
   });
+  
+  // Draw grid connection lines after layout settles
+  setTimeout(() => drawGridLines(gatewayIp), 100);
+}
+
+function drawGridLines(gatewayIp) {
+  const svg = document.getElementById('grid-svg');
+  const grid = document.getElementById('network-devices');
+  if (!svg || !grid) return;
+  
+  const rect = grid.getBoundingClientRect();
+  svg.setAttribute('width', rect.width);
+  svg.setAttribute('height', rect.height);
+  
+  const gatewayEl = document.getElementById(`grid-device-${gatewayIp?.replace(/\./g, '-')}`);
+  if (!gatewayEl) {
+    svg.innerHTML = '';
+    return;
+  }
+  
+  const gatewayRect = gatewayEl.getBoundingClientRect();
+  const gx = gatewayRect.left + gatewayRect.width / 2 - rect.left;
+  const gy = gatewayRect.top + gatewayRect.height / 2 - rect.top;
+  
+  let lines = '';
+  
+  grid.querySelectorAll('.network-device').forEach(el => {
+    if (el.dataset.ip === gatewayIp) return;
+    
+    const r = el.getBoundingClientRect();
+    const x = r.left + r.width / 2 - rect.left;
+    const y = r.top + r.height / 2 - rect.top;
+    const isOnline = el.classList.contains('online') || el.classList.contains('server');
+    
+    lines += `<line x1="${gx}" y1="${gy}" x2="${x}" y2="${y}" class="grid-line ${isOnline ? '' : 'offline'}"/>`;
+  });
+  
+  svg.innerHTML = lines;
 }
 
 function renderQuickActions(device) {
   const actions = [];
   const services = device.services || [];
+  const displayName = getDeviceDisplayName(device);
   
   // Check for SSH (port 22)
   if (services.some(s => s.port === 22)) {
-    actions.push(`<a href="ssh://${device.ip}" class="quick-action ssh" title="SSH"><span>⌨</span> SSH</a>`);
+    actions.push(`<button class="quick-action ssh" onclick="event.stopPropagation(); showConnectionInfo('ssh', '${device.ip}', '${displayName}')" title="SSH Connection"><span>⌨</span> SSH</button>`);
   }
   
   // Check for RDP (port 3389)
   if (services.some(s => s.port === 3389)) {
-    actions.push(`<a href="rdp://${device.ip}" class="quick-action rdp" title="Remote Desktop"><span>🖥</span> RDP</a>`);
+    actions.push(`<button class="quick-action rdp" onclick="event.stopPropagation(); showConnectionInfo('rdp', '${device.ip}', '${displayName}')" title="Remote Desktop"><span>🖥</span> RDP</button>`);
   }
   
   // Check for SMB/File Sharing (port 445)
   if (services.some(s => s.port === 445)) {
-    actions.push(`<a href="smb://${device.ip}" class="quick-action smb" title="File Share"><span>📁</span> Files</a>`);
+    actions.push(`<button class="quick-action smb" onclick="event.stopPropagation(); showConnectionInfo('smb', '${device.ip}', '${displayName}')" title="File Share"><span>📁</span> Files</button>`);
   }
   
   // Check for VNC (port 5900)
   if (services.some(s => s.port === 5900)) {
-    actions.push(`<a href="vnc://${device.ip}" class="quick-action vnc" title="VNC"><span>🖥</span> VNC</a>`);
+    actions.push(`<button class="quick-action vnc" onclick="event.stopPropagation(); showConnectionInfo('vnc', '${device.ip}', '${displayName}')" title="VNC"><span>🖥</span> VNC</button>`);
   }
   
   return actions.length > 0 ? actions.join('') : '';
 }
 
+function showConnectionInfo(type, ip, name) {
+  let title, command, instructions;
+  
+  switch (type) {
+    case 'ssh':
+      title = `SSH to ${name}`;
+      command = `ssh ${ip}`;
+      instructions = `
+        <p>Connect via terminal:</p>
+        <div class="connection-command">${command}</div>
+        <p class="connection-hint">Or use: ssh user@${ip}</p>
+        <div class="connection-buttons">
+          <button class="btn primary" onclick="copyToClipboard('${command}')">📋 Copy Command</button>
+          <a href="ssh://${ip}" class="btn">🚀 Open SSH App</a>
+        </div>
+      `;
+      break;
+    case 'rdp':
+      title = `Remote Desktop to ${name}`;
+      command = `mstsc /v:${ip}`;
+      instructions = `
+        <p>Connect via Windows Remote Desktop:</p>
+        <div class="connection-command">${command}</div>
+        <p class="connection-hint">Or open Remote Desktop Connection and enter: ${ip}</p>
+        <div class="connection-buttons">
+          <button class="btn primary" onclick="copyToClipboard('${command}')">📋 Copy Command</button>
+          <a href="rdp://${ip}" class="btn">🚀 Open RDP</a>
+        </div>
+      `;
+      break;
+    case 'smb':
+      title = `File Share on ${name}`;
+      command = `\\\\${ip}`;
+      instructions = `
+        <p>Access shared folders:</p>
+        <div class="connection-command">${command}</div>
+        <p class="connection-hint">
+          <strong>Windows:</strong> Win+R, type \\\\${ip}<br>
+          <strong>Mac:</strong> Finder → Go → Connect to Server → smb://${ip}<br>
+          <strong>Linux:</strong> Files → Other Locations → smb://${ip}
+        </p>
+        <div class="connection-buttons">
+          <button class="btn primary" onclick="copyToClipboard('${command}')">📋 Copy Path</button>
+          <a href="smb://${ip}" class="btn">🚀 Open in Explorer</a>
+        </div>
+      `;
+      break;
+    case 'vnc':
+      title = `VNC to ${name}`;
+      command = `vnc://${ip}`;
+      instructions = `
+        <p>Connect via VNC viewer:</p>
+        <div class="connection-command">${ip}:5900</div>
+        <p class="connection-hint">Use any VNC client (RealVNC, TightVNC, etc.)</p>
+        <div class="connection-buttons">
+          <button class="btn primary" onclick="copyToClipboard('${ip}:5900')">📋 Copy Address</button>
+          <a href="vnc://${ip}" class="btn">🚀 Open VNC App</a>
+        </div>
+      `;
+      break;
+  }
+  
+  showConnectionModal(title, instructions);
+}
+
+function showConnectionModal(title, content) {
+  // Remove any existing modal
+  const existing = document.getElementById('connection-modal');
+  if (existing) existing.remove();
+  
+  const modal = document.createElement('div');
+  modal.id = 'connection-modal';
+  modal.className = 'connection-modal';
+  modal.innerHTML = `
+    <div class="connection-modal-content">
+      <div class="connection-modal-header">
+        <h3>${title}</h3>
+        <button class="connection-modal-close" onclick="closeConnectionModal()">✕</button>
+      </div>
+      <div class="connection-modal-body">
+        ${content}
+      </div>
+    </div>
+  `;
+  
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeConnectionModal();
+  });
+  
+  document.body.appendChild(modal);
+}
+
+function closeConnectionModal() {
+  const modal = document.getElementById('connection-modal');
+  if (modal) modal.remove();
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    showMessage('Copied to clipboard!', 'info', 1500);
+  }).catch(() => {
+    showMessage('Failed to copy', 'error');
+  });
+}
+
 function getDeviceIcon(device) {
+  // Check explicit flags first
   if (device.is_server) return '🖥️';
+  if (device.is_gateway || device.ip === networkGateway) return '📡';
+  
   const hostname = (device.hostname || '').toLowerCase();
-  if (hostname.includes('iphone') || hostname.includes('android') || hostname.includes('phone')) return '📱';
-  if (hostname.includes('ipad') || hostname.includes('tablet')) return '📱';
-  if (hostname.includes('mac') || hostname.includes('imac')) return '🖥️';
-  if (hostname.includes('router') || hostname.includes('gateway')) return '📡';
-  if (hostname.includes('nas') || hostname.includes('synology') || hostname.includes('qnap')) return '💾';
-  if (hostname.includes('printer')) return '🖨️';
-  if (hostname.includes('tv') || hostname.includes('roku') || hostname.includes('firestick')) return '📺';
-  if (hostname.includes('camera') || hostname.includes('cam')) return '📷';
+  const ip = device.ip || '';
+  
+  // Router/Gateway detection (common patterns)
+  if (hostname.includes('router') || hostname.includes('gateway') || 
+      hostname.includes('netgear') || hostname.includes('linksys') ||
+      hostname.includes('asus-rt') || hostname.includes('tp-link') ||
+      hostname.includes('dlink') || hostname.includes('ubnt') ||
+      hostname.includes('unifi') || hostname.includes('mikrotik') ||
+      hostname.includes('openwrt') || hostname.includes('pfsense') ||
+      hostname.includes('edgerouter') || hostname.includes('orbi') ||
+      hostname.includes('eero') || hostname.includes('mesh') ||
+      ip.endsWith('.1') && !device.is_server) return '📡';
+  
+  // Phones
+  if (hostname.includes('iphone') || hostname.includes('ipad') || 
+      hostname.includes('android') || hostname.includes('phone') ||
+      hostname.includes('pixel') || hostname.includes('galaxy') ||
+      hostname.includes('oneplus') || hostname.includes('xiaomi')) return '📱';
+  
+  // Tablets
+  if (hostname.includes('tablet') || hostname.includes('surface')) return '📱';
+  
+  // Apple devices
+  if (hostname.includes('macbook') || hostname.includes('imac') ||
+      hostname.includes('mac-') || hostname.includes('apple-')) return '💻';
+  
+  // Windows PC detection
+  if (hostname.includes('desktop') || hostname.includes('pc-') ||
+      hostname.includes('workstation') || hostname.includes('windows')) return '🖥️';
+  
+  // Laptops
+  if (hostname.includes('laptop') || hostname.includes('thinkpad') ||
+      hostname.includes('dell-') || hostname.includes('hp-')) return '💻';
+  
+  // NAS devices
+  if (hostname.includes('nas') || hostname.includes('synology') || 
+      hostname.includes('qnap') || hostname.includes('drobo') ||
+      hostname.includes('freenas') || hostname.includes('truenas') ||
+      hostname.includes('unraid')) return '💾';
+  
+  // Printers
+  if (hostname.includes('printer') || hostname.includes('epson') ||
+      hostname.includes('hp-') || hostname.includes('canon') ||
+      hostname.includes('brother')) return '🖨️';
+  
+  // Smart TV / Media
+  if (hostname.includes('tv') || hostname.includes('roku') || 
+      hostname.includes('firestick') || hostname.includes('chromecast') ||
+      hostname.includes('apple-tv') || hostname.includes('shield') ||
+      hostname.includes('samsung') || hostname.includes('lg-') ||
+      hostname.includes('sony') || hostname.includes('plex')) return '📺';
+  
+  // Cameras
+  if (hostname.includes('camera') || hostname.includes('cam-') ||
+      hostname.includes('ipcam') || hostname.includes('ring') ||
+      hostname.includes('nest') || hostname.includes('arlo') ||
+      hostname.includes('wyze')) return '📷';
+  
+  // Smart home devices
+  if (hostname.includes('echo') || hostname.includes('alexa') ||
+      hostname.includes('google-home') || hostname.includes('homepod') ||
+      hostname.includes('hue') || hostname.includes('sonos')) return '🔊';
+  
+  // Gaming
+  if (hostname.includes('xbox') || hostname.includes('playstation') ||
+      hostname.includes('ps4') || hostname.includes('ps5') ||
+      hostname.includes('switch') || hostname.includes('nintendo')) return '🎮';
+  
+  // Raspberry Pi / IoT
+  if (hostname.includes('raspberry') || hostname.includes('raspberrypi') ||
+      hostname.includes('rpi') || hostname.includes('pi-') ||
+      hostname.includes('arduino') || hostname.includes('esp')) return '🔌';
+  
+  // Default
   if (device.online) return '💻';
   return '❓';
 }
