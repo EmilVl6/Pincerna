@@ -1,7 +1,8 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, g
 import jwt
 import datetime
 import logging
+from logging.handlers import RotatingFileHandler
 import psutil
 import os
 import time
@@ -15,9 +16,12 @@ import base64
 app = Flask(__name__)
 SECRET = os.environ.get('JWT_SECRET', 'bartendershandbook-change-in-production')
 
-
+FILES_ROOT = os.environ.get('FILES_ROOT', '/opt/pincerna/files')
 OAUTH_STORE = {}
-OAUTH_STATE_FILE = '/tmp/pincerna_oauth_state.json'
+OAUTH_STATE_FILE = os.environ.get('OAUTH_STATE_FILE', '/tmp/pincerna_oauth_state.json')
+LOG_DIR = os.environ.get('LOG_DIR', '/var/log/pincerna')
+app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('MAX_UPLOAD_BYTES', '52428800'))
 
 def _load_oauth_store():
 	global OAUTH_STORE
@@ -27,21 +31,27 @@ def _load_oauth_store():
 				OAUTH_STORE = json.load(f)
 		else:
 			OAUTH_STORE = {}
-	except Exception as e:
-		logging.warning(f'Failed to load oauth state: {e}')
+	except Exception:
+		logging.warning('Failed to load oauth state')
 		OAUTH_STORE = {}
 
 def _save_oauth_store():
 	try:
 		with open(OAUTH_STATE_FILE, 'w', encoding='utf-8') as f:
 			json.dump(OAUTH_STORE, f)
-	except Exception as e:
-		logging.exception(f'failed to save oauth state to {OAUTH_STATE_FILE}: {e}')
+	except Exception:
+		logging.exception('failed to save oauth state')
 
 
 _load_oauth_store()
-
-logging.basicConfig(filename="api.log", level=logging.INFO)
+os.makedirs(LOG_DIR, exist_ok=True)
+handler = RotatingFileHandler(os.path.join(LOG_DIR, 'api.log'), maxBytes=5*1024*1024, backupCount=5)
+formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+handler.setFormatter(formatter)
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+if not any(isinstance(h, RotatingFileHandler) for h in root_logger.handlers):
+	root_logger.addHandler(handler)
 
 @app.route("/login", methods=["POST"])
 def login():
@@ -221,7 +231,7 @@ def oauth_callback():
 	_load_oauth_store()
 	stored = OAUTH_STORE.get(state)
 	if not stored or stored.get('expires',0) < int(time.time()):
-		# State expired or not found - show error instead of silent redirect
+		
 		return _access_denied_page("Session expired. Please try signing in again."), 200
 	
 	code_verifier = stored.get('code_verifier')
@@ -298,11 +308,14 @@ location.replace('/cloud/index.html');
 
 def protected(f):
 	def wrapper(*args, **kwargs):
-		token = request.headers.get("Authorization")
+		token = request.headers.get("Authorization") or request.args.get('token')
 		if not token:
 			return jsonify(error="Missing token"), 401
+		if token.lower().startswith('bearer '):
+			token = token.split(None, 1)[1]
 		try:
-			jwt.decode(token, SECRET, algorithms=["HS256"])
+			payload = jwt.decode(token, SECRET, algorithms=["HS256"])
+			g.user = payload
 		except:
 			return jsonify(error="Invalid token"), 401
 		return f(*args, **kwargs)
@@ -433,7 +446,7 @@ def list_files():
 @app.route("/files/download")
 def download_file():
 	"""Download a file - supports both Authorization header and token query param"""
-	# Check authorization - first try header, then query param
+	
 	token = request.headers.get('Authorization') or request.args.get('token')
 	if not token:
 		return jsonify(error='Missing token'), 401
@@ -449,7 +462,7 @@ def download_file():
 	
 	from flask import send_file
 	try:
-		# Get the filename for download
+		
 		filename = os.path.basename(full_path)
 		return send_file(
 			full_path,
@@ -630,21 +643,21 @@ def move_file_endpoint():
 	except Exception as e:
 		return jsonify(error=str(e)), 500
 
-# ==================== NETWORK SCANNING ====================
+
 
 def get_local_network_range():
 	"""Get the local network CIDR range"""
 	import subprocess
 	try:
-		# Get default gateway interface IP
+		
 		result = subprocess.run(['ip', 'route', 'get', '1.1.1.1'], capture_output=True, text=True)
 		if result.returncode == 0:
-			# Parse output like: "1.1.1.1 via 192.168.1.1 dev eth0 src 192.168.1.100"
+			
 			parts = result.stdout.split()
 			for i, part in enumerate(parts):
 				if part == 'src' and i + 1 < len(parts):
 					local_ip = parts[i + 1]
-					# Assume /24 network
+					
 					prefix = '.'.join(local_ip.split('.')[:3])
 					return f"{prefix}.0/24", local_ip
 	except:
@@ -662,7 +675,7 @@ def network_scan():
 		network_range, server_ip = get_local_network_range()
 		devices = []
 		
-		# Try nmap first (fast and accurate)
+		
 		try:
 			result = subprocess.run(
 				['nmap', '-sn', '-oG', '-', network_range],
@@ -686,7 +699,7 @@ def network_scan():
 						}
 						devices.append(device)
 		except (FileNotFoundError, subprocess.TimeoutExpired):
-			# Fallback: use ARP table
+			
 			result = subprocess.run(['ip', 'neigh'], capture_output=True, text=True)
 			if result.returncode == 0:
 				for line in result.stdout.split('\n'):
@@ -705,7 +718,7 @@ def network_scan():
 							}
 							devices.append(device)
 		
-		# Add the server itself
+		
 		if not any(d['ip'] == server_ip for d in devices):
 			devices.insert(0, {
 				'ip': server_ip,
@@ -715,10 +728,10 @@ def network_scan():
 				'services': [{'port': 80, 'name': 'http'}, {'port': 443, 'name': 'https'}]
 			})
 		
-		# Sort: server first, then by IP
+		
 		devices.sort(key=lambda d: (not d.get('is_server'), tuple(map(int, d['ip'].split('.')))))
 		
-		# Get gateway IP
+		
 		gateway_ip = ''
 		try:
 			gw_result = subprocess.run(['ip', 'route'], capture_output=True, text=True)
@@ -745,7 +758,7 @@ def get_hostname(ip):
 	import socket
 	try:
 		hostname = socket.gethostbyaddr(ip)[0]
-		return hostname.split('.')[0]  # Return short hostname
+		return hostname.split('.')[0]  
 	except:
 		return ''
 
@@ -755,20 +768,20 @@ def scan_device_ports(ip):
 	"""Scan common ports on a device"""
 	import socket
 	
-	# Validate IP format
+	
 	try:
 		parts = ip.split('.')
 		if len(parts) != 4 or not all(0 <= int(p) <= 255 for p in parts):
 			return jsonify(error='Invalid IP address'), 400
 		
-		# Only allow scanning private network IPs (security measure)
+		
 		first_octet = int(parts[0])
 		second_octet = int(parts[1])
 		is_private = (
-			first_octet == 10 or  # 10.0.0.0/8
-			(first_octet == 172 and 16 <= second_octet <= 31) or  # 172.16.0.0/12
-			(first_octet == 192 and second_octet == 168) or  # 192.168.0.0/16
-			first_octet == 127  # localhost
+			first_octet == 10 or  
+			(first_octet == 172 and 16 <= second_octet <= 31) or  
+			(first_octet == 192 and second_octet == 168) or  
+			first_octet == 127  
 		)
 		if not is_private:
 			return jsonify(error='Can only scan private network addresses'), 400
@@ -812,7 +825,7 @@ def network_info():
 	try:
 		network_range, server_ip = get_local_network_range()
 		
-		# Get gateway
+		
 		gateway = ''
 		try:
 			result = subprocess.run(['ip', 'route'], capture_output=True, text=True)
@@ -823,7 +836,7 @@ def network_info():
 		except:
 			pass
 		
-		# Get hostname
+		
 		import socket
 		hostname = socket.gethostname()
 		
@@ -836,7 +849,7 @@ def network_info():
 	except Exception as e:
 		return jsonify(error=str(e)), 500
 
-# Cloud API prefix aliases for all endpoints
+
 @app.route("/cloud/api/health")
 def health_alias():
 	return health()
