@@ -251,7 +251,6 @@ async function checkVPNStatus() {
 }
 
 async function getVPNStats() {
-  // VPN stats disabled - Tailscale manages its own dashboard
   return;
 }
 

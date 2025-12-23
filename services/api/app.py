@@ -733,87 +733,6 @@ def move_file_endpoint():
 	except Exception as e:
 		return jsonify(error=str(e)), 500
 
-@app.route("/vpn/status")
-@protected
-def vpn_status():
-	"""Get Tailscale VPN connection status"""
-	try:
-		import subprocess
-		# Check if tailscale is installed and running
-		result = subprocess.run(['tailscale', 'status', '--json'], capture_output=True, text=True)
-		if result.returncode != 0:
-			return jsonify(connected=False, configured=False, error='Tailscale not running')
-		
-		status = json.loads(result.stdout)
-		is_connected = status.get('BackendState') == 'Running'
-		self_ip = status.get('TailscaleIPs', [''])[0] if status.get('TailscaleIPs') else ''
-		
-		# Get peer count
-		peers = status.get('Peer', {})
-		online_peers = sum(1 for p in peers.values() if p.get('Online', False))
-		
-		return jsonify(
-			connected=is_connected,
-			configured=True,
-			ip=self_ip,
-			peer_count=online_peers,
-			backend_state=status.get('BackendState', 'Unknown')
-		)
-	except FileNotFoundError:
-		return jsonify(connected=False, configured=False, error='Tailscale not installed')
-	except Exception as e:
-		return jsonify(connected=False, error=str(e))
-
-@app.route("/vpn/peers")
-@protected
-def vpn_peers():
-	"""Get list of Tailscale peers (devices on your network)"""
-	try:
-		import subprocess
-		result = subprocess.run(['tailscale', 'status', '--json'], capture_output=True, text=True)
-		if result.returncode != 0:
-			return jsonify(peers=[], error='Tailscale not running')
-		
-		status = json.loads(result.stdout)
-		peers_data = status.get('Peer', {})
-		
-		peers = []
-		for key, peer in peers_data.items():
-			peers.append({
-				'name': peer.get('HostName', 'Unknown'),
-				'ip': peer.get('TailscaleIPs', [''])[0] if peer.get('TailscaleIPs') else '',
-				'online': peer.get('Online', False),
-				'os': peer.get('OS', ''),
-				'last_seen': peer.get('LastSeen', '')
-			})
-		
-		return jsonify(peers=peers)
-	except Exception as e:
-		return jsonify(peers=[], error=str(e))
-
-@app.route("/vpn/toggle", methods=["POST"])
-@protected
-def vpn_toggle():
-	"""Tailscale is always-on, this just returns current status"""
-	try:
-		import subprocess
-		result = subprocess.run(['tailscale', 'status', '--json'], capture_output=True, text=True)
-		if result.returncode != 0:
-			return jsonify(error='Tailscale not running. Run: sudo tailscale up'), 400
-		
-		status = json.loads(result.stdout)
-		is_connected = status.get('BackendState') == 'Running'
-		
-		return jsonify(
-			connected=is_connected,
-			message='Tailscale is always-on. Install the Tailscale app on your device and sign in with Google to connect.'
-		)
-	except FileNotFoundError:
-		return jsonify(error='Tailscale not installed'), 400
-	except Exception as e:
-		logging.exception('VPN status check failed')
-		return jsonify(error=str(e)), 500
-
 # ==================== NETWORK SCANNING ====================
 
 def get_local_network_range():
@@ -1028,18 +947,6 @@ def health_alias():
 @app.route("/cloud/api/metrics")
 def metrics_alias():
 	return metrics()
-
-@app.route("/cloud/api/vpn/status")
-def vpn_status_alias():
-	return vpn_status()
-
-@app.route("/cloud/api/vpn/peers")
-def vpn_peers_alias():
-	return vpn_peers()
-
-@app.route("/cloud/api/vpn/toggle", methods=["POST"])
-def vpn_toggle_alias():
-	return vpn_toggle()
 
 @app.route("/cloud/api/network/scan")
 def network_scan_alias():

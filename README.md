@@ -6,7 +6,7 @@
 
 v.1.0-beta
 - Locally Stored Drive
-- Home Network VPN
+- Network Browser
 
 ## Availability
 
