@@ -357,7 +357,7 @@ body::after{
 
 .file-list{border:1px solid rgba(0,0,0,0.05);background:rgba(255,255,255,0.02)}
 .file-entry .file-info{display:flex;align-items:center;gap:12px;flex:1;min-width:0}
-.file-entry .file-icon{font-size:24px;flex-shrink:0}
+.file-entry .file-icon{font-size:24px;flex-shrink:0;margin-left:6px}
 .file-entry .file-details{flex:1;min-width:0}
 .file-entry .file-name{font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .file-entry .file-meta{font-size:0.8rem;color:var(--muted);margin-top:2px}
