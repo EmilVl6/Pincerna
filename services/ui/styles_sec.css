@@ -40,7 +40,7 @@ body{
 .nav a.active{color:var(--primary);background:rgba(255,122,0,0.1)}
 
 .wrap{padding-bottom:36px}
-.card{background:var(--card);border-radius:var(--radius);padding:20px;margin:18px 0;border:1px solid var(--glass);box-shadow:0 10px 30px rgba(15,23,42,0.08)}
+.card{background:rgba(255,255,255,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-radius:var(--radius);padding:20px;margin:18px 0;border:1px solid rgba(255,255,255,0.2);box-shadow:0 10px 30px rgba(15,23,42,0.08)}
 .card h1{margin:0 0 6px 0;font-size:1.8rem}
 .card h2{margin:0 0 8px 0;font-size:1.1rem}
 .lead{color:var(--muted);margin-top:6px}
@@ -321,10 +321,10 @@ body::after{
 
 .metrics-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));gap:12px;margin-bottom:16px}
 .metric-widget{background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);border:2px solid #0f3460;padding:16px;text-align:center;position:relative;overflow:hidden}
-.metric-widget::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg, transparent, var(--primary), transparent)}
-.metric-icon{font-size:24px;margin-bottom:8px;filter:drop-shadow(0 0 8px rgba(255,130,0,0.5))}
-.metric-value{font-size:28px;font-weight:700;color:#fff;font-family:'Courier New', monospace;text-shadow:0 0 10px rgba(255,130,0,0.3)}
-.metric-label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--primary);margin-top:4px;font-weight:600}
+.metric-widget::before{display:none}
+.metric-icon{font-size:24px;margin-bottom:8px}
+.metric-value{font-size:28px;font-weight:700;color:#fff;font-family:'Courier New', monospace}
+.metric-label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#9aa0a6;margin-top:4px;font-weight:600}
 .metric-sub{font-size:10px;color:var(--muted);margin-top:4px}
 .metrics-refresh{display:flex;align-items:center;gap:12px;margin-top:12px}
 .metrics-refresh .meta{color:var(--muted);font-size:0.85rem}
