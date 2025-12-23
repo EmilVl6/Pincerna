@@ -495,19 +495,9 @@ function renderQuickActions(device) {
   const services = device.services || [];
   const displayName = getDeviceDisplayName(device);
   
-  // Check for SSH (port 22)
-  if (services.some(s => s.port === 22)) {
-    actions.push(`<button class="quick-action ssh" onclick="event.stopPropagation(); showConnectionInfo('ssh', '${device.ip}', '${displayName}')" title="SSH Connection"><span>⌨</span> SSH</button>`);
-  }
-  
   // Check for RDP (port 3389)
   if (services.some(s => s.port === 3389)) {
     actions.push(`<button class="quick-action rdp" onclick="event.stopPropagation(); showConnectionInfo('rdp', '${device.ip}', '${displayName}')" title="Remote Desktop"><span>🖥</span> RDP</button>`);
-  }
-  
-  // Check for SMB/File Sharing (port 445)
-  if (services.some(s => s.port === 445)) {
-    actions.push(`<button class="quick-action smb" onclick="event.stopPropagation(); showConnectionInfo('smb', '${device.ip}', '${displayName}')" title="File Share"><span>📁</span> Files</button>`);
   }
   
   // Check for VNC (port 5900)
