@@ -83,7 +83,7 @@ check_root
 log_step "1/8" "Installing system dependencies"
 
 
-PACKAGES="nginx python3 python3-venv python3-pip rsync curl openssl"
+PACKAGES="nginx python3 python3-venv python3-pip rsync curl openssl nmap"
 NEED_INSTALL=""
 for pkg in $PACKAGES; do
     if ! dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then

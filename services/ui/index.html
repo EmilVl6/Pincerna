@@ -32,6 +32,7 @@
       <span id="user-greeting" class="user-greeting"></span>
       <nav class="nav" aria-label="Main">
         <a href="#" id="nav-home" class="active">Dashboard</a>
+        <a href="#" id="nav-network">Network</a>
         <a href="#" id="nav-files">Files</a>
         <a href="#" id="nav-about">About</a>
       </nav>
@@ -46,7 +47,30 @@
       <div class="row">
         <div>
           <button id="btn-access-local" class="btn primary">Access Local Files</button>
+          <button id="btn-view-network" class="btn">View Home Network</button>
         </div>
+      </div>
+    </section>
+
+    <!-- Network/LAN Panel -->
+    <section class="card" id="network-panel" style="display:none">
+      <h2>Home Network</h2>
+      <div class="network-header">
+        <div class="network-status">
+          <span class="network-status-dot connected"></span>
+          <span id="network-status-text">Connected to local network</span>
+        </div>
+        <button id="btn-scan-network" class="btn">Scan Network</button>
+      </div>
+      <div id="network-scanning" class="network-scanning" style="display:none">
+        <div class="scanning-spinner"></div>
+        <span>Scanning network...</span>
+      </div>
+      <div id="network-devices" class="network-devices-grid">
+        <!-- Devices will be populated here -->
+      </div>
+      <div id="network-empty" class="network-empty" style="display:none">
+        <p>No devices found. Click "Scan Network" to discover devices.</p>
       </div>
     </section>
 

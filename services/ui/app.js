@@ -62,7 +62,7 @@ async function apiFetch(path, opts = {}) {
 }
 
 function showSection(sectionId) {
-  ['hero', 'controls', 'files', 'metrics', 'about'].forEach(id => {
+  ['hero', 'controls', 'files', 'metrics', 'about', 'network-panel'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
@@ -80,6 +80,12 @@ function showSection(sectionId) {
     if (files) files.style.display = 'block';
     const navFiles = document.getElementById('nav-files');
     if (navFiles) navFiles.classList.add('active');
+  } else if (sectionId === 'network') {
+    const networkPanel = document.getElementById('network-panel');
+    if (networkPanel) networkPanel.style.display = 'block';
+    const navNetwork = document.getElementById('nav-network');
+    if (navNetwork) navNetwork.classList.add('active');
+    scanNetwork();  // Auto-scan on open
   } else if (sectionId === 'about') {
     const about = document.getElementById('about');
     if (about) about.style.display = 'block';
@@ -235,6 +241,157 @@ async function getVPNStats() {
   // VPN stats disabled - Tailscale manages its own dashboard
   return;
 }
+
+// ==================== NETWORK SCANNING ====================
+
+let networkDevices = [];
+let isScanning = false;
+
+async function scanNetwork() {
+  if (isScanning) return;
+  isScanning = true;
+  
+  const devicesGrid = document.getElementById('network-devices');
+  const scanningEl = document.getElementById('network-scanning');
+  const emptyEl = document.getElementById('network-empty');
+  const statusDot = document.querySelector('.network-status-dot');
+  const statusText = document.getElementById('network-status-text');
+  
+  if (scanningEl) scanningEl.style.display = 'flex';
+  if (emptyEl) emptyEl.style.display = 'none';
+  if (devicesGrid) devicesGrid.innerHTML = '';
+  if (statusDot) statusDot.classList.add('scanning');
+  if (statusText) statusText.textContent = 'Scanning network...';
+  
+  try {
+    const res = await apiFetch('/network/scan');
+    
+    if (res && res.devices) {
+      networkDevices = res.devices;
+      
+      if (statusDot) {
+        statusDot.classList.remove('scanning');
+        statusDot.classList.add('connected');
+      }
+      if (statusText) {
+        statusText.textContent = `${res.devices.length} devices on ${res.network}`;
+      }
+      
+      if (res.devices.length === 0) {
+        if (emptyEl) emptyEl.style.display = 'block';
+      } else {
+        renderNetworkDevices(res.devices);
+      }
+    } else if (res && res.error) {
+      showMessage('Network scan failed: ' + res.error, 'error');
+      if (statusText) statusText.textContent = 'Scan failed';
+      if (statusDot) statusDot.classList.remove('scanning', 'connected');
+    }
+  } catch (e) {
+    showMessage('Network scan failed', 'error');
+    if (statusText) statusText.textContent = 'Connection error';
+    if (statusDot) statusDot.classList.remove('scanning', 'connected');
+  } finally {
+    isScanning = false;
+    if (scanningEl) scanningEl.style.display = 'none';
+  }
+}
+
+function renderNetworkDevices(devices) {
+  const grid = document.getElementById('network-devices');
+  if (!grid) return;
+  
+  grid.innerHTML = devices.map(device => {
+    const icon = getDeviceIcon(device);
+    const statusClass = device.is_server ? 'server' : (device.online ? 'online' : 'offline');
+    const deviceType = device.is_server ? 'This Server' : (device.hostname ? '' : 'Unknown Device');
+    
+    return `
+      <div class="network-device ${statusClass}" data-ip="${device.ip}">
+        <div class="device-header">
+          <span class="device-icon">${icon}</span>
+          <div>
+            <div class="device-name">${device.hostname || device.ip}</div>
+            ${deviceType ? `<div class="device-type">${deviceType}</div>` : ''}
+          </div>
+        </div>
+        <div class="device-info">
+          <div class="device-ip">${device.ip}</div>
+          ${device.mac ? `<div class="device-mac">${device.mac}</div>` : ''}
+        </div>
+        <div class="device-services" id="services-${device.ip.replace(/\./g, '-')}">
+          ${renderDeviceServices(device)}
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  // Add click handlers for port scanning
+  grid.querySelectorAll('.network-device').forEach(el => {
+    el.addEventListener('click', () => {
+      const ip = el.dataset.ip;
+      scanDevicePorts(ip);
+    });
+  });
+}
+
+function getDeviceIcon(device) {
+  if (device.is_server) return '🖥️';
+  const hostname = (device.hostname || '').toLowerCase();
+  if (hostname.includes('iphone') || hostname.includes('android') || hostname.includes('phone')) return '📱';
+  if (hostname.includes('ipad') || hostname.includes('tablet')) return '📱';
+  if (hostname.includes('mac') || hostname.includes('imac')) return '🖥️';
+  if (hostname.includes('router') || hostname.includes('gateway')) return '📡';
+  if (hostname.includes('nas') || hostname.includes('synology') || hostname.includes('qnap')) return '💾';
+  if (hostname.includes('printer')) return '🖨️';
+  if (hostname.includes('tv') || hostname.includes('roku') || hostname.includes('firestick')) return '📺';
+  if (hostname.includes('camera') || hostname.includes('cam')) return '📷';
+  if (device.online) return '💻';
+  return '❓';
+}
+
+function renderDeviceServices(device) {
+  if (!device.services || device.services.length === 0) {
+    return '<span style="font-size:0.75rem;color:var(--muted)">Click to scan ports</span>';
+  }
+  
+  return device.services.map(svc => {
+    const isWeb = ['http', 'https', 'HTTP', 'HTTPS', 'HTTP Alt', 'HTTPS Alt', 'Synology', 'Synology SSL', 'Plex', 'Portainer'].includes(svc.name);
+    const protocol = svc.port === 443 || svc.port === 8443 || svc.port === 5001 ? 'https' : 'http';
+    
+    if (isWeb) {
+      return `<a href="${protocol}://${device.ip}:${svc.port}" target="_blank" class="device-service" onclick="event.stopPropagation()">${svc.name} :${svc.port}</a>`;
+    }
+    return `<span class="device-service">${svc.name} :${svc.port}</span>`;
+  }).join('');
+}
+
+async function scanDevicePorts(ip) {
+  const servicesEl = document.getElementById(`services-${ip.replace(/\./g, '-')}`);
+  if (!servicesEl) return;
+  
+  servicesEl.innerHTML = '<span style="font-size:0.75rem;color:var(--muted)">Scanning ports...</span>';
+  
+  try {
+    const res = await apiFetch(`/network/device/${ip}/ports`);
+    if (res && res.ports) {
+      // Update the device in our cache
+      const device = networkDevices.find(d => d.ip === ip);
+      if (device) {
+        device.services = res.ports;
+        servicesEl.innerHTML = renderDeviceServices(device);
+      }
+      
+      if (res.ports.length === 0) {
+        servicesEl.innerHTML = '<span style="font-size:0.75rem;color:var(--muted)">No open ports found</span>';
+      }
+    }
+  } catch (e) {
+    servicesEl.innerHTML = '<span style="font-size:0.75rem;color:var(--muted)">Scan failed</span>';
+  }
+}
+
+// ==================== VPN UI ====================
 
 function updateVPNUI(connected, details = {}) {
   const btn = document.getElementById('btn-vpn');
@@ -639,13 +796,15 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
-    $('#btn-logout').addEventListener('click', logout);
+  const btnLogout = $('#btn-logout');
+  if (btnLogout) btnLogout.addEventListener('click', logout);
   
   // VPN button (optional - may not exist)
   const btnVpn = document.getElementById('btn-vpn');
   if (btnVpn) btnVpn.addEventListener('click', toggleVPN);
   
-  $('#btn-access-local').addEventListener('click', () => { document.getElementById('nav-files').click(); });
+  const btnAccessLocal = $('#btn-access-local');
+  if (btnAccessLocal) btnAccessLocal.addEventListener('click', () => { document.getElementById('nav-files').click(); });
 
     const btnMetrics = document.getElementById('btn-metrics');
   if (btnMetrics) btnMetrics.addEventListener('click', loadMetrics);
@@ -670,9 +829,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-    $('#nav-home').addEventListener('click', (e) => { e.preventDefault(); showSection('home'); });
-  $('#nav-files').addEventListener('click', (e) => { e.preventDefault(); showSection('files'); refreshFiles(); });
-  $('#nav-about').addEventListener('click', (e) => { e.preventDefault(); showSection('about'); });
+    const navHome = $('#nav-home');
+  const navFiles = $('#nav-files');
+  const navNetwork = $('#nav-network');
+  const navAbout = $('#nav-about');
+  if (navHome) navHome.addEventListener('click', (e) => { e.preventDefault(); showSection('home'); });
+  if (navFiles) navFiles.addEventListener('click', (e) => { e.preventDefault(); showSection('files'); refreshFiles(); });
+  if (navNetwork) navNetwork.addEventListener('click', (e) => { e.preventDefault(); showSection('network'); });
+  if (navAbout) navAbout.addEventListener('click', (e) => { e.preventDefault(); showSection('about'); });
+
+  // Network panel buttons
+  const btnViewNetwork = document.getElementById('btn-view-network');
+  if (btnViewNetwork) btnViewNetwork.addEventListener('click', () => showSection('network'));
+  
+  const btnScanNetwork = document.getElementById('btn-scan-network');
+  if (btnScanNetwork) btnScanNetwork.addEventListener('click', scanNetwork);
 
     const fileInput = document.getElementById('file-input');
   if (fileInput) {
@@ -731,7 +902,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-    fetch(apiBase + '/health').then(r => {
+  // Health check with fallback - always hide preloader
+  const token = localStorage.getItem('pincerna_token');
+  fetch(apiBase + '/health', {
+    headers: token ? { 'Authorization': token } : {}
+  }).then(r => {
     if (r.ok) {
       hidePreloader(2000);
     } else {

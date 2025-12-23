@@ -217,3 +217,38 @@ body::after{
 
 #turnstile-container{min-height:65px;display:flex;align-items:center;justify-content:center}
 #turnstile-container iframe{max-width:100%}
+
+/* Network Panel */
+.network-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px}
+.network-status{display:flex;align-items:center;gap:10px}
+.network-status-dot{width:10px;height:10px;border-radius:50%;background:#666}
+.network-status-dot.connected{background:#22c55e;box-shadow:0 0 10px #22c55e}
+.network-status-dot.scanning{background:#f59e0b;animation:pulse 1s infinite}
+#network-status-text{color:#fff;font-weight:500}
+
+.network-scanning{display:flex;align-items:center;justify-content:center;gap:12px;padding:24px;color:var(--muted)}
+.scanning-spinner{width:20px;height:20px;border:2px solid var(--muted);border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.network-devices-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:12px}
+.network-device{background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);border:1px solid #0f3460;padding:16px;position:relative;transition:all 0.2s ease}
+.network-device:hover{border-color:var(--primary);transform:translateY(-2px);box-shadow:0 8px 24px rgba(255,130,0,0.15)}
+.network-device.online{border-left:3px solid #22c55e}
+.network-device.offline{border-left:3px solid #666;opacity:0.6}
+.network-device.server{border-left:3px solid var(--primary)}
+
+.device-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.device-icon{font-size:28px;filter:drop-shadow(0 0 6px rgba(255,130,0,0.3))}
+.device-name{font-weight:600;color:#fff;font-size:0.95rem;word-break:break-word}
+.device-type{font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px}
+
+.device-info{font-size:0.85rem;color:var(--muted)}
+.device-ip{font-family:'Courier New', monospace;color:var(--accent)}
+.device-mac{font-size:0.75rem;color:#666;margin-top:4px}
+
+.device-services{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.device-service{font-size:0.7rem;padding:3px 8px;background:rgba(255,130,0,0.15);color:var(--primary);border:1px solid rgba(255,130,0,0.3);cursor:pointer;text-decoration:none}
+.device-service:hover{background:rgba(255,130,0,0.3)}
+
+.network-empty{text-align:center;padding:40px;color:var(--muted)}
+.network-empty p{margin:0}

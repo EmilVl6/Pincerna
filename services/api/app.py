@@ -805,6 +805,188 @@ def vpn_toggle():
 		logging.exception('VPN status check failed')
 		return jsonify(error=str(e)), 500
 
+# ==================== NETWORK SCANNING ====================
+
+def get_local_network_range():
+	"""Get the local network CIDR range"""
+	import subprocess
+	try:
+		# Get default gateway interface IP
+		result = subprocess.run(['ip', 'route', 'get', '1.1.1.1'], capture_output=True, text=True)
+		if result.returncode == 0:
+			# Parse output like: "1.1.1.1 via 192.168.1.1 dev eth0 src 192.168.1.100"
+			parts = result.stdout.split()
+			for i, part in enumerate(parts):
+				if part == 'src' and i + 1 < len(parts):
+					local_ip = parts[i + 1]
+					# Assume /24 network
+					prefix = '.'.join(local_ip.split('.')[:3])
+					return f"{prefix}.0/24", local_ip
+	except:
+		pass
+	return "192.168.1.0/24", "192.168.1.1"
+
+@app.route("/network/scan")
+@protected
+def network_scan():
+	"""Scan the local network for devices"""
+	import subprocess
+	import socket
+	
+	try:
+		network_range, server_ip = get_local_network_range()
+		devices = []
+		
+		# Try nmap first (fast and accurate)
+		try:
+			result = subprocess.run(
+				['nmap', '-sn', '-oG', '-', network_range],
+				capture_output=True, text=True, timeout=30
+			)
+			if result.returncode == 0:
+				for line in result.stdout.split('\n'):
+					if 'Host:' in line and 'Status: Up' in line:
+						parts = line.split()
+						ip = parts[1]
+						hostname = ''
+						if '(' in line and ')' in line:
+							hostname = line.split('(')[1].split(')')[0]
+						
+						device = {
+							'ip': ip,
+							'hostname': hostname or get_hostname(ip),
+							'online': True,
+							'is_server': ip == server_ip,
+							'services': []
+						}
+						devices.append(device)
+		except (FileNotFoundError, subprocess.TimeoutExpired):
+			# Fallback: use ARP table
+			result = subprocess.run(['ip', 'neigh'], capture_output=True, text=True)
+			if result.returncode == 0:
+				for line in result.stdout.split('\n'):
+					parts = line.split()
+					if len(parts) >= 4 and parts[0].count('.') == 3:
+						ip = parts[0]
+						state = parts[-1] if parts else 'STALE'
+						if state in ['REACHABLE', 'STALE', 'DELAY']:
+							device = {
+								'ip': ip,
+								'hostname': get_hostname(ip),
+								'online': state == 'REACHABLE',
+								'is_server': ip == server_ip,
+								'mac': parts[4] if len(parts) > 4 and ':' in parts[4] else '',
+								'services': []
+							}
+							devices.append(device)
+		
+		# Add the server itself
+		if not any(d['ip'] == server_ip for d in devices):
+			devices.insert(0, {
+				'ip': server_ip,
+				'hostname': socket.gethostname(),
+				'online': True,
+				'is_server': True,
+				'services': [{'port': 80, 'name': 'http'}, {'port': 443, 'name': 'https'}]
+			})
+		
+		# Sort: server first, then by IP
+		devices.sort(key=lambda d: (not d.get('is_server'), tuple(map(int, d['ip'].split('.')))))
+		
+		return jsonify(
+			devices=devices,
+			network=network_range,
+			server_ip=server_ip,
+			scanned_at=datetime.datetime.now().isoformat()
+		)
+	except Exception as e:
+		logging.exception('Network scan failed')
+		return jsonify(error=str(e), devices=[]), 500
+
+def get_hostname(ip):
+	"""Try to resolve hostname from IP"""
+	import socket
+	try:
+		hostname = socket.gethostbyaddr(ip)[0]
+		return hostname.split('.')[0]  # Return short hostname
+	except:
+		return ''
+
+@app.route("/network/device/<ip>/ports")
+@protected
+def scan_device_ports(ip):
+	"""Scan common ports on a device"""
+	import socket
+	
+	# Validate IP format
+	try:
+		parts = ip.split('.')
+		if len(parts) != 4 or not all(0 <= int(p) <= 255 for p in parts):
+			return jsonify(error='Invalid IP address'), 400
+	except:
+		return jsonify(error='Invalid IP address'), 400
+	
+	common_ports = [
+		(22, 'SSH'),
+		(80, 'HTTP'),
+		(443, 'HTTPS'),
+		(445, 'SMB'),
+		(548, 'AFP'),
+		(3389, 'RDP'),
+		(5000, 'Synology'),
+		(5001, 'Synology SSL'),
+		(8080, 'HTTP Alt'),
+		(8443, 'HTTPS Alt'),
+		(9000, 'Portainer'),
+		(32400, 'Plex'),
+	]
+	
+	open_ports = []
+	for port, name in common_ports:
+		try:
+			sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+			sock.settimeout(0.5)
+			result = sock.connect_ex((ip, port))
+			if result == 0:
+				open_ports.append({'port': port, 'name': name})
+			sock.close()
+		except:
+			pass
+	
+	return jsonify(ip=ip, ports=open_ports)
+
+@app.route("/network/info")
+@protected
+def network_info():
+	"""Get server's network information"""
+	import subprocess
+	try:
+		network_range, server_ip = get_local_network_range()
+		
+		# Get gateway
+		gateway = ''
+		try:
+			result = subprocess.run(['ip', 'route'], capture_output=True, text=True)
+			for line in result.stdout.split('\n'):
+				if line.startswith('default'):
+					gateway = line.split()[2]
+					break
+		except:
+			pass
+		
+		# Get hostname
+		import socket
+		hostname = socket.gethostname()
+		
+		return jsonify(
+			server_ip=server_ip,
+			gateway=gateway,
+			network=network_range,
+			hostname=hostname
+		)
+	except Exception as e:
+		return jsonify(error=str(e)), 500
+
 # Cloud API prefix aliases for all endpoints
 @app.route("/cloud/api/health")
 def health_alias():
@@ -825,6 +1007,18 @@ def vpn_peers_alias():
 @app.route("/cloud/api/vpn/toggle", methods=["POST"])
 def vpn_toggle_alias():
 	return vpn_toggle()
+
+@app.route("/cloud/api/network/scan")
+def network_scan_alias():
+	return network_scan()
+
+@app.route("/cloud/api/network/device/<ip>/ports")
+def scan_device_ports_alias(ip):
+	return scan_device_ports(ip)
+
+@app.route("/cloud/api/network/info")
+def network_info_alias():
+	return network_info()
 
 @app.route("/cloud/api/files")
 def files_list_alias():
