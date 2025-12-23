@@ -10,9 +10,6 @@ SYSTEMD_UNIT="/etc/systemd/system/pincerna.service"
 NGINX_AVAILABLE="/etc/nginx/sites-available/cloud.emilvinod.com"
 NGINX_ENABLED="/etc/nginx/sites-enabled/cloud.emilvinod.com"
 VENV_PATH="$REPO_ROOT/venv"
-WG_CONF="/etc/wireguard/wg0.conf"
-WG_PRIVKEY="/etc/wireguard/privatekey"
-WG_PUBKEY="/etc/wireguard/publickey"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -86,7 +83,7 @@ check_root
 log_step "1/8" "Installing system dependencies"
 
 
-PACKAGES="nginx python3 python3-venv python3-pip rsync wireguard wireguard-tools openssl"
+PACKAGES="nginx python3 python3-venv python3-pip rsync curl openssl"
 NEED_INSTALL=""
 for pkg in $PACKAGES; do
     if ! dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
@@ -163,137 +160,60 @@ chmod 750 "$FILES_ROOT"
 log_success "File storage ready at $FILES_ROOT"
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+log_step "4/8" "Setting up Tailscale VPN"
 
-
-log_step "4/8" "Configuring WireGuard VPN"
-
-
-if [ ! -f "$WG_PRIVKEY" ]; then
-    echo "Generating WireGuard keys..."
-    mkdir -p /etc/wireguard
-    wg genkey > "$WG_PRIVKEY"
-    chmod 600 "$WG_PRIVKEY"
-    cat "$WG_PRIVKEY" | wg pubkey > "$WG_PUBKEY"
-    chmod 644 "$WG_PUBKEY"
-    log_success "Generated new WireGuard keypair"
-fi
-
-
-if [ ! -f "$WG_CONF" ]; then
-    PRIVKEY=$(cat "$WG_PRIVKEY")
-    
-    
-    PRIMARY_IFACE=$(ip route | grep default | awk '{print $5}' | head -1)
-    [ -z "$PRIMARY_IFACE" ] && PRIMARY_IFACE="eth0"
-    
-    cat > "$WG_CONF" <<WGEOF
-[Interface]
-PrivateKey = ${PRIVKEY}
-Address = 10.0.0.1/24
-ListenPort = 51820
-PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o ${PRIMARY_IFACE} -j MASQUERADE
-PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o ${PRIMARY_IFACE} -j MASQUERADE
-
-
-
-
-
-
-WGEOF
-    chmod 600 "$WG_CONF"
-    log_success "Created WireGuard configuration"
+# Install Tailscale if not present
+if ! command -v tailscale >/dev/null 2>&1; then
+    echo "Installing Tailscale..."
+    curl -fsSL https://tailscale.com/install.sh | sh
+    log_success "Tailscale installed"
 else
-    log_success "WireGuard config already exists"
+    log_success "Tailscale already installed"
 fi
 
-
+# Enable IP forwarding for subnet routing
 if ! grep -q "^net.ipv4.ip_forward=1" /etc/sysctl.conf 2>/dev/null; then
     echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
 fi
+if ! grep -q "^net.ipv6.conf.all.forwarding=1" /etc/sysctl.conf 2>/dev/null; then
+    echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
+fi
 sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1
+sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null 2>&1
 log_success "IP forwarding enabled"
 
-
-SUDOERS_WG="/etc/sudoers.d/pincerna-wg"
-cat > "$SUDOERS_WG" <<SUDOEOF
-
-www-data ALL=(ALL) NOPASSWD: /usr/bin/wg-quick up wg0
-www-data ALL=(ALL) NOPASSWD: /usr/bin/wg-quick down wg0
-www-data ALL=(ALL) NOPASSWD: /usr/bin/wg show
-www-data ALL=(ALL) NOPASSWD: /usr/bin/wg show wg0
-SUDOEOF
-chmod 440 "$SUDOERS_WG"
-log_success "VPN sudo permissions configured"
-
-# Enable wg0 on boot
-systemctl enable wg-quick@wg0 >/dev/null 2>&1 || true
-
-# Create first device config if no devices exist yet
-PEERS_DIR="/etc/wireguard/peers"
-mkdir -p "$PEERS_DIR"
-
-if ! grep -q "^\[Peer\]" "$WG_CONF" 2>/dev/null; then
-    echo ""
-    echo -e "${YELLOW}No VPN devices configured yet.${NC}"
-    echo -en "${YELLOW}Enter a name for your first device (e.g., phone, laptop) or press Enter to skip: ${NC}"
-    read -r DEVICE_NAME
-    
-    if [ -n "$DEVICE_NAME" ]; then
-        # Sanitize name
-        DEVICE_NAME=$(echo "$DEVICE_NAME" | tr -cd '[:alnum:]_-')
-        
-        # Generate device keys
-        DEVICE_PRIVKEY=$(wg genkey)
-        DEVICE_PUBKEY=$(echo "$DEVICE_PRIVKEY" | wg pubkey)
-        DEVICE_IP="10.0.0.2"
-        
-        # Get server info
-        SERVER_PUBKEY=$(cat "$WG_PUBKEY")
-        SERVER_IP=$(curl -s -4 ifconfig.me 2>/dev/null || curl -s -4 icanhazip.com 2>/dev/null || echo "YOUR_SERVER_IP")
-        
-        # Add device to server config
-        cat >> "$WG_CONF" <<PEEREOF
-
-# Device: ${DEVICE_NAME} (added $(date +%Y-%m-%d))
-[Peer]
-PublicKey = ${DEVICE_PUBKEY}
-AllowedIPs = ${DEVICE_IP}/32
-PEEREOF
-        
-        # Save device config file
-        DEVICE_CONF="${PEERS_DIR}/${DEVICE_NAME}.conf"
-        cat > "$DEVICE_CONF" <<DEVICEEOF
-[Interface]
-PrivateKey = ${DEVICE_PRIVKEY}
-Address = ${DEVICE_IP}/24
-DNS = 1.1.1.1, 8.8.8.8
-
-[Peer]
-PublicKey = ${SERVER_PUBKEY}
-Endpoint = ${SERVER_IP}:51820
-AllowedIPs = 0.0.0.0/0, ::/0
-PersistentKeepalive = 25
-DEVICEEOF
-        chmod 600 "$DEVICE_CONF"
-        
-        log_success "Created VPN config for '${DEVICE_NAME}'"
-        log_success "Config saved to ${DEVICE_CONF}"
-        
-        # Store for later display
-        CREATED_DEVICE="$DEVICE_NAME"
-        CREATED_DEVICE_CONF="$DEVICE_CONF"
-    else
-        log_warn "Skipped - you can add devices later by re-running this script"
-    fi
+# Get local subnet for advertising
+LOCAL_SUBNET=$(ip route | grep -E '^(192\.168|10\.|172\.(1[6-9]|2[0-9]|3[01]))' | head -1 | awk '{print $1}')
+if [ -z "$LOCAL_SUBNET" ]; then
+    LOCAL_SUBNET="192.168.1.0/24"
 fi
 
-# Start WireGuard if we have devices configured
-if grep -q "^\[Peer\]" "$WG_CONF" 2>/dev/null; then
-    wg-quick down wg0 >/dev/null 2>&1 || true
-    wg-quick up wg0 >/dev/null 2>&1 || true
-    log_success "WireGuard VPN started"
+# Check if Tailscale is already authenticated
+if ! tailscale status >/dev/null 2>&1; then
+    echo ""
+    echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}Tailscale Setup${NC}"
+    echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo "Tailscale provides zero-config VPN - just sign in on any device!"
+    echo ""
+    echo "To complete setup, run this command and follow the link:"
+    echo ""
+    echo -e "  ${YELLOW}sudo tailscale up --advertise-routes=${LOCAL_SUBNET} --accept-routes${NC}"
+    echo ""
+    echo "This will:"
+    echo "  • Open a login link for your Google account"
+    echo "  • Share your home network (${LOCAL_SUBNET}) with your devices"
+    echo "  • Let any device you sign into instantly connect"
+    echo ""
+    TAILSCALE_NEEDS_AUTH=true
 else
-    log_warn "WireGuard ready but no devices configured yet"
+    # Already authenticated, make sure routes are advertised
+    tailscale up --advertise-routes="${LOCAL_SUBNET}" --accept-routes --reset >/dev/null 2>&1 || true
+    TAILSCALE_IP=$(tailscale ip -4 2>/dev/null || echo "")
+    log_success "Tailscale connected (IP: ${TAILSCALE_IP})"
+    log_success "Advertising home network: ${LOCAL_SUBNET}"
 fi
 
 
@@ -447,50 +367,10 @@ echo "Summary:"
 echo -e "  ${GREEN}✓${NC} UI:        $WWW_DIR"
 echo -e "  ${GREEN}✓${NC} Files:     $FILES_ROOT"
 echo -e "  ${GREEN}✓${NC} Backend:   pincerna.service (port 5002)"
-echo -e "  ${GREEN}✓${NC} VPN:       WireGuard on wg0"
+echo -e "  ${GREEN}✓${NC} VPN:       Tailscale"
 echo ""
 
-
-if [ -f "$WG_PUBKEY" ]; then
-    # If we just created a device, show its config
-    if [ -n "${CREATED_DEVICE:-}" ] && [ -f "${CREATED_DEVICE_CONF:-}" ]; then
-        echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
-        echo -e "${GREEN}VPN Configuration for '${CREATED_DEVICE}':${NC}"
-        echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
-        echo ""
-        cat "$CREATED_DEVICE_CONF"
-        echo ""
-        echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
-        echo ""
-        echo -e "${GREEN}To connect:${NC}"
-        echo "  1. Install the WireGuard app on your device"
-        echo "  2. Copy the config above (or import ${CREATED_DEVICE_CONF})"
-        echo "  3. Activate the VPN in the app"
-        echo ""
-        
-        # Show QR code if qrencode is available
-        if command -v qrencode >/dev/null 2>&1; then
-            echo -e "${GREEN}Or scan this QR code with the WireGuard app:${NC}"
-            echo ""
-            qrencode -t ansiutf8 < "$CREATED_DEVICE_CONF"
-            echo ""
-        else
-            echo -e "${YELLOW}Tip: Install qrencode to generate a QR code:${NC}"
-            echo "  sudo apt install qrencode"
-            echo "  qrencode -t ansiutf8 < ${CREATED_DEVICE_CONF}"
-            echo ""
-        fi
-    else
-        echo -e "${BLUE}WireGuard Server Public Key:${NC}"
-        echo -e "${YELLOW}$(cat "$WG_PUBKEY")${NC}"
-        echo ""
-        echo -e "${YELLOW}No VPN device was configured.${NC}"
-        echo "To add a device later, re-run this script."
-        echo ""
-    fi
-fi
-
-
+# Show Tailscale status
 echo "Service Status:"
 if systemctl is-active --quiet pincerna.service; then
     echo -e "  ${GREEN}●${NC} pincerna.service: running"
@@ -504,12 +384,30 @@ else
     echo -e "  ${RED}●${NC} nginx: stopped"
 fi
 
-if ip link show wg0 >/dev/null 2>&1; then
-    echo -e "  ${GREEN}●${NC} WireGuard (wg0): up"
+if tailscale status >/dev/null 2>&1; then
+    TAILSCALE_IP=$(tailscale ip -4 2>/dev/null || echo "connected")
+    echo -e "  ${GREEN}●${NC} Tailscale: connected (${TAILSCALE_IP})"
 else
-    echo -e "  ${YELLOW}●${NC} WireGuard (wg0): down (re-run this script to add a device)"
+    echo -e "  ${YELLOW}●${NC} Tailscale: needs authentication"
 fi
 
 echo ""
 echo -e "Access your dashboard at: ${BLUE}https://cloud.emilvinod.com/cloud${NC}"
 echo ""
+
+# If Tailscale needs auth, show instructions
+if [ "${TAILSCALE_NEEDS_AUTH:-false}" = "true" ]; then
+    echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
+    echo -e "${YELLOW}IMPORTANT: Complete Tailscale setup to enable VPN${NC}"
+    echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo "Run this command now:"
+    echo ""
+    echo -e "  ${GREEN}sudo tailscale up --advertise-routes=${LOCAL_SUBNET} --accept-routes${NC}"
+    echo ""
+    echo "Then on your phone/laptop:"
+    echo "  1. Install the Tailscale app"
+    echo "  2. Sign in with your Google account"
+    echo "  3. Done! You're connected to your home network"
+    echo ""
+fi

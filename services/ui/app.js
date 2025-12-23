@@ -62,7 +62,7 @@ async function apiFetch(path, opts = {}) {
 }
 
 function showSection(sectionId) {
-  ['hero', 'controls', 'files', 'metrics', 'about', 'vpn-panel'].forEach(id => {
+  ['hero', 'controls', 'files', 'metrics', 'about'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
@@ -71,14 +71,10 @@ function showSection(sectionId) {
   if (sectionId === 'home') {
     const hero = document.getElementById('hero');
     const controls = document.getElementById('controls');
-    const vpnPanel = document.getElementById('vpn-panel');
     if (hero) hero.style.display = 'block';
     if (controls) controls.style.display = 'block';
-    if (vpnPanel) vpnPanel.style.display = 'block';
     const navHome = document.getElementById('nav-home');
     if (navHome) navHome.classList.add('active');
-    // Refresh VPN status when showing home
-    checkVPNStatus();
   } else if (sectionId === 'files') {
     const files = document.getElementById('files');
     if (files) files.style.display = 'block';
@@ -236,18 +232,8 @@ async function checkVPNStatus() {
 }
 
 async function getVPNStats() {
-  try {
-    const res = await apiFetch('/vpn/stats');
-    if (res) {
-            const peersEl = document.getElementById('vpn-peers');
-      const rxEl = document.getElementById('vpn-rx');
-      const txEl = document.getElementById('vpn-tx');
-      
-      if (peersEl) peersEl.textContent = res.peer_count || 0;
-      if (rxEl) rxEl.textContent = formatBytes(res.transfer_rx || 0);
-      if (txEl) txEl.textContent = formatBytes(res.transfer_tx || 0);
-    }
-  } catch (e) {}
+  // VPN stats disabled - Tailscale manages its own dashboard
+  return;
 }
 
 function updateVPNUI(connected, details = {}) {
@@ -654,7 +640,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
     $('#btn-logout').addEventListener('click', logout);
-  $('#btn-vpn').addEventListener('click', toggleVPN);
+  
+  // VPN button (optional - may not exist)
+  const btnVpn = document.getElementById('btn-vpn');
+  if (btnVpn) btnVpn.addEventListener('click', toggleVPN);
+  
   $('#btn-access-local').addEventListener('click', () => { document.getElementById('nav-files').click(); });
 
     const btnMetrics = document.getElementById('btn-metrics');
@@ -752,16 +742,4 @@ document.addEventListener('DOMContentLoaded', () => {
     if (indicator) indicator.textContent = 'Cannot connect to server';
     hidePreloader(2500);
   });
-
-  // Initial VPN status check
-  checkVPNStatus();
-  
-  // Periodic VPN status and stats refresh
-  setInterval(() => {
-    checkVPNStatus();
-  }, 15000);
-  
-  setInterval(() => {
-    if (vpnConnected) getVPNStats();
-  }, 30000);
 });

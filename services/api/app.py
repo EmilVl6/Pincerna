@@ -464,75 +464,6 @@ def metrics():
 		process_count=process_count
 	)
 
-@app.route("/vpn/stats")
-@protected
-def vpn_stats():
-	"""Get detailed VPN statistics"""
-	import subprocess
-	try:
-		
-		result = subprocess.run(['ip', 'link', 'show', 'wg0'], capture_output=True, text=True)
-		is_up = result.returncode == 0 and 'UP' in result.stdout
-		
-		if not is_up:
-			return jsonify(connected=False, peers=[], transfer_rx=0, transfer_tx=0)
-		
-		
-		wg_result = subprocess.run(['sudo', 'wg', 'show', 'wg0'], capture_output=True, text=True)
-		if wg_result.returncode != 0:
-			return jsonify(connected=True, peers=[], transfer_rx=0, transfer_tx=0)
-		
-		
-		lines = wg_result.stdout.strip().split('\n')
-		peers = []
-		current_peer = None
-		total_rx = 0
-		total_tx = 0
-		
-		for line in lines:
-			line = line.strip()
-			if line.startswith('peer:'):
-				if current_peer:
-					peers.append(current_peer)
-				current_peer = {'public_key': line.split(':')[1].strip()[:16] + '...'}
-			elif current_peer:
-				if 'endpoint:' in line:
-					current_peer['endpoint'] = line.split(':')[1].strip() + ':' + line.split(':')[2].strip() if ':' in line.split(':')[1] else line.split(':')[1].strip()
-				elif 'latest handshake:' in line:
-					current_peer['last_handshake'] = line.split(':', 1)[1].strip()
-				elif 'transfer:' in line:
-					parts = line.split(':')[1].strip().split(',')
-					if len(parts) >= 2:
-						rx_str = parts[0].strip()
-						tx_str = parts[1].strip()
-						current_peer['transfer'] = f"{rx_str} / {tx_str}"
-						
-						try:
-							rx_val = float(rx_str.split()[0])
-							tx_val = float(tx_str.split()[0])
-							rx_unit = rx_str.split()[1] if len(rx_str.split()) > 1 else 'B'
-							tx_unit = tx_str.split()[1] if len(tx_str.split()) > 1 else 'B'
-							multipliers = {'B': 1, 'KiB': 1024, 'MiB': 1024**2, 'GiB': 1024**3}
-							total_rx += rx_val * multipliers.get(rx_unit, 1)
-							total_tx += tx_val * multipliers.get(tx_unit, 1)
-						except:
-							pass
-				elif 'allowed ips:' in line:
-					current_peer['allowed_ips'] = line.split(':')[1].strip()
-		
-		if current_peer:
-			peers.append(current_peer)
-		
-		return jsonify(
-			connected=True,
-			peers=peers,
-			peer_count=len(peers),
-			transfer_rx=int(total_rx),
-			transfer_tx=int(total_tx)
-		)
-	except Exception as e:
-		return jsonify(connected=False, error=str(e))
-
 @app.route("/restart", methods=["POST"])
 @protected
 def restart_service():
@@ -796,60 +727,82 @@ def move_file_endpoint():
 @app.route("/vpn/status")
 @protected
 def vpn_status():
-	"""Get VPN connection status with additional details"""
+	"""Get Tailscale VPN connection status"""
 	try:
 		import subprocess
-		config_exists = os.path.exists('/etc/wireguard/wg0.conf')
-		result = subprocess.run(['ip', 'link', 'show', 'wg0'], capture_output=True, text=True)
-		is_up = result.returncode == 0 and 'UP' in result.stdout
+		# Check if tailscale is installed and running
+		result = subprocess.run(['tailscale', 'status', '--json'], capture_output=True, text=True)
+		if result.returncode != 0:
+			return jsonify(connected=False, configured=False, error='Tailscale not running')
 		
-		if is_up:
-			# Get additional info
-			wg_result = subprocess.run(['sudo', 'wg', 'show', 'wg0'], capture_output=True, text=True)
-			has_peers = 'peer:' in wg_result.stdout if wg_result.returncode == 0 else False
-			return jsonify(connected=True, interface='wg0', has_peers=has_peers, config_exists=config_exists)
-		else:
-			return jsonify(connected=False, config_exists=config_exists)
+		status = json.loads(result.stdout)
+		is_connected = status.get('BackendState') == 'Running'
+		self_ip = status.get('TailscaleIPs', [''])[0] if status.get('TailscaleIPs') else ''
+		
+		# Get peer count
+		peers = status.get('Peer', {})
+		online_peers = sum(1 for p in peers.values() if p.get('Online', False))
+		
+		return jsonify(
+			connected=is_connected,
+			configured=True,
+			ip=self_ip,
+			peer_count=online_peers,
+			backend_state=status.get('BackendState', 'Unknown')
+		)
+	except FileNotFoundError:
+		return jsonify(connected=False, configured=False, error='Tailscale not installed')
 	except Exception as e:
 		return jsonify(connected=False, error=str(e))
 
-@app.route("/vpn/config")
+@app.route("/vpn/peers")
 @protected
-def vpn_config_info():
-	"""Check if VPN is configured"""
+def vpn_peers():
+	"""Get list of Tailscale peers (devices on your network)"""
 	try:
-		config_path = '/etc/wireguard/wg0.conf'
-		config_exists = os.path.exists(config_path)
-		return jsonify(configured=config_exists, config_path=config_path)
+		import subprocess
+		result = subprocess.run(['tailscale', 'status', '--json'], capture_output=True, text=True)
+		if result.returncode != 0:
+			return jsonify(peers=[], error='Tailscale not running')
+		
+		status = json.loads(result.stdout)
+		peers_data = status.get('Peer', {})
+		
+		peers = []
+		for key, peer in peers_data.items():
+			peers.append({
+				'name': peer.get('HostName', 'Unknown'),
+				'ip': peer.get('TailscaleIPs', [''])[0] if peer.get('TailscaleIPs') else '',
+				'online': peer.get('Online', False),
+				'os': peer.get('OS', ''),
+				'last_seen': peer.get('LastSeen', '')
+			})
+		
+		return jsonify(peers=peers)
 	except Exception as e:
-		return jsonify(configured=False, error=str(e))
+		return jsonify(peers=[], error=str(e))
 
 @app.route("/vpn/toggle", methods=["POST"])
 @protected
 def vpn_toggle():
+	"""Tailscale is always-on, this just returns current status"""
 	try:
 		import subprocess
+		result = subprocess.run(['tailscale', 'status', '--json'], capture_output=True, text=True)
+		if result.returncode != 0:
+			return jsonify(error='Tailscale not running. Run: sudo tailscale up'), 400
 		
-		# Check if config exists first
-		if not os.path.exists('/etc/wireguard/wg0.conf'):
-			return jsonify(error='VPN not configured. Missing /etc/wireguard/wg0.conf'), 400
+		status = json.loads(result.stdout)
+		is_connected = status.get('BackendState') == 'Running'
 		
-		result = subprocess.run(['ip', 'link', 'show', 'wg0'], capture_output=True, text=True)
-		is_up = result.returncode == 0 and 'UP' in result.stdout
-		
-		if is_up:
-			down_result = subprocess.run(['sudo', 'wg-quick', 'down', 'wg0'], capture_output=True, text=True)
-			if down_result.returncode != 0:
-				return jsonify(error=f'Failed to disconnect: {down_result.stderr}'), 500
-			return jsonify(connected=False, message='VPN disconnected successfully')
-		else:
-			up_result = subprocess.run(['sudo', 'wg-quick', 'up', 'wg0'], capture_output=True, text=True)
-			if up_result.returncode != 0:
-				error_msg = up_result.stderr.strip() or 'Unknown error'
-				return jsonify(error=f'Failed to connect: {error_msg}'), 500
-			return jsonify(connected=True, message='VPN connected successfully')
+		return jsonify(
+			connected=is_connected,
+			message='Tailscale is always-on. Install the Tailscale app on your device and sign in with Google to connect.'
+		)
+	except FileNotFoundError:
+		return jsonify(error='Tailscale not installed'), 400
 	except Exception as e:
-		logging.exception('VPN toggle failed')
+		logging.exception('VPN status check failed')
 		return jsonify(error=str(e)), 500
 
 # Cloud API prefix aliases for all endpoints
@@ -865,13 +818,9 @@ def metrics_alias():
 def vpn_status_alias():
 	return vpn_status()
 
-@app.route("/cloud/api/vpn/stats")
-def vpn_stats_alias():
-	return vpn_stats()
-
-@app.route("/cloud/api/vpn/config")
-def vpn_config_alias():
-	return vpn_config_info()
+@app.route("/cloud/api/vpn/peers")
+def vpn_peers_alias():
+	return vpn_peers()
 
 @app.route("/cloud/api/vpn/toggle", methods=["POST"])
 def vpn_toggle_alias():
