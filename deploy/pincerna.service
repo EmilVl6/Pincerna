@@ -3,12 +3,20 @@ Description=Pincerna Flask API
 After=network.target
 
 [Service]
-User=pi
+User=root
 Group=www-data
-WorkingDirectory=/home/pi/Pincerna/services/api
-Environment="PATH=/home/pi/Pincerna/.venv/bin"
-ExecStart=/home/pi/Pincerna/.venv/bin/gunicorn -w 2 -b 127.0.0.1:5002 app:app
+WorkingDirectory=/opt/pincerna/services/api
+Environment="PATH=/opt/pincerna/.venv/bin"
+EnvironmentFile=-/opt/pincerna/.env
+ExecStart=/opt/pincerna/.venv/bin/gunicorn \
+    --workers 2 \
+    --bind 127.0.0.1:5002 \
+    --timeout 120 \
+    --access-logfile /var/log/pincerna/access.log \
+    --error-logfile /var/log/pincerna/error.log \
+    app:app
 Restart=on-failure
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
