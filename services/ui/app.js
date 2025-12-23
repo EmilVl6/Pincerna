@@ -246,6 +246,37 @@ async function getVPNStats() {
 
 let networkDevices = [];
 let isScanning = false;
+let deviceNicknames = {};
+let viewMode = 'grid'; // 'grid' or 'map'
+
+// Load saved nicknames from localStorage
+function loadDeviceNicknames() {
+  try {
+    const saved = localStorage.getItem('pincerna_device_nicknames');
+    if (saved) deviceNicknames = JSON.parse(saved);
+  } catch (e) {}
+}
+
+function saveDeviceNicknames() {
+  try {
+    localStorage.setItem('pincerna_device_nicknames', JSON.stringify(deviceNicknames));
+  } catch (e) {}
+}
+
+function getDeviceDisplayName(device) {
+  return deviceNicknames[device.ip] || device.hostname || device.ip;
+}
+
+function setDeviceNickname(ip, nickname) {
+  if (nickname && nickname.trim()) {
+    deviceNicknames[ip] = nickname.trim();
+  } else {
+    delete deviceNicknames[ip];
+  }
+  saveDeviceNicknames();
+}
+
+loadDeviceNicknames();
 
 async function scanNetwork() {
   if (isScanning) return;
@@ -280,7 +311,11 @@ async function scanNetwork() {
       if (res.devices.length === 0) {
         if (emptyEl) emptyEl.style.display = 'block';
       } else {
-        renderNetworkDevices(res.devices);
+        if (viewMode === 'map') {
+          renderNetworkMap(res.devices, res.gateway || res.devices[0]?.ip);
+        } else {
+          renderNetworkDevices(res.devices);
+        }
       }
     } else if (res && res.error) {
       showMessage('Network scan failed: ' + res.error, 'error');
@@ -301,23 +336,31 @@ function renderNetworkDevices(devices) {
   const grid = document.getElementById('network-devices');
   if (!grid) return;
   
+  grid.className = 'network-devices-grid';
   grid.innerHTML = devices.map(device => {
     const icon = getDeviceIcon(device);
     const statusClass = device.is_server ? 'server' : (device.online ? 'online' : 'offline');
     const deviceType = device.is_server ? 'This Server' : (device.hostname ? '' : 'Unknown Device');
+    const displayName = getDeviceDisplayName(device);
+    const hasNickname = deviceNicknames[device.ip];
     
     return `
       <div class="network-device ${statusClass}" data-ip="${device.ip}">
         <div class="device-header">
           <span class="device-icon">${icon}</span>
-          <div>
-            <div class="device-name">${device.hostname || device.ip}</div>
+          <div class="device-header-info">
+            <div class="device-name" title="Click to rename">${displayName}</div>
+            ${hasNickname ? `<div class="device-hostname">${device.hostname || ''}</div>` : ''}
             ${deviceType ? `<div class="device-type">${deviceType}</div>` : ''}
           </div>
+          <button class="device-edit-btn" data-ip="${device.ip}" title="Edit nickname">✎</button>
         </div>
         <div class="device-info">
           <div class="device-ip">${device.ip}</div>
           ${device.mac ? `<div class="device-mac">${device.mac}</div>` : ''}
+        </div>
+        <div class="device-quick-actions" id="actions-${device.ip.replace(/\./g, '-')}">
+          ${renderQuickActions(device)}
         </div>
         <div class="device-services" id="services-${device.ip.replace(/\./g, '-')}">
           ${renderDeviceServices(device)}
@@ -326,13 +369,56 @@ function renderNetworkDevices(devices) {
     `;
   }).join('');
   
-  // Add click handlers for port scanning
+  // Add click handlers
   grid.querySelectorAll('.network-device').forEach(el => {
-    el.addEventListener('click', () => {
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.device-edit-btn') || e.target.closest('.device-quick-actions') || e.target.closest('.device-services')) return;
       const ip = el.dataset.ip;
       scanDevicePorts(ip);
     });
   });
+  
+  // Add edit nickname handlers
+  grid.querySelectorAll('.device-edit-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const ip = btn.dataset.ip;
+      const device = networkDevices.find(d => d.ip === ip);
+      const currentName = getDeviceDisplayName(device);
+      const newName = prompt('Enter a nickname for this device:', currentName);
+      if (newName !== null) {
+        setDeviceNickname(ip, newName);
+        renderNetworkDevices(networkDevices);
+      }
+    });
+  });
+}
+
+function renderQuickActions(device) {
+  const actions = [];
+  const services = device.services || [];
+  
+  // Check for SSH (port 22)
+  if (services.some(s => s.port === 22)) {
+    actions.push(`<a href="ssh://${device.ip}" class="quick-action ssh" title="SSH"><span>⌨</span> SSH</a>`);
+  }
+  
+  // Check for RDP (port 3389)
+  if (services.some(s => s.port === 3389)) {
+    actions.push(`<a href="rdp://${device.ip}" class="quick-action rdp" title="Remote Desktop"><span>🖥</span> RDP</a>`);
+  }
+  
+  // Check for SMB/File Sharing (port 445)
+  if (services.some(s => s.port === 445)) {
+    actions.push(`<a href="smb://${device.ip}" class="quick-action smb" title="File Share"><span>📁</span> Files</a>`);
+  }
+  
+  // Check for VNC (port 5900)
+  if (services.some(s => s.port === 5900)) {
+    actions.push(`<a href="vnc://${device.ip}" class="quick-action vnc" title="VNC"><span>🖥</span> VNC</a>`);
+  }
+  
+  return actions.length > 0 ? actions.join('') : '';
 }
 
 function getDeviceIcon(device) {
@@ -368,6 +454,7 @@ function renderDeviceServices(device) {
 
 async function scanDevicePorts(ip) {
   const servicesEl = document.getElementById(`services-${ip.replace(/\./g, '-')}`);
+  const actionsEl = document.getElementById(`actions-${ip.replace(/\./g, '-')}`);
   if (!servicesEl) return;
   
   servicesEl.innerHTML = '<span style="font-size:0.75rem;color:var(--muted)">Scanning ports...</span>';
@@ -380,6 +467,7 @@ async function scanDevicePorts(ip) {
       if (device) {
         device.services = res.ports;
         servicesEl.innerHTML = renderDeviceServices(device);
+        if (actionsEl) actionsEl.innerHTML = renderQuickActions(device);
       }
       
       if (res.ports.length === 0) {
@@ -388,6 +476,205 @@ async function scanDevicePorts(ip) {
     }
   } catch (e) {
     servicesEl.innerHTML = '<span style="font-size:0.75rem;color:var(--muted)">Scan failed</span>';
+  }
+}
+
+// ==================== NETWORK MAP ====================
+
+function renderNetworkMap(devices, gatewayIp) {
+  const container = document.getElementById('network-devices');
+  if (!container) return;
+  
+  container.className = 'network-map-container';
+  
+  // Find the gateway/router
+  const gateway = devices.find(d => d.ip === gatewayIp) || devices.find(d => (d.hostname || '').toLowerCase().includes('router'));
+  const server = devices.find(d => d.is_server);
+  const otherDevices = devices.filter(d => d !== gateway && d !== server);
+  
+  // Create SVG for connections
+  const mapHtml = `
+    <div class="network-map">
+      <svg class="network-lines" id="network-svg"></svg>
+      
+      <!-- Internet Cloud -->
+      <div class="map-node internet" id="node-internet">
+        <div class="map-node-icon">☁️</div>
+        <div class="map-node-label">Internet</div>
+      </div>
+      
+      <!-- Router/Gateway -->
+      ${gateway ? `
+      <div class="map-node router" id="node-gateway" data-ip="${gateway.ip}">
+        <div class="map-node-icon">📡</div>
+        <div class="map-node-label">${getDeviceDisplayName(gateway)}</div>
+        <div class="map-node-ip">${gateway.ip}</div>
+      </div>
+      ` : ''}
+      
+      <!-- Server (Pincerna) -->
+      ${server ? `
+      <div class="map-node server" id="node-server" data-ip="${server.ip}">
+        <div class="map-node-icon">🖥️</div>
+        <div class="map-node-label">${getDeviceDisplayName(server)}</div>
+        <div class="map-node-ip">${server.ip}</div>
+        <div class="map-node-badge">This Server</div>
+      </div>
+      ` : ''}
+      
+      <!-- Other Devices -->
+      <div class="map-devices-ring" id="devices-ring">
+        ${otherDevices.map((device, i) => `
+          <div class="map-node device ${device.online ? 'online' : 'offline'}" 
+               id="node-${device.ip.replace(/\./g, '-')}" 
+               data-ip="${device.ip}"
+               style="--device-index: ${i}; --total-devices: ${otherDevices.length}">
+            <div class="map-node-icon">${getDeviceIcon(device)}</div>
+            <div class="map-node-label">${getDeviceDisplayName(device)}</div>
+            <div class="map-node-ip">${device.ip}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    
+    <!-- Device Detail Panel -->
+    <div class="map-device-detail" id="map-device-detail" style="display:none">
+      <div class="detail-header">
+        <span class="detail-icon" id="detail-icon"></span>
+        <div class="detail-info">
+          <div class="detail-name" id="detail-name"></div>
+          <div class="detail-ip" id="detail-ip"></div>
+        </div>
+        <button class="detail-close" id="detail-close">✕</button>
+      </div>
+      <div class="detail-actions" id="detail-actions"></div>
+      <div class="detail-services" id="detail-services"></div>
+    </div>
+  `;
+  
+  container.innerHTML = mapHtml;
+  
+  // Draw connection lines after a brief delay to let layout settle
+  setTimeout(() => drawNetworkLines(), 100);
+  
+  // Add click handlers for nodes
+  container.querySelectorAll('.map-node[data-ip]').forEach(node => {
+    node.addEventListener('click', () => {
+      const ip = node.dataset.ip;
+      showMapDeviceDetail(ip);
+    });
+  });
+  
+  // Close detail panel
+  const closeBtn = document.getElementById('detail-close');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      document.getElementById('map-device-detail').style.display = 'none';
+    });
+  }
+}
+
+function drawNetworkLines() {
+  const svg = document.getElementById('network-svg');
+  if (!svg) return;
+  
+  const container = svg.parentElement;
+  const rect = container.getBoundingClientRect();
+  svg.setAttribute('width', rect.width);
+  svg.setAttribute('height', rect.height);
+  
+  let lines = '';
+  
+  const internet = document.getElementById('node-internet');
+  const gateway = document.getElementById('node-gateway');
+  const server = document.getElementById('node-server');
+  
+  // Helper to get center of element relative to container
+  function getCenter(el) {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return {
+      x: r.left + r.width / 2 - rect.left,
+      y: r.top + r.height / 2 - rect.top
+    };
+  }
+  
+  // Internet to Gateway
+  const internetPos = getCenter(internet);
+  const gatewayPos = getCenter(gateway);
+  const serverPos = getCenter(server);
+  
+  if (internetPos && gatewayPos) {
+    lines += `<line x1="${internetPos.x}" y1="${internetPos.y}" x2="${gatewayPos.x}" y2="${gatewayPos.y}" class="network-line primary"/>`;
+  }
+  
+  // Gateway to Server
+  if (gatewayPos && serverPos) {
+    lines += `<line x1="${gatewayPos.x}" y1="${gatewayPos.y}" x2="${serverPos.x}" y2="${serverPos.y}" class="network-line primary"/>`;
+  }
+  
+  // Gateway to all devices
+  document.querySelectorAll('.map-node.device').forEach(node => {
+    const pos = getCenter(node);
+    if (gatewayPos && pos) {
+      const isOnline = node.classList.contains('online');
+      lines += `<line x1="${gatewayPos.x}" y1="${gatewayPos.y}" x2="${pos.x}" y2="${pos.y}" class="network-line ${isOnline ? '' : 'offline'}"/>`;
+    }
+  });
+  
+  svg.innerHTML = lines;
+}
+
+function showMapDeviceDetail(ip) {
+  const device = networkDevices.find(d => d.ip === ip);
+  if (!device) return;
+  
+  const panel = document.getElementById('map-device-detail');
+  const iconEl = document.getElementById('detail-icon');
+  const nameEl = document.getElementById('detail-name');
+  const ipEl = document.getElementById('detail-ip');
+  const actionsEl = document.getElementById('detail-actions');
+  const servicesEl = document.getElementById('detail-services');
+  
+  if (iconEl) iconEl.textContent = getDeviceIcon(device);
+  if (nameEl) nameEl.textContent = getDeviceDisplayName(device);
+  if (ipEl) ipEl.textContent = device.ip;
+  if (actionsEl) actionsEl.innerHTML = renderQuickActions(device) || '<span class="no-actions">Scan for services...</span>';
+  if (servicesEl) servicesEl.innerHTML = renderDeviceServices(device);
+  
+  if (panel) panel.style.display = 'block';
+  
+  // Trigger port scan
+  scanDevicePortsForMap(ip);
+}
+
+async function scanDevicePortsForMap(ip) {
+  try {
+    const res = await apiFetch(`/network/device/${ip}/ports`);
+    if (res && res.ports) {
+      const device = networkDevices.find(d => d.ip === ip);
+      if (device) {
+        device.services = res.ports;
+        const actionsEl = document.getElementById('detail-actions');
+        const servicesEl = document.getElementById('detail-services');
+        if (actionsEl) actionsEl.innerHTML = renderQuickActions(device) || '<span class="no-actions">No remote access ports</span>';
+        if (servicesEl) servicesEl.innerHTML = renderDeviceServices(device);
+      }
+    }
+  } catch (e) {}
+}
+
+function toggleNetworkView() {
+  viewMode = viewMode === 'grid' ? 'map' : 'grid';
+  const btn = document.getElementById('btn-toggle-view');
+  if (btn) btn.textContent = viewMode === 'grid' ? 'Map View' : 'Grid View';
+  
+  if (networkDevices.length > 0) {
+    if (viewMode === 'map') {
+      renderNetworkMap(networkDevices);
+    } else {
+      renderNetworkDevices(networkDevices);
+    }
   }
 }
 
@@ -844,6 +1131,9 @@ document.addEventListener('DOMContentLoaded', () => {
   
   const btnScanNetwork = document.getElementById('btn-scan-network');
   if (btnScanNetwork) btnScanNetwork.addEventListener('click', scanNetwork);
+  
+  const btnToggleView = document.getElementById('btn-toggle-view');
+  if (btnToggleView) btnToggleView.addEventListener('click', toggleNetworkView);
 
     const fileInput = document.getElementById('file-input');
   if (fileInput) {

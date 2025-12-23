@@ -221,6 +221,7 @@ body::after{
 /* Network Panel */
 .network-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px}
 .network-status{display:flex;align-items:center;gap:10px}
+.network-actions{display:flex;gap:8px}
 .network-status-dot{width:10px;height:10px;border-radius:50%;background:#666}
 .network-status-dot.connected{background:#22c55e;box-shadow:0 0 10px #22c55e}
 .network-status-dot.scanning{background:#f59e0b;animation:pulse 1s infinite}
@@ -238,13 +239,28 @@ body::after{
 .network-device.server{border-left:3px solid var(--primary)}
 
 .device-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.device-header-info{flex:1;min-width:0}
 .device-icon{font-size:28px;filter:drop-shadow(0 0 6px rgba(255,130,0,0.3))}
 .device-name{font-weight:600;color:#fff;font-size:0.95rem;word-break:break-word}
+.device-hostname{font-size:0.75rem;color:var(--muted);margin-top:2px}
 .device-type{font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px}
+.device-edit-btn{background:transparent;border:none;color:var(--muted);cursor:pointer;padding:4px 8px;font-size:14px;opacity:0;transition:opacity 0.2s}
+.network-device:hover .device-edit-btn{opacity:1}
+.device-edit-btn:hover{color:var(--primary)}
 
 .device-info{font-size:0.85rem;color:var(--muted)}
 .device-ip{font-family:'Courier New', monospace;color:var(--accent)}
 .device-mac{font-size:0.75rem;color:#666;margin-top:4px}
+
+.device-quick-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.quick-action{display:inline-flex;align-items:center;gap:4px;font-size:0.75rem;padding:6px 10px;background:linear-gradient(135deg, #1e3a5f 0%, #0f2847 100%);color:#fff;border:1px solid #2563eb;text-decoration:none;transition:all 0.2s}
+.quick-action:hover{background:linear-gradient(135deg, #2563eb 0%, #1e40af 100%);transform:translateY(-1px)}
+.quick-action.ssh{border-color:#22c55e;background:linear-gradient(135deg, #14532d 0%, #052e16 100%)}
+.quick-action.ssh:hover{background:linear-gradient(135deg, #22c55e 0%, #15803d 100%)}
+.quick-action.rdp{border-color:#8b5cf6;background:linear-gradient(135deg, #3b0764 0%, #1e1b4b 100%)}
+.quick-action.rdp:hover{background:linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)}
+.quick-action.smb{border-color:#f59e0b;background:linear-gradient(135deg, #78350f 0%, #451a03 100%)}
+.quick-action.smb:hover{background:linear-gradient(135deg, #f59e0b 0%, #d97706 100%)}
 
 .device-services{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .device-service{font-size:0.7rem;padding:3px 8px;background:rgba(255,130,0,0.15);color:var(--primary);border:1px solid rgba(255,130,0,0.3);cursor:pointer;text-decoration:none}
@@ -252,3 +268,40 @@ body::after{
 
 .network-empty{text-align:center;padding:40px;color:var(--muted)}
 .network-empty p{margin:0}
+
+/* Network Map View */
+.network-map-container{min-height:500px;position:relative}
+.network-map{position:relative;width:100%;height:500px;overflow:visible}
+.network-lines{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.network-line{stroke:rgba(255,130,0,0.3);stroke-width:2}
+.network-line.primary{stroke:var(--primary);stroke-width:3}
+.network-line.offline{stroke:rgba(102,102,102,0.3);stroke-dasharray:5,5}
+
+.map-node{position:absolute;display:flex;flex-direction:column;align-items:center;text-align:center;padding:12px;background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);border:2px solid #0f3460;cursor:pointer;z-index:1;transition:all 0.2s;min-width:80px}
+.map-node:hover{transform:scale(1.1);border-color:var(--primary);z-index:10}
+.map-node-icon{font-size:32px;margin-bottom:6px}
+.map-node-label{font-size:0.8rem;font-weight:600;color:#fff;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.map-node-ip{font-size:0.7rem;color:var(--muted);font-family:'Courier New', monospace}
+.map-node-badge{font-size:0.6rem;background:var(--primary);color:#fff;padding:2px 6px;margin-top:4px}
+
+.map-node.internet{top:20px;left:50%;transform:translateX(-50%);border-color:#3b82f6;background:linear-gradient(135deg, #1e3a5f 0%, #0f2847 100%)}
+.map-node.router{top:120px;left:50%;transform:translateX(-50%);border-color:#22c55e}
+.map-node.server{top:220px;left:50%;transform:translateX(-50%);border-color:var(--primary)}
+
+.map-devices-ring{position:absolute;top:320px;left:0;right:0;display:flex;flex-wrap:wrap;justify-content:center;gap:16px;padding:0 20px}
+.map-devices-ring .map-node{position:relative;top:auto;left:auto;transform:none}
+.map-node.device.online{border-color:#22c55e}
+.map-node.device.offline{border-color:#666;opacity:0.6}
+
+/* Map Device Detail Panel */
+.map-device-detail{position:absolute;top:20px;right:20px;width:280px;background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);border:2px solid #0f3460;padding:16px;z-index:100;box-shadow:0 8px 32px rgba(0,0,0,0.5)}
+.detail-header{display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.1)}
+.detail-icon{font-size:36px}
+.detail-info{flex:1}
+.detail-name{font-weight:600;color:#fff;font-size:1.1rem}
+.detail-ip{font-size:0.85rem;color:var(--accent);font-family:'Courier New', monospace}
+.detail-close{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:18px;padding:4px}
+.detail-close:hover{color:#fff}
+.detail-actions{margin-bottom:12px}
+.detail-services{display:flex;flex-wrap:wrap;gap:6px}
+.no-actions{font-size:0.8rem;color:var(--muted)}

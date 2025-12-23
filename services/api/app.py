@@ -902,10 +902,22 @@ def network_scan():
 		# Sort: server first, then by IP
 		devices.sort(key=lambda d: (not d.get('is_server'), tuple(map(int, d['ip'].split('.')))))
 		
+		# Get gateway IP
+		gateway_ip = ''
+		try:
+			gw_result = subprocess.run(['ip', 'route'], capture_output=True, text=True)
+			for line in gw_result.stdout.split('\n'):
+				if line.startswith('default'):
+					gateway_ip = line.split()[2]
+					break
+		except:
+			pass
+		
 		return jsonify(
 			devices=devices,
 			network=network_range,
 			server_ip=server_ip,
+			gateway=gateway_ip,
 			scanned_at=datetime.datetime.now().isoformat()
 		)
 	except Exception as e:
