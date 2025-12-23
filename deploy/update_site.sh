@@ -396,11 +396,39 @@ if [ -f "$WG_PUBKEY" ]; then
     echo -e "${BLUE}WireGuard Server Public Key:${NC}"
     echo -e "${YELLOW}$(cat "$WG_PUBKEY")${NC}"
     echo ""
-    echo "To add a client, append to $WG_CONF:"
+    
+    # Get server's public IP
+    SERVER_IP=$(curl -s -4 ifconfig.me 2>/dev/null || curl -s -4 icanhazip.com 2>/dev/null || echo "YOUR_SERVER_IP")
+    
+    echo -e "${BLUE}To add your first VPN client:${NC}"
     echo ""
-    echo "  [Peer]"
-    echo "  PublicKey = <client-public-key>"
-    echo "  AllowedIPs = 10.0.0.2/32"
+    echo "1. On your client device, generate keys:"
+    echo "   wg genkey | tee client_private.key | wg pubkey > client_public.key"
+    echo ""
+    echo "2. Add the client to the server:"
+    echo "   sudo bash -c 'cat >> $WG_CONF << EOF"
+    echo ""
+    echo "[Peer]"
+    echo "PublicKey = <paste client_public.key contents>"
+    echo "AllowedIPs = 10.0.0.2/32"
+    echo "EOF'"
+    echo ""
+    echo "3. Restart WireGuard:"
+    echo "   sudo wg-quick down wg0 && sudo wg-quick up wg0"
+    echo ""
+    echo "4. Use this config on your client device:"
+    echo "   ─────────────────────────────────────"
+    echo "   [Interface]"
+    echo "   PrivateKey = <client_private.key contents>"
+    echo "   Address = 10.0.0.2/24"
+    echo "   DNS = 1.1.1.1"
+    echo ""
+    echo "   [Peer]"
+    echo "   PublicKey = $(cat "$WG_PUBKEY")"
+    echo "   Endpoint = ${SERVER_IP}:51820"
+    echo "   AllowedIPs = 0.0.0.0/0, ::/0"
+    echo "   PersistentKeepalive = 25"
+    echo "   ─────────────────────────────────────"
     echo ""
 fi
 
@@ -421,7 +449,10 @@ fi
 if ip link show wg0 >/dev/null 2>&1; then
     echo -e "  ${GREEN}●${NC} WireGuard (wg0): up"
 else
-    echo -e "  ${YELLOW}●${NC} WireGuard (wg0): down (no peers configured)"
+    echo -e "  ${YELLOW}●${NC} WireGuard (wg0): down (add a peer to activate)"
+    echo ""
+    echo -e "${BLUE}Quick VPN Setup:${NC}"
+    echo "  sudo ./deploy/add_vpn_peer.sh phone"
 fi
 
 echo ""
