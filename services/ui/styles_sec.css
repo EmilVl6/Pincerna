@@ -61,33 +61,33 @@ body{
   .card{padding:14px !important;margin:12px 0 !important}
   .brand-text{display:none !important}
   
-  /* Header mobile layout - complete rewrite */
+  /* Header mobile layout */
   .site-header{
     flex-direction:column !important;
     padding:10px !important;
-    gap:10px !important;
+    gap:8px !important;
   }
   .brand{width:100%;justify-content:center}
   .header-right{
     width:100% !important;
     flex-direction:column !important;
     align-items:center !important;
-    gap:10px !important;
+    gap:8px !important;
   }
   .nav{
     width:100% !important;
     justify-content:center !important;
-    flex-wrap:wrap !important;
+    flex-wrap:nowrap !important;
     gap:4px !important;
     order:0 !important;
   }
   .nav a{
     margin:0 !important;
-    padding:10px 12px !important;
-    font-size:0.9rem !important;
+    padding:10px 8px !important;
+    font-size:0.85rem !important;
     flex:1 !important;
     text-align:center !important;
-    min-width:70px !important;
+    min-width:auto !important;
   }
   .user-greeting{display:none !important}
   .signout-link{
@@ -98,8 +98,8 @@ body{
     background:rgba(255,255,255,0.05) !important;
   }
   
-  /* Hero section */
-  #hero h1, .card h1{font-size:1.2rem !important;white-space:normal !important;word-break:break-word}
+  /* Hero section - ensure h1 fits */
+  #hero h1, .card h1{font-size:1.1rem !important;white-space:nowrap !important;overflow:hidden !important;text-overflow:ellipsis !important}
   .card h2{font-size:1rem !important}
   .lead{font-size:0.9rem}
   .row{flex-direction:column;align-items:stretch}
@@ -191,7 +191,7 @@ body{
   .container{padding:0 8px !important}
   .card{padding:12px !important;margin:8px 0 !important}
   #hero h1, .card h1{font-size:1rem !important}
-  .nav a{padding:8px 6px !important;font-size:0.75rem !important;min-height:40px;min-width:60px !important}
+  .nav a{padding:8px 4px !important;font-size:0.75rem !important;min-height:40px}
   .btn{padding:10px 12px;font-size:0.85rem}
   .metrics-grid{grid-template-columns:1fr 1fr;gap:6px}
   .metric-widget{padding:10px 6px}
@@ -212,7 +212,7 @@ body{
 
 
 .preloader{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;box-sizing:border-box}
-.preloader-content{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;width:100%;max-width:300px}
+.preloader-content{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;width:100%;max-width:300px;margin:0 auto}
 .preloader-img{width:100px;height:100px}
 .preloader-progress{margin-top:16px}
 .preloader-indicator{color:var(--muted);font-size:0.9rem;margin-top:12px}
