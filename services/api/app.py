@@ -799,6 +799,7 @@ def vpn_status():
 	"""Get VPN connection status with additional details"""
 	try:
 		import subprocess
+		config_exists = os.path.exists('/etc/wireguard/wg0.conf')
 		result = subprocess.run(['ip', 'link', 'show', 'wg0'], capture_output=True, text=True)
 		is_up = result.returncode == 0 and 'UP' in result.stdout
 		
@@ -806,10 +807,8 @@ def vpn_status():
 			# Get additional info
 			wg_result = subprocess.run(['sudo', 'wg', 'show', 'wg0'], capture_output=True, text=True)
 			has_peers = 'peer:' in wg_result.stdout if wg_result.returncode == 0 else False
-			return jsonify(connected=True, interface='wg0', has_peers=has_peers)
+			return jsonify(connected=True, interface='wg0', has_peers=has_peers, config_exists=config_exists)
 		else:
-			# Check if config exists
-			config_exists = os.path.exists('/etc/wireguard/wg0.conf')
 			return jsonify(connected=False, config_exists=config_exists)
 	except Exception as e:
 		return jsonify(connected=False, error=str(e))

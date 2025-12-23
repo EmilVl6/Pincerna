@@ -257,11 +257,16 @@ function updateVPNUI(connected, details = {}) {
   const vpnPanel = document.getElementById('vpn-panel');
   const vpnDetails = document.getElementById('vpn-details');
   
-  // Check if VPN is not configured
-  const notConfigured = details.config_exists === false;
+  // Only show not-configured if NOT connected AND config doesn't exist
+  const notConfigured = !connected && details.config_exists === false;
   
   if (btn) {
-    if (notConfigured) {
+    if (connected) {
+      btn.textContent = 'VPN Connected ✓';
+      btn.classList.add('active');
+      btn.style.background = '#22c55e';
+      btn.disabled = false;
+    } else if (notConfigured) {
       btn.textContent = 'VPN Not Configured';
       btn.classList.remove('active');
       btn.style.background = '#6b7280';
@@ -270,11 +275,6 @@ function updateVPNUI(connected, details = {}) {
       btn.textContent = 'VPN Error';
       btn.classList.remove('active');
       btn.style.background = '#ef4444';
-      btn.disabled = false;
-    } else if (connected) {
-      btn.textContent = 'VPN Connected ✓';
-      btn.classList.add('active');
-      btn.style.background = '#22c55e';
       btn.disabled = false;
     } else {
       btn.textContent = 'Start VPN';
@@ -285,21 +285,25 @@ function updateVPNUI(connected, details = {}) {
   }
   
   if (indicator) {
-    if (notConfigured) {
+    if (connected) {
+      indicator.className = 'vpn-status-indicator connected';
+    } else if (notConfigured) {
       indicator.className = 'vpn-status-indicator not-configured';
     } else if (details.error) {
       indicator.className = 'vpn-status-indicator error';
     } else {
-      indicator.className = 'vpn-status-indicator ' + (connected ? 'connected' : 'disconnected');
+      indicator.className = 'vpn-status-indicator disconnected';
     }
   }
   if (statusText) {
-    if (notConfigured) {
+    if (connected) {
+      statusText.textContent = 'Connected';
+    } else if (notConfigured) {
       statusText.textContent = 'Not Configured';
     } else if (details.error) {
       statusText.textContent = 'Error';
     } else {
-      statusText.textContent = connected ? 'Connected' : 'Disconnected';
+      statusText.textContent = 'Disconnected';
     }
   }
   

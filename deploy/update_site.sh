@@ -225,16 +225,75 @@ SUDOEOF
 chmod 440 "$SUDOERS_WG"
 log_success "VPN sudo permissions configured"
 
-
+# Enable wg0 on boot
 systemctl enable wg-quick@wg0 >/dev/null 2>&1 || true
 
+# Create first device config if no devices exist yet
+PEERS_DIR="/etc/wireguard/peers"
+mkdir -p "$PEERS_DIR"
 
+if ! grep -q "^\[Peer\]" "$WG_CONF" 2>/dev/null; then
+    echo ""
+    echo -e "${YELLOW}No VPN devices configured yet.${NC}"
+    echo -en "${YELLOW}Enter a name for your first device (e.g., phone, laptop) or press Enter to skip: ${NC}"
+    read -r DEVICE_NAME
+    
+    if [ -n "$DEVICE_NAME" ]; then
+        # Sanitize name
+        DEVICE_NAME=$(echo "$DEVICE_NAME" | tr -cd '[:alnum:]_-')
+        
+        # Generate device keys
+        DEVICE_PRIVKEY=$(wg genkey)
+        DEVICE_PUBKEY=$(echo "$DEVICE_PRIVKEY" | wg pubkey)
+        DEVICE_IP="10.0.0.2"
+        
+        # Get server info
+        SERVER_PUBKEY=$(cat "$WG_PUBKEY")
+        SERVER_IP=$(curl -s -4 ifconfig.me 2>/dev/null || curl -s -4 icanhazip.com 2>/dev/null || echo "YOUR_SERVER_IP")
+        
+        # Add device to server config
+        cat >> "$WG_CONF" <<PEEREOF
+
+# Device: ${DEVICE_NAME} (added $(date +%Y-%m-%d))
+[Peer]
+PublicKey = ${DEVICE_PUBKEY}
+AllowedIPs = ${DEVICE_IP}/32
+PEEREOF
+        
+        # Save device config file
+        DEVICE_CONF="${PEERS_DIR}/${DEVICE_NAME}.conf"
+        cat > "$DEVICE_CONF" <<DEVICEEOF
+[Interface]
+PrivateKey = ${DEVICE_PRIVKEY}
+Address = ${DEVICE_IP}/24
+DNS = 1.1.1.1, 8.8.8.8
+
+[Peer]
+PublicKey = ${SERVER_PUBKEY}
+Endpoint = ${SERVER_IP}:51820
+AllowedIPs = 0.0.0.0/0, ::/0
+PersistentKeepalive = 25
+DEVICEEOF
+        chmod 600 "$DEVICE_CONF"
+        
+        log_success "Created VPN config for '${DEVICE_NAME}'"
+        log_success "Config saved to ${DEVICE_CONF}"
+        
+        # Store for later display
+        CREATED_DEVICE="$DEVICE_NAME"
+        CREATED_DEVICE_CONF="$DEVICE_CONF"
+    else
+        log_warn "Skipped - you can add devices later by re-running this script"
+    fi
+fi
+
+# Start WireGuard if we have devices configured
 if grep -q "^\[Peer\]" "$WG_CONF" 2>/dev/null; then
     wg-quick down wg0 >/dev/null 2>&1 || true
     wg-quick up wg0 >/dev/null 2>&1 || true
     log_success "WireGuard VPN started"
 else
-    log_warn "WireGuard configured but no peers yet - will start when peers are added"
+    log_warn "WireGuard ready but no devices configured yet"
 fi
 
 
@@ -393,43 +452,42 @@ echo ""
 
 
 if [ -f "$WG_PUBKEY" ]; then
-    echo -e "${BLUE}WireGuard Server Public Key:${NC}"
-    echo -e "${YELLOW}$(cat "$WG_PUBKEY")${NC}"
-    echo ""
-    
-    # Get server's public IP
-    SERVER_IP=$(curl -s -4 ifconfig.me 2>/dev/null || curl -s -4 icanhazip.com 2>/dev/null || echo "YOUR_SERVER_IP")
-    
-    echo -e "${BLUE}To add your first VPN client:${NC}"
-    echo ""
-    echo "1. On your client device, generate keys:"
-    echo "   wg genkey | tee client_private.key | wg pubkey > client_public.key"
-    echo ""
-    echo "2. Add the client to the server:"
-    echo "   sudo bash -c 'cat >> $WG_CONF << EOF"
-    echo ""
-    echo "[Peer]"
-    echo "PublicKey = <paste client_public.key contents>"
-    echo "AllowedIPs = 10.0.0.2/32"
-    echo "EOF'"
-    echo ""
-    echo "3. Restart WireGuard:"
-    echo "   sudo wg-quick down wg0 && sudo wg-quick up wg0"
-    echo ""
-    echo "4. Use this config on your client device:"
-    echo "   ─────────────────────────────────────"
-    echo "   [Interface]"
-    echo "   PrivateKey = <client_private.key contents>"
-    echo "   Address = 10.0.0.2/24"
-    echo "   DNS = 1.1.1.1"
-    echo ""
-    echo "   [Peer]"
-    echo "   PublicKey = $(cat "$WG_PUBKEY")"
-    echo "   Endpoint = ${SERVER_IP}:51820"
-    echo "   AllowedIPs = 0.0.0.0/0, ::/0"
-    echo "   PersistentKeepalive = 25"
-    echo "   ─────────────────────────────────────"
-    echo ""
+    # If we just created a device, show its config
+    if [ -n "${CREATED_DEVICE:-}" ] && [ -f "${CREATED_DEVICE_CONF:-}" ]; then
+        echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
+        echo -e "${GREEN}VPN Configuration for '${CREATED_DEVICE}':${NC}"
+        echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
+        echo ""
+        cat "$CREATED_DEVICE_CONF"
+        echo ""
+        echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
+        echo ""
+        echo -e "${GREEN}To connect:${NC}"
+        echo "  1. Install the WireGuard app on your device"
+        echo "  2. Copy the config above (or import ${CREATED_DEVICE_CONF})"
+        echo "  3. Activate the VPN in the app"
+        echo ""
+        
+        # Show QR code if qrencode is available
+        if command -v qrencode >/dev/null 2>&1; then
+            echo -e "${GREEN}Or scan this QR code with the WireGuard app:${NC}"
+            echo ""
+            qrencode -t ansiutf8 < "$CREATED_DEVICE_CONF"
+            echo ""
+        else
+            echo -e "${YELLOW}Tip: Install qrencode to generate a QR code:${NC}"
+            echo "  sudo apt install qrencode"
+            echo "  qrencode -t ansiutf8 < ${CREATED_DEVICE_CONF}"
+            echo ""
+        fi
+    else
+        echo -e "${BLUE}WireGuard Server Public Key:${NC}"
+        echo -e "${YELLOW}$(cat "$WG_PUBKEY")${NC}"
+        echo ""
+        echo -e "${YELLOW}No VPN device was configured.${NC}"
+        echo "To add a device later, re-run this script."
+        echo ""
+    fi
 fi
 
 
@@ -449,10 +507,7 @@ fi
 if ip link show wg0 >/dev/null 2>&1; then
     echo -e "  ${GREEN}●${NC} WireGuard (wg0): up"
 else
-    echo -e "  ${YELLOW}●${NC} WireGuard (wg0): down (add a peer to activate)"
-    echo ""
-    echo -e "${BLUE}Quick VPN Setup:${NC}"
-    echo "  sudo ./deploy/add_vpn_peer.sh phone"
+    echo -e "  ${YELLOW}●${NC} WireGuard (wg0): down (re-run this script to add a device)"
 fi
 
 echo ""
