@@ -68,7 +68,7 @@ echo -e "${BLUE}     +++++++++++:=++++++++++++      ${NC}"
 echo -e "${BLUE}       +++++++++.-++++++++++         ${NC}"
 echo -e "${BLUE}          *++++++++++++++           ${NC}"
 echo ""
-echo -e "       ${BLUE}Pincerna Installer v1.0-beta${NC}"
+echo -e "       ${BLUE}Pincerna Installer v2.1${NC}"
 echo ""
 
 check_root
