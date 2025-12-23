@@ -80,7 +80,7 @@ check_root
 
 
 
-log_step "1/7" "Installing system dependencies"
+log_step "1/8" "Installing system dependencies"
 
 
 PACKAGES="nginx python3 python3-venv python3-pip rsync curl openssl"
@@ -105,7 +105,7 @@ fi
 
 
 
-log_step "2/7" "Checking credentials"
+log_step "2/8" "Checking credentials"
 
 # Only create env file if it doesn't exist - NEVER overwrite existing credentials
 if [ ! -f "$ENV_FILE" ]; then
@@ -152,7 +152,7 @@ fi
 
 
 
-log_step "3/7" "Setting up file storage"
+log_step "3/8" "Setting up file storage"
 
 mkdir -p "$FILES_ROOT"
 chown www-data:www-data "$FILES_ROOT"
@@ -160,9 +160,66 @@ chmod 750 "$FILES_ROOT"
 log_success "File storage ready at $FILES_ROOT"
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+log_step "4/8" "Setting up Tailscale VPN"
+
+# Install Tailscale if not present
+if ! command -v tailscale >/dev/null 2>&1; then
+    echo "Installing Tailscale..."
+    curl -fsSL https://tailscale.com/install.sh | sh
+    log_success "Tailscale installed"
+else
+    log_success "Tailscale already installed"
+fi
+
+# Enable IP forwarding for subnet routing
+if ! grep -q "^net.ipv4.ip_forward=1" /etc/sysctl.conf 2>/dev/null; then
+    echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+fi
+if ! grep -q "^net.ipv6.conf.all.forwarding=1" /etc/sysctl.conf 2>/dev/null; then
+    echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
+fi
+sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1
+sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null 2>&1
+log_success "IP forwarding enabled"
+
+# Get local subnet for advertising
+LOCAL_SUBNET=$(ip route | grep -E '^(192\.168|10\.|172\.(1[6-9]|2[0-9]|3[01]))' | head -1 | awk '{print $1}')
+if [ -z "$LOCAL_SUBNET" ]; then
+    LOCAL_SUBNET="192.168.1.0/24"
+fi
+
+# Check if Tailscale is already authenticated
+if ! tailscale status >/dev/null 2>&1; then
+    echo ""
+    echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}Tailscale Setup${NC}"
+    echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo "Tailscale provides zero-config VPN - just sign in on any device!"
+    echo ""
+    echo "To complete setup, run this command and follow the link:"
+    echo ""
+    echo -e "  ${YELLOW}sudo tailscale up --advertise-routes=${LOCAL_SUBNET} --accept-routes${NC}"
+    echo ""
+    echo "This will:"
+    echo "  • Open a login link for your Google account"
+    echo "  • Share your home network (${LOCAL_SUBNET}) with your devices"
+    echo "  • Let any device you sign into instantly connect"
+    echo ""
+    TAILSCALE_NEEDS_AUTH=true
+else
+    # Already authenticated, make sure routes are advertised
+    tailscale up --advertise-routes="${LOCAL_SUBNET}" --accept-routes --reset >/dev/null 2>&1 || true
+    TAILSCALE_IP=$(tailscale ip -4 2>/dev/null || echo "")
+    log_success "Tailscale connected (IP: ${TAILSCALE_IP})"
+    log_success "Advertising home network: ${LOCAL_SUBNET}"
+fi
 
 
-log_step "4/7" "Setting up Python environment"
+
+
+log_step "5/8" "Setting up Python environment"
 
 
 if [ ! -d "$VENV_PATH" ]; then
@@ -188,7 +245,7 @@ chown www-data:www-data "$REPO_ROOT/api.log" 2>/dev/null || true
 
 
 
-log_step "5/7" "Deploying UI files"
+log_step "6/8" "Deploying UI files"
 
 if [ ! -d "$SRC_DIR" ]; then
     log_error "Source directory not found: $SRC_DIR"
@@ -203,7 +260,7 @@ log_success "UI deployed to $WWW_DIR"
 
 
 
-log_step "6/7" "Configuring services"
+log_step "7/8" "Configuring services"
 
 
 cat > "$SYSTEMD_UNIT" <<EOF
@@ -271,7 +328,7 @@ log_success "Services configured"
 
 
 
-log_step "7/7" "Starting all services"
+log_step "8/8" "Starting all services"
 
 
 systemctl daemon-reload
@@ -310,8 +367,10 @@ echo "Summary:"
 echo -e "  ${GREEN}✓${NC} UI:        $WWW_DIR"
 echo -e "  ${GREEN}✓${NC} Files:     $FILES_ROOT"
 echo -e "  ${GREEN}✓${NC} Backend:   pincerna.service (port 5002)"
+echo -e "  ${GREEN}✓${NC} VPN:       Tailscale"
 echo ""
 
+# Show Tailscale status
 echo "Service Status:"
 if systemctl is-active --quiet pincerna.service; then
     echo -e "  ${GREEN}●${NC} pincerna.service: running"
@@ -325,6 +384,30 @@ else
     echo -e "  ${RED}●${NC} nginx: stopped"
 fi
 
+if tailscale status >/dev/null 2>&1; then
+    TAILSCALE_IP=$(tailscale ip -4 2>/dev/null || echo "connected")
+    echo -e "  ${GREEN}●${NC} Tailscale: connected (${TAILSCALE_IP})"
+else
+    echo -e "  ${YELLOW}●${NC} Tailscale: needs authentication"
+fi
+
 echo ""
 echo -e "Access your dashboard at: ${BLUE}https://cloud.emilvinod.com/cloud${NC}"
 echo ""
+
+# If Tailscale needs auth, show instructions
+if [ "${TAILSCALE_NEEDS_AUTH:-false}" = "true" ]; then
+    echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
+    echo -e "${YELLOW}IMPORTANT: Complete Tailscale setup to enable VPN${NC}"
+    echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo "Run this command now:"
+    echo ""
+    echo -e "  ${GREEN}sudo tailscale up --advertise-routes=${LOCAL_SUBNET} --accept-routes${NC}"
+    echo ""
+    echo "Then on your phone/laptop:"
+    echo "  1. Install the Tailscale app"
+    echo "  2. Sign in with your Google account"
+    echo "  3. Done! You're connected to your home network"
+    echo ""
+fi

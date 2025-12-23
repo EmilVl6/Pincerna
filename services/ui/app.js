@@ -211,7 +211,126 @@ async function loadMetrics() {
   }
 }
 
-// VPN functionality removed - dashboard accessible via HTTPS + Google auth
+let vpnConnected = false;
+let vpnConfigured = true;
+
+async function checkVPNStatus() {
+  try {
+    const res = await apiFetch('/vpn/status');
+    if (res && res.connected !== undefined) {
+      vpnConnected = res.connected;
+      vpnConfigured = res.config_exists !== false;
+      updateVPNUI(res.connected, res);
+      if (res.connected) getVPNStats();
+    } else if (res && res.error) {
+      vpnConnected = false;
+      updateVPNUI(false, { error: res.error });
+    }
+  } catch (e) {
+    updateVPNUI(false, { error: 'Failed to check VPN status' });
+  }
+}
+
+async function getVPNStats() {
+  // VPN stats disabled - Tailscale manages its own dashboard
+  return;
+}
+
+function updateVPNUI(connected, details = {}) {
+  const btn = document.getElementById('btn-vpn');
+  const indicator = document.getElementById('vpn-indicator');
+  const statusText = document.getElementById('vpn-status-text');
+  const vpnPanel = document.getElementById('vpn-panel');
+  const vpnDetails = document.getElementById('vpn-details');
+  
+  // Only show not-configured if NOT connected AND config doesn't exist
+  const notConfigured = !connected && details.config_exists === false;
+  
+  if (btn) {
+    if (connected) {
+      btn.textContent = 'VPN Connected ✓';
+      btn.classList.add('active');
+      btn.style.background = '#22c55e';
+      btn.disabled = false;
+    } else if (notConfigured) {
+      btn.textContent = 'VPN Not Configured';
+      btn.classList.remove('active');
+      btn.style.background = '#6b7280';
+      btn.disabled = true;
+    } else if (details.error) {
+      btn.textContent = 'VPN Error';
+      btn.classList.remove('active');
+      btn.style.background = '#ef4444';
+      btn.disabled = false;
+    } else {
+      btn.textContent = 'Start VPN';
+      btn.classList.remove('active');
+      btn.style.background = '';
+      btn.disabled = false;
+    }
+  }
+  
+  if (indicator) {
+    if (connected) {
+      indicator.className = 'vpn-status-indicator connected';
+    } else if (notConfigured) {
+      indicator.className = 'vpn-status-indicator not-configured';
+    } else if (details.error) {
+      indicator.className = 'vpn-status-indicator error';
+    } else {
+      indicator.className = 'vpn-status-indicator disconnected';
+    }
+  }
+  if (statusText) {
+    if (connected) {
+      statusText.textContent = 'Connected';
+    } else if (notConfigured) {
+      statusText.textContent = 'Not Configured';
+    } else if (details.error) {
+      statusText.textContent = 'Error';
+    } else {
+      statusText.textContent = 'Disconnected';
+    }
+  }
+  
+  // Hide stats when not configured or disconnected
+  if (vpnDetails) {
+    vpnDetails.style.display = (connected && !notConfigured) ? 'grid' : 'none';
+  }
+  
+  // Always show VPN panel on home section for status visibility
+  if (vpnPanel) {
+    const isHomeSection = document.getElementById('hero')?.style.display !== 'none';
+    vpnPanel.style.display = isHomeSection ? 'block' : 'none';
+    if (connected && !notConfigured) getVPNStats();
+  }
+}
+
+async function toggleVPN() {
+  const btn = document.getElementById('btn-vpn');
+  if (btn) {
+    btn.textContent = vpnConnected ? 'Disconnecting...' : 'Connecting...';
+    btn.disabled = true;
+  }
+  
+  try {
+    const res = await apiFetch('/vpn/toggle', { method: 'POST' });
+    if (res && res.connected !== undefined) {
+      vpnConnected = res.connected;
+      updateVPNUI(res.connected);
+      showMessage(res.message || (res.connected ? 'VPN connected' : 'VPN disconnected'), 'info');
+      if (res.connected) getVPNStats();
+    } else if (res && res.error) {
+      showMessage(res.error, 'error');
+      checkVPNStatus();
+    }
+  } catch (e) {
+    showMessage('VPN toggle failed: ' + e.message, 'error');
+    checkVPNStatus();
+  }
+  
+  if (btn) btn.disabled = false;
+}
 
 let currentPath = '/';
 let selectedFile = null;
