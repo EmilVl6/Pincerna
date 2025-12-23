@@ -52,7 +52,6 @@
       </div>
     </section>
 
-    <!-- Network/LAN Panel -->
     <section class="card" id="network-panel" style="display:none">
       <h2>Home Network</h2>
       <div class="network-header">
@@ -66,10 +65,9 @@
       </div>
       <div id="network-scanning" class="network-scanning" style="display:none">
         <div class="scanning-spinner"></div>
-        <span>Scanning network...</span>
+        <span>Scanning network</span>
       </div>
       <div id="network-devices" class="network-devices-grid">
-        <!-- Devices will be populated here -->
       </div>
       <div id="network-empty" class="network-empty" style="display:none">
         <p>No devices found. Click "Scan Network" to discover devices.</p>
@@ -87,46 +85,49 @@
     <section class="card" id="metrics" style="display:none">
       <h2>System Metrics</h2>
       <div class="metrics-grid">
-        <div class="metric-widget" id="widget-cpu">
-          <div class="metric-icon">✸</div>
+
+        <div class="metric-widget">
+          <div class="metric-icon">▣</div>
           <div class="metric-value" id="metric-cpu">--%</div>
           <div class="metric-label">CPU</div>
           <div class="metric-sub" id="metric-cpu-temp"></div>
         </div>
-        <div class="metric-widget" id="widget-memory">
-          <div class="metric-icon">✢</div>
+
+        <div class="metric-widget">
+          <div class="metric-icon">≡</div>
           <div class="metric-value" id="metric-memory">--%</div>
           <div class="metric-label">Memory</div>
           <div class="metric-sub" id="metric-memory-detail"></div>
         </div>
-        <div class="metric-widget" id="widget-disk">
-          <div class="metric-icon">✤</div>
+
+        <div class="metric-widget">
+          <div class="metric-icon">⬒</div>
           <div class="metric-value" id="metric-disk">--%</div>
           <div class="metric-label">Disk</div>
           <div class="metric-sub" id="metric-disk-detail"></div>
         </div>
-        <div class="metric-widget" id="widget-network">
-          <div class="metric-icon">⁂</div>
+
+        <div class="metric-widget">
+          <div class="metric-icon">↔</div>
           <div class="metric-value" id="metric-network">--</div>
           <div class="metric-label">Network</div>
           <div class="metric-sub" id="metric-network-detail"></div>
         </div>
-        <div class="metric-widget" id="widget-uptime">
-          <div class="metric-icon">⏱</div>
+
+        <div class="metric-widget">
+          <div class="metric-icon">◷</div>
           <div class="metric-value" id="metric-uptime">--</div>
           <div class="metric-label">Uptime</div>
           <div class="metric-sub" id="metric-load"></div>
         </div>
-        <div class="metric-widget" id="widget-processes">
-          <div class="metric-icon">✺</div>
+
+        <div class="metric-widget">
+          <div class="metric-icon">⚙︎</div>
           <div class="metric-value" id="metric-processes">--</div>
           <div class="metric-label">Processes</div>
           <div class="metric-sub" id="metric-cores"></div>
         </div>
-      </div>
-      <div class="metrics-refresh">
-        <button id="btn-refresh-metrics" class="btn">Refresh Metrics</button>
-        <span id="metrics-last-update" class="meta"></span>
+
       </div>
     </section>
 
@@ -165,10 +166,10 @@
 
     <section class="card" id="about" style="display:none">
       <h2>About</h2>
-      <p class="lead">Emil's Bartender (A SERVER WITH RSA [Not the cryptography])</p>
+      <p class="lead">Pincerna is a Pi hosted cloud server framework. To learn more check out the <a href="https://github.com/EmilVl6/Pincerna" target="_blank" rel="noopener noreferrer">Github Repo</a></p>
     </section>
   </main>
 
-  <footer class="site-footer">Pincerna : cloud.emilvinod.com</footer>
+  <footer class="site-footer">Pincerna™ - cloud.emilvinod.com</footer>
 </body>
 </html>

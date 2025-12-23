@@ -63,8 +63,7 @@ body{
   .container{padding:0 10px !important;margin:12px auto !important;max-width:100vw !important}
   .card{padding:14px !important;margin:12px 0 !important}
   .brand-text{display:none !important}
-  
-  /* Header mobile layout */
+
   .site-header{
     flex-direction:column !important;
     padding:8px !important;
@@ -106,7 +105,6 @@ body{
     font-size:0.85rem !important;
   }
   
-  /* Hero section - ensure h1 fits */
   #hero h1, .card h1{font-size:1.1rem !important;white-space:nowrap !important;overflow:hidden !important;text-overflow:ellipsis !important}
   .card h2{font-size:1rem !important}
   .lead{font-size:0.9rem}
@@ -114,11 +112,9 @@ body{
   .row > div{display:flex;flex-direction:column;gap:8px}
   .row .btn{width:100%}
   
-  /* Grid adjustments */
   .grid{flex-direction:column}
   .grid .btn{width:100%}
   
-  /* Metrics */
   .metrics-grid{grid-template-columns:repeat(2, 1fr);gap:8px}
   .metric-widget{padding:12px 8px}
   .metric-value{font-size:20px}
@@ -126,14 +122,12 @@ body{
   .metric-label{font-size:9px}
   .metric-sub{font-size:8px}
   
-  /* VPN */
   .vpn-details{grid-template-columns:1fr 1fr;gap:8px}
   .vpn-stat{padding:10px 8px}
   .vpn-stat-value{font-size:14px}
   .vpn-actions{flex-wrap:wrap}
   .vpn-actions .btn{flex:1;min-width:45%}
   
-  /* File browser */
   .file-controls{flex-direction:row;align-items:center;flex-wrap:nowrap;gap:6px}
   .file-actions-left{flex-wrap:nowrap;gap:4px}
   .file-actions-left .btn{flex:0 1 auto;min-width:auto;padding:8px 10px;font-size:0.75rem;text-align:center}
@@ -143,7 +137,6 @@ body{
   .file-entry .actions{width:100%;justify-content:flex-end}
   .file-entry .file-name{font-size:0.9rem}
   
-  /* Network panel */
   .network-header{flex-direction:column;align-items:stretch;gap:10px}
   .network-status{justify-content:center}
   .network-actions{justify-content:center;flex-wrap:wrap}
@@ -156,10 +149,8 @@ body{
   .device-quick-actions{justify-content:center}
   .quick-action{padding:8px 12px;font-size:0.8rem}
   
-  /* Hide grid lines on mobile - they don't render well */
   .grid-lines{display:none}
   
-  /* Network map */
   .network-map{min-height:auto !important;height:auto !important;padding-bottom:20px}
   .network-map-container{min-height:auto}
   .map-node{padding:8px 6px;min-width:70px}
@@ -172,13 +163,11 @@ body{
   .map-node.internet,.map-node.router,.map-node.server{position:relative !important;top:auto !important;left:auto !important;transform:none !important;margin:5px auto}
   .network-map{display:flex;flex-direction:column;align-items:center;gap:10px}
   
-  /* Map detail panel */
   .map-device-detail{position:fixed !important;top:auto !important;bottom:0;left:0;right:0;width:100%;max-width:100%;border-radius:16px 16px 0 0}
   .detail-header{padding:12px}
   .detail-icon{font-size:28px}
   .detail-name{font-size:1rem}
   
-  /* Connection modal */
   .connection-modal-content{width:95%;max-width:none;margin:10px}
   .connection-modal-header{padding:14px 16px}
   .connection-modal-header h3{font-size:1rem}
@@ -187,14 +176,11 @@ body{
   .connection-buttons{flex-direction:column}
   .connection-buttons .btn{width:100%}
   
-  /* Toast */
   .toast{left:12px;right:12px;bottom:12px;text-align:center}
   
-  /* Context menu */
   .context-menu{max-width:calc(100vw - 20px)}
 }
 
-/* Extra small screens */
 @media (max-width:400px){
   .container{padding:0 6px !important}
   .card{padding:10px !important;margin:8px 0 !important}
@@ -212,7 +198,6 @@ body{
   .quick-action{padding:6px 8px;font-size:0.7rem;min-height:32px}
   .logo,.logo-img{width:36px !important;height:36px !important}
   
-  /* Auth page mobile */
   .auth-card{padding:14px;max-width:95vw}
   .auth-card .auth-body{width:100%;max-width:260px}
   .auth-title{font-size:18px}
@@ -376,7 +361,6 @@ body::after{
 #turnstile-container{min-height:65px;display:flex;align-items:center;justify-content:center}
 #turnstile-container iframe{max-width:100%}
 
-/* Network Panel */
 .network-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px}
 .network-status{display:flex;align-items:center;gap:10px}
 .network-actions{display:flex;gap:8px}
@@ -428,16 +412,13 @@ body::after{
 .network-empty{text-align:center;padding:40px;color:var(--muted)}
 .network-empty p{margin:0}
 
-/* Grid View with Lines */
 .grid-lines{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0}
 .grid-line{stroke:rgba(34,197,94,0.25);stroke-width:2}
 .grid-line.offline{stroke:rgba(102,102,102,0.2);stroke-dasharray:4,4}
 
-/* Gateway/Router device styling */
 .network-device.gateway{border-left:3px solid #22c55e;border-color:#22c55e}
 .network-device.gateway::before{content:'🌐';position:absolute;top:-8px;right:-8px;font-size:16px}
 
-/* Network Map View */
 .network-map-container{min-height:500px;position:relative}
 .network-map{position:relative;width:100%;min-height:500px;overflow:visible;padding-bottom:40px}
 .network-lines{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0}
@@ -462,7 +443,6 @@ body::after{
 .map-devices-area{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none}
 .map-devices-area .map-node{pointer-events:auto}
 
-/* Map Device Detail Panel */
 .map-device-detail{position:absolute;top:20px;right:20px;width:280px;background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);border:2px solid #0f3460;padding:16px;z-index:100;box-shadow:0 8px 32px rgba(0,0,0,0.5)}
 .detail-header{display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.1)}
 .detail-icon{font-size:36px}
@@ -475,7 +455,6 @@ body::after{
 .detail-services{display:flex;flex-wrap:wrap;gap:6px}
 .no-actions{font-size:0.8rem;color:var(--muted)}
 
-/* Connection Modal */
 .connection-modal{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(4px)}
 .connection-modal-content{background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);border:2px solid #0f3460;padding:0;width:90%;max-width:420px;box-shadow:0 16px 48px rgba(0,0,0,0.5)}
 .connection-modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.1)}

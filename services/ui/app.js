@@ -31,7 +31,6 @@ function logout() {
 function hidePreloader(delay = 2000) {
   const p = document.getElementById('preloader');
   if (!p) return;
-  // Ensure minimum time for animation to play
   const minAnimationTime = 1800;
   const actualDelay = Math.max(delay, minAnimationTime);
   setTimeout(() => {
@@ -85,7 +84,6 @@ function showSection(sectionId) {
     if (networkPanel) networkPanel.style.display = 'block';
     const navNetwork = document.getElementById('nav-network');
     if (navNetwork) navNetwork.classList.add('active');
-    // Restore saved state or auto-scan if no cached data
     if (restoreNetworkState() && networkDevices.length > 0) {
       renderNetworkDevices(networkDevices, networkGateway);
     } else {
@@ -125,7 +123,6 @@ function downloadFile(item) {
   
   showMessage(`Downloading ${item.name}...`, 'info', 3000);
   
-  // Use fetch + blob for reliable downloads
   const downloadUrl = apiBase + '/files/download?path=' + encodeURIComponent(item.path);
   
   fetch(downloadUrl, {
@@ -141,7 +138,6 @@ function downloadFile(item) {
     return response.blob();
   })
   .then(blob => {
-    // Create blob URL and trigger download
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -164,7 +160,6 @@ function previewFile(item) {
     return;
   }
   
-  // Create preview URL with token
   const previewUrl = apiBase + '/files/preview?path=' + encodeURIComponent(item.path) + '&token=' + encodeURIComponent(token);
   window.open(previewUrl, '_blank');
 }
@@ -246,14 +241,12 @@ async function getVPNStats() {
   return;
 }
 
-// ==================== NETWORK SCANNING ====================
 
 let networkDevices = [];
 let isScanning = false;
 let deviceNicknames = {};
-let networkGateway = '';  // Store gateway IP for device classification
+let networkGateway = '';
 
-// Load saved nicknames from localStorage
 function loadDeviceNicknames() {
   try {
     const saved = localStorage.getItem('pincerna_device_nicknames');
@@ -267,7 +260,6 @@ function saveDeviceNicknames() {
   } catch (e) {}
 }
 
-// Persist network state to sessionStorage (survives navigation)
 function saveNetworkState() {
   try {
     sessionStorage.setItem('pincerna_network_devices', JSON.stringify(networkDevices));
@@ -326,7 +318,6 @@ async function scanNetwork() {
       networkGateway = res.gateway || '';
       saveNetworkState();
       
-      // Mark gateway device
       if (networkGateway) {
         const gatewayDevice = networkDevices.find(d => d.ip === networkGateway);
         if (gatewayDevice) gatewayDevice.is_gateway = true;
@@ -364,7 +355,6 @@ function renderNetworkDevices(devices, gatewayIp) {
   const grid = document.getElementById('network-devices');
   if (!grid) return;
   
-  // Sort devices: gateway first, then server, then by IP
   const sortedDevices = [...devices].sort((a, b) => {
     if (a.ip === gatewayIp) return -1;
     if (b.ip === gatewayIp) return 1;
@@ -410,7 +400,6 @@ function renderNetworkDevices(devices, gatewayIp) {
   }).join('')}
   `;
   
-  // Add click handlers
   grid.querySelectorAll('.network-device').forEach(el => {
     el.addEventListener('click', (e) => {
       if (e.target.closest('.device-edit-btn') || e.target.closest('.device-quick-actions') || e.target.closest('.device-services')) return;
@@ -419,7 +408,6 @@ function renderNetworkDevices(devices, gatewayIp) {
     });
   });
   
-  // Add edit nickname handlers
   grid.querySelectorAll('.device-edit-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -434,7 +422,6 @@ function renderNetworkDevices(devices, gatewayIp) {
     });
   });
   
-  // Draw grid connection lines after layout settles
   setTimeout(() => drawGridLines(gatewayIp), 100);
 }
 
@@ -478,12 +465,10 @@ function renderQuickActions(device) {
   const services = device.services || [];
   const displayName = getDeviceDisplayName(device);
   
-  // Check for RDP (port 3389)
   if (services.some(s => s.port === 3389)) {
     actions.push(`<button class="quick-action rdp" onclick="event.stopPropagation(); showConnectionInfo('rdp', '${device.ip}', '${displayName}')" title="Remote Desktop"><span>🖥</span> RDP</button>`);
   }
   
-  // Check for VNC (port 5900)
   if (services.some(s => s.port === 5900)) {
     actions.push(`<button class="quick-action vnc" onclick="event.stopPropagation(); showConnectionInfo('vnc', '${device.ip}', '${displayName}')" title="VNC"><span>🖥</span> VNC</button>`);
   }
@@ -557,7 +542,6 @@ function showConnectionInfo(type, ip, name) {
 }
 
 function showConnectionModal(title, content) {
-  // Remove any existing modal
   const existing = document.getElementById('connection-modal');
   if (existing) existing.remove();
   
@@ -597,14 +581,12 @@ function copyToClipboard(text) {
 }
 
 function getDeviceIcon(device) {
-  // Check explicit flags first
   if (device.is_server) return '🖥️';
   if (device.is_gateway || device.ip === networkGateway) return '📡';
   
   const hostname = (device.hostname || '').toLowerCase();
   const ip = device.ip || '';
   
-  // Router/Gateway detection (common patterns)
   if (hostname.includes('router') || hostname.includes('gateway') || 
       hostname.includes('netgear') || hostname.includes('linksys') ||
       hostname.includes('asus-rt') || hostname.includes('tp-link') ||
@@ -615,67 +597,54 @@ function getDeviceIcon(device) {
       hostname.includes('eero') || hostname.includes('mesh') ||
       ip.endsWith('.1') && !device.is_server) return '📡';
   
-  // Phones
   if (hostname.includes('iphone') || hostname.includes('ipad') || 
       hostname.includes('android') || hostname.includes('phone') ||
       hostname.includes('pixel') || hostname.includes('galaxy') ||
       hostname.includes('oneplus') || hostname.includes('xiaomi')) return '📱';
   
-  // Tablets
   if (hostname.includes('tablet') || hostname.includes('surface')) return '📱';
   
-  // Apple devices
   if (hostname.includes('macbook') || hostname.includes('imac') ||
       hostname.includes('mac-') || hostname.includes('apple-')) return '💻';
   
-  // Windows PC detection
   if (hostname.includes('desktop') || hostname.includes('pc-') ||
       hostname.includes('workstation') || hostname.includes('windows')) return '🖥️';
   
-  // Laptops
   if (hostname.includes('laptop') || hostname.includes('thinkpad') ||
       hostname.includes('dell-') || hostname.includes('hp-')) return '💻';
   
-  // NAS devices
   if (hostname.includes('nas') || hostname.includes('synology') || 
       hostname.includes('qnap') || hostname.includes('drobo') ||
       hostname.includes('freenas') || hostname.includes('truenas') ||
       hostname.includes('unraid')) return '💾';
   
-  // Printers
   if (hostname.includes('printer') || hostname.includes('epson') ||
       hostname.includes('hp-') || hostname.includes('canon') ||
       hostname.includes('brother')) return '🖨️';
   
-  // Smart TV / Media
   if (hostname.includes('tv') || hostname.includes('roku') || 
       hostname.includes('firestick') || hostname.includes('chromecast') ||
       hostname.includes('apple-tv') || hostname.includes('shield') ||
       hostname.includes('samsung') || hostname.includes('lg-') ||
       hostname.includes('sony') || hostname.includes('plex')) return '📺';
   
-  // Cameras
   if (hostname.includes('camera') || hostname.includes('cam-') ||
       hostname.includes('ipcam') || hostname.includes('ring') ||
       hostname.includes('nest') || hostname.includes('arlo') ||
       hostname.includes('wyze')) return '📷';
-  
-  // Smart home devices
+
   if (hostname.includes('echo') || hostname.includes('alexa') ||
       hostname.includes('google-home') || hostname.includes('homepod') ||
       hostname.includes('hue') || hostname.includes('sonos')) return '🔊';
   
-  // Gaming
   if (hostname.includes('xbox') || hostname.includes('playstation') ||
       hostname.includes('ps4') || hostname.includes('ps5') ||
       hostname.includes('switch') || hostname.includes('nintendo')) return '🎮';
   
-  // Raspberry Pi / IoT
   if (hostname.includes('raspberry') || hostname.includes('raspberrypi') ||
       hostname.includes('rpi') || hostname.includes('pi-') ||
       hostname.includes('arduino') || hostname.includes('esp')) return '🔌';
   
-  // Default
   if (device.online) return '💻';
   return '❓';
 }
@@ -706,13 +675,12 @@ async function scanDevicePorts(ip) {
   try {
     const res = await apiFetch(`/network/device/${ip}/ports`);
     if (res && res.ports) {
-      // Update the device in our cache
       const device = networkDevices.find(d => d.ip === ip);
       if (device) {
         device.services = res.ports;
         servicesEl.innerHTML = renderDeviceServices(device);
         if (actionsEl) actionsEl.innerHTML = renderQuickActions(device);
-        saveNetworkState(); // Persist port scan results
+        saveNetworkState();
       }
       
       if (res.ports.length === 0) {
@@ -724,7 +692,6 @@ async function scanDevicePorts(ip) {
   }
 }
 
-// ==================== VPN UI ====================
 
 function updateVPNUI(connected, details = {}) {
   const btn = document.getElementById('btn-vpn');
@@ -733,7 +700,6 @@ function updateVPNUI(connected, details = {}) {
   const vpnPanel = document.getElementById('vpn-panel');
   const vpnDetails = document.getElementById('vpn-details');
   
-  // Only show not-configured if NOT connected AND config doesn't exist
   const notConfigured = !connected && details.config_exists === false;
   
   if (btn) {
@@ -783,12 +749,10 @@ function updateVPNUI(connected, details = {}) {
     }
   }
   
-  // Hide stats when not configured or disconnected
   if (vpnDetails) {
     vpnDetails.style.display = (connected && !notConfigured) ? 'grid' : 'none';
   }
   
-  // Always show VPN panel on home section for status visibility
   if (vpnPanel) {
     const isHomeSection = document.getElementById('hero')?.style.display !== 'none';
     vpnPanel.style.display = isHomeSection ? 'block' : 'none';
@@ -1132,7 +1096,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnLogout = $('#btn-logout');
   if (btnLogout) btnLogout.addEventListener('click', logout);
   
-  // VPN button (optional - may not exist)
   const btnVpn = document.getElementById('btn-vpn');
   if (btnVpn) btnVpn.addEventListener('click', toggleVPN);
   
@@ -1145,7 +1108,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnRefreshMetrics = document.getElementById('btn-refresh-metrics');
   if (btnRefreshMetrics) btnRefreshMetrics.addEventListener('click', loadMetrics);
 
-  // VPN refresh button
   const btnVpnRefresh = document.getElementById('btn-vpn-refresh');
   if (btnVpnRefresh) btnVpnRefresh.addEventListener('click', () => {
     checkVPNStatus();
@@ -1171,7 +1133,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (navNetwork) navNetwork.addEventListener('click', (e) => { e.preventDefault(); showSection('network'); });
   if (navAbout) navAbout.addEventListener('click', (e) => { e.preventDefault(); showSection('about'); });
 
-  // Network panel buttons
   const btnViewNetwork = document.getElementById('btn-view-network');
   if (btnViewNetwork) btnViewNetwork.addEventListener('click', () => showSection('network'));
   
@@ -1235,7 +1196,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Health check with fallback - always hide preloader
   const token = localStorage.getItem('pincerna_token');
   fetch(apiBase + '/health', {
     headers: token ? { 'Authorization': token } : {}
