@@ -178,6 +178,8 @@ body::after{
 .vpn-status-indicator.disconnected .vpn-dot{background:#ef4444}
 .vpn-status-indicator.error .vpn-dot{background:#f59e0b;animation:pulse 1s infinite}
 .vpn-status-indicator.error #vpn-status-text{color:#f59e0b}
+.vpn-status-indicator.not-configured .vpn-dot{background:#6b7280}
+.vpn-status-indicator.not-configured #vpn-status-text{color:#9ca3af}
 #vpn-status-text{font-weight:600;color:#fff}
 .vpn-details{display:grid;grid-template-columns:repeat(3, 1fr);gap:12px}
 .vpn-stat{background:rgba(0,0,0,0.15);padding:12px;text-align:center;border:1px solid rgba(255,255,255,0.03)}

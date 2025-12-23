@@ -28,14 +28,17 @@ function logout() {
   window.location.href = 'auth.html';
 }
 
-function hidePreloader(delay = 700) {
+function hidePreloader(delay = 2000) {
   const p = document.getElementById('preloader');
   if (!p) return;
+  // Ensure minimum time for animation to play
+  const minAnimationTime = 1800;
+  const actualDelay = Math.max(delay, minAnimationTime);
   setTimeout(() => {
-    p.style.transition = 'opacity 220ms ease';
+    p.style.transition = 'opacity 400ms ease';
     p.style.opacity = '0';
-    setTimeout(() => { p.style.display = 'none'; }, 240);
-  }, delay);
+    setTimeout(() => { p.style.display = 'none'; }, 420);
+  }, actualDelay);
 }
 
 function showMessage(msg, level = 'info', timeout = 4000) {
@@ -113,19 +116,38 @@ function downloadFile(item) {
     return;
   }
   
-  // Create download URL with token
-  const downloadUrl = apiBase + '/files/download?path=' + encodeURIComponent(item.path) + '&token=' + encodeURIComponent(token);
+  showMessage(`Downloading ${item.name}...`, 'info', 3000);
   
-  // Create a temporary link and click it
-  const link = document.createElement('a');
-  link.href = downloadUrl;
-  link.download = item.name;
-  link.style.display = 'none';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  // Use fetch + blob for reliable downloads
+  const downloadUrl = apiBase + '/files/download?path=' + encodeURIComponent(item.path);
   
-  showMessage(`Downloading ${item.name}...`, 'info', 2000);
+  fetch(downloadUrl, {
+    method: 'GET',
+    headers: {
+      'Authorization': token
+    }
+  })
+  .then(response => {
+    if (!response.ok) {
+      return response.json().then(err => { throw new Error(err.error || 'Download failed'); });
+    }
+    return response.blob();
+  })
+  .then(blob => {
+    // Create blob URL and trigger download
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = item.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    showMessage(`Downloaded ${item.name}`, 'info', 2000);
+  })
+  .catch(err => {
+    showMessage('Download failed: ' + err.message, 'error');
+  });
 }
 
 function previewFile(item) {
@@ -233,44 +255,64 @@ function updateVPNUI(connected, details = {}) {
   const indicator = document.getElementById('vpn-indicator');
   const statusText = document.getElementById('vpn-status-text');
   const vpnPanel = document.getElementById('vpn-panel');
+  const vpnDetails = document.getElementById('vpn-details');
+  
+  // Check if VPN is not configured
+  const notConfigured = details.config_exists === false;
   
   if (btn) {
-    if (details.error) {
+    if (notConfigured) {
+      btn.textContent = 'VPN Not Configured';
+      btn.classList.remove('active');
+      btn.style.background = '#6b7280';
+      btn.disabled = true;
+    } else if (details.error) {
       btn.textContent = 'VPN Error';
       btn.classList.remove('active');
       btn.style.background = '#ef4444';
+      btn.disabled = false;
     } else if (connected) {
       btn.textContent = 'VPN Connected ✓';
       btn.classList.add('active');
       btn.style.background = '#22c55e';
+      btn.disabled = false;
     } else {
       btn.textContent = 'Start VPN';
       btn.classList.remove('active');
       btn.style.background = '';
+      btn.disabled = false;
     }
-    btn.disabled = false;
   }
   
   if (indicator) {
-    if (details.error) {
+    if (notConfigured) {
+      indicator.className = 'vpn-status-indicator not-configured';
+    } else if (details.error) {
       indicator.className = 'vpn-status-indicator error';
     } else {
       indicator.className = 'vpn-status-indicator ' + (connected ? 'connected' : 'disconnected');
     }
   }
   if (statusText) {
-    if (details.error) {
+    if (notConfigured) {
+      statusText.textContent = 'Not Configured';
+    } else if (details.error) {
       statusText.textContent = 'Error';
     } else {
       statusText.textContent = connected ? 'Connected' : 'Disconnected';
     }
   }
   
+  // Hide stats when not configured or disconnected
+  if (vpnDetails) {
+    vpnDetails.style.display = (connected && !notConfigured) ? 'grid' : 'none';
+  }
+  
   // Always show VPN panel on home section for status visibility
   if (vpnPanel) {
     const isHomeSection = document.getElementById('hero')?.style.display !== 'none';
     vpnPanel.style.display = isHomeSection ? 'block' : 'none';
-    if (connected) getVPNStats();
+    if (connected && !notConfigured) getVPNStats();
   }
 }
 
@@ -697,14 +739,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     fetch(apiBase + '/health').then(r => {
     if (r.ok) {
-      hidePreloader(300);
+      hidePreloader(2000);
     } else {
       if (indicator) indicator.textContent = 'Backend unavailable';
-      hidePreloader(1500);
+      hidePreloader(2500);
     }
   }).catch(() => {
     if (indicator) indicator.textContent = 'Cannot connect to server';
-    hidePreloader(1500);
+    hidePreloader(2500);
   });
 
   // Initial VPN status check
