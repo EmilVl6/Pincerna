@@ -466,11 +466,11 @@ function renderQuickActions(device) {
   const displayName = getDeviceDisplayName(device);
   
   if (services.some(s => s.port === 3389)) {
-    actions.push(`<button class="quick-action rdp" onclick="event.stopPropagation(); showConnectionInfo('rdp', '${device.ip}', '${displayName}')" title="Remote Desktop"><span>🖥</span> RDP</button>`);
+    actions.push(`<button class="quick-action rdp" onclick="event.stopPropagation(); showConnectionInfo('rdp', '${device.ip}', '${displayName}')" title="Remote Desktop"><span>🖥︎</span> RDP</button>`);
   }
   
   if (services.some(s => s.port === 5900)) {
-    actions.push(`<button class="quick-action vnc" onclick="event.stopPropagation(); showConnectionInfo('vnc', '${device.ip}', '${displayName}')" title="VNC"><span>🖥</span> VNC</button>`);
+    actions.push(`<button class="quick-action vnc" onclick="event.stopPropagation(); showConnectionInfo('vnc', '${device.ip}', '${displayName}')" title="VNC"><span>🖥︎</span> VNC</button>`);
   }
   
   return actions.length > 0 ? actions.join('') : '';
@@ -488,8 +488,8 @@ function showConnectionInfo(type, ip, name) {
         <div class="connection-command">${command}</div>
         <p class="connection-hint">Or use: ssh user@${ip}</p>
         <div class="connection-buttons">
-          <button class="btn primary" onclick="copyToClipboard('${command}')">📋 Copy Command</button>
-          <a href="ssh://${ip}" class="btn">🚀 Open SSH App</a>
+          <button class="btn primary" onclick="copyToClipboard('${command}')">📋︎ Copy Command</button>
+          <a href="ssh://${ip}" class="btn">🚀︎ Open SSH App</a>
         </div>
       `;
       break;
@@ -501,8 +501,8 @@ function showConnectionInfo(type, ip, name) {
         <div class="connection-command">${command}</div>
         <p class="connection-hint">Or open Remote Desktop Connection and enter: ${ip}</p>
         <div class="connection-buttons">
-          <button class="btn primary" onclick="copyToClipboard('${command}')">📋 Copy Command</button>
-          <a href="rdp://${ip}" class="btn">🚀 Open RDP</a>
+          <button class="btn primary" onclick="copyToClipboard('${command}')">📋︎ Copy Command</button>
+          <a href="rdp://${ip}" class="btn">🚀︎ Open RDP</a>
         </div>
       `;
       break;
@@ -518,8 +518,8 @@ function showConnectionInfo(type, ip, name) {
           <strong>Linux:</strong> Files → Other Locations → smb://${ip}
         </p>
         <div class="connection-buttons">
-          <button class="btn primary" onclick="copyToClipboard('${command}')">📋 Copy Path</button>
-          <a href="smb://${ip}" class="btn">🚀 Open in Explorer</a>
+          <button class="btn primary" onclick="copyToClipboard('${command}')">📋︎ Copy Path</button>
+          <a href="smb://${ip}" class="btn">🚀︎ Open in Explorer</a>
         </div>
       `;
       break;
@@ -531,8 +531,8 @@ function showConnectionInfo(type, ip, name) {
         <div class="connection-command">${ip}:5900</div>
         <p class="connection-hint">Use any VNC client (RealVNC, TightVNC, etc.)</p>
         <div class="connection-buttons">
-          <button class="btn primary" onclick="copyToClipboard('${ip}:5900')">📋 Copy Address</button>
-          <a href="vnc://${ip}" class="btn">🚀 Open VNC App</a>
+          <button class="btn primary" onclick="copyToClipboard('${ip}:5900')">📋︎ Copy Address</button>
+          <a href="vnc://${ip}" class="btn">🚀︎ Open VNC App</a>
         </div>
       `;
       break;
@@ -581,8 +581,8 @@ function copyToClipboard(text) {
 }
 
 function getDeviceIcon(device) {
-  if (device.is_server) return '🖥️';
-  if (device.is_gateway || device.ip === networkGateway) return '📡';
+  if (device.is_server) return '🖥︎';
+  if (device.is_gateway || device.ip === networkGateway) return '📡︎';
   
   const hostname = (device.hostname || '').toLowerCase();
   const ip = device.ip || '';
@@ -595,58 +595,58 @@ function getDeviceIcon(device) {
       hostname.includes('openwrt') || hostname.includes('pfsense') ||
       hostname.includes('edgerouter') || hostname.includes('orbi') ||
       hostname.includes('eero') || hostname.includes('mesh') ||
-      ip.endsWith('.1') && !device.is_server) return '📡';
+      ip.endsWith('.1') && !device.is_server) return '📡︎';
   
-  if (hostname.includes('iphone') || hostname.includes('ipad') || 
+    if (hostname.includes('iphone') || hostname.includes('ipad') || 
       hostname.includes('android') || hostname.includes('phone') ||
       hostname.includes('pixel') || hostname.includes('galaxy') ||
-      hostname.includes('oneplus') || hostname.includes('xiaomi')) return '📱';
+      hostname.includes('oneplus') || hostname.includes('xiaomi')) return '📱︎';
   
-  if (hostname.includes('tablet') || hostname.includes('surface')) return '📱';
+  if (hostname.includes('tablet') || hostname.includes('surface')) return '📱︎';
   
-  if (hostname.includes('macbook') || hostname.includes('imac') ||
-      hostname.includes('mac-') || hostname.includes('apple-')) return '💻';
+    if (hostname.includes('macbook') || hostname.includes('imac') ||
+      hostname.includes('mac-') || hostname.includes('apple-')) return '💻︎';
   
-  if (hostname.includes('desktop') || hostname.includes('pc-') ||
-      hostname.includes('workstation') || hostname.includes('windows')) return '🖥️';
+    if (hostname.includes('desktop') || hostname.includes('pc-') ||
+      hostname.includes('workstation') || hostname.includes('windows')) return '🖥︎';
   
-  if (hostname.includes('laptop') || hostname.includes('thinkpad') ||
-      hostname.includes('dell-') || hostname.includes('hp-')) return '💻';
+    if (hostname.includes('laptop') || hostname.includes('thinkpad') ||
+      hostname.includes('dell-') || hostname.includes('hp-')) return '💻︎';
   
-  if (hostname.includes('nas') || hostname.includes('synology') || 
+    if (hostname.includes('nas') || hostname.includes('synology') || 
       hostname.includes('qnap') || hostname.includes('drobo') ||
       hostname.includes('freenas') || hostname.includes('truenas') ||
-      hostname.includes('unraid')) return '💾';
+      hostname.includes('unraid')) return '💾︎';
   
-  if (hostname.includes('printer') || hostname.includes('epson') ||
+    if (hostname.includes('printer') || hostname.includes('epson') ||
       hostname.includes('hp-') || hostname.includes('canon') ||
-      hostname.includes('brother')) return '🖨️';
+      hostname.includes('brother')) return '🖨︎';
   
-  if (hostname.includes('tv') || hostname.includes('roku') || 
+    if (hostname.includes('tv') || hostname.includes('roku') || 
       hostname.includes('firestick') || hostname.includes('chromecast') ||
       hostname.includes('apple-tv') || hostname.includes('shield') ||
       hostname.includes('samsung') || hostname.includes('lg-') ||
-      hostname.includes('sony') || hostname.includes('plex')) return '📺';
+      hostname.includes('sony') || hostname.includes('plex')) return '📺︎';
   
-  if (hostname.includes('camera') || hostname.includes('cam-') ||
+    if (hostname.includes('camera') || hostname.includes('cam-') ||
       hostname.includes('ipcam') || hostname.includes('ring') ||
       hostname.includes('nest') || hostname.includes('arlo') ||
-      hostname.includes('wyze')) return '📷';
+      hostname.includes('wyze')) return '📷︎';
 
-  if (hostname.includes('echo') || hostname.includes('alexa') ||
+    if (hostname.includes('echo') || hostname.includes('alexa') ||
       hostname.includes('google-home') || hostname.includes('homepod') ||
-      hostname.includes('hue') || hostname.includes('sonos')) return '🔊';
+      hostname.includes('hue') || hostname.includes('sonos')) return '🔊︎';
   
-  if (hostname.includes('xbox') || hostname.includes('playstation') ||
+    if (hostname.includes('xbox') || hostname.includes('playstation') ||
       hostname.includes('ps4') || hostname.includes('ps5') ||
-      hostname.includes('switch') || hostname.includes('nintendo')) return '🎮';
+      hostname.includes('switch') || hostname.includes('nintendo')) return '🎮︎';
   
-  if (hostname.includes('raspberry') || hostname.includes('raspberrypi') ||
+    if (hostname.includes('raspberry') || hostname.includes('raspberrypi') ||
       hostname.includes('rpi') || hostname.includes('pi-') ||
-      hostname.includes('arduino') || hostname.includes('esp')) return '🔌';
+      hostname.includes('arduino') || hostname.includes('esp')) return '🔌︎';
   
-  if (device.online) return '💻';
-  return '❓';
+  if (device.online) return '💻︎';
+  return '❓︎';
 }
 
 function renderDeviceServices(device) {
@@ -799,7 +799,7 @@ async function listFiles(path = currentPath) {
 }
 
 function getFileIcon(name, isDir) {
-  if (isDir) return '🗎';
+  if (isDir) return '🗎︎';
   const ext = name.split('.').pop().toLowerCase();
   const icons = {
   'pdf': '⌘',      
@@ -842,7 +842,7 @@ function getFileIcon(name, isDir) {
   'sh': '⚙',
   'bat': '⚙'
   };
-  return icons[ext] || '🗎';
+  return icons[ext] || '🗎︎';
 }
 
 function renderFileList(items, path) {
@@ -850,12 +850,12 @@ function renderFileList(items, path) {
   if (!out) return;
   out.innerHTML = '';
 
-  if (path && path !== '/') {
+    if (path && path !== '/') {
     const upDiv = document.createElement('div');
     upDiv.className = 'file-entry file-dir';
     upDiv.innerHTML = `
       <div class="file-info">
-        <span class="file-icon">🗎</span>
+        <span class="file-icon">🗎︎</span>
         <div class="file-details">
           <div class="file-name">..</div>
           <div class="file-meta">Parent directory</div>
@@ -869,8 +869,8 @@ function renderFileList(items, path) {
     out.appendChild(upDiv);
   }
 
-  if (!items || !Array.isArray(items) || items.length === 0) {
-    if (path === '/') out.innerHTML += '<div class="file-entry"><div class="file-info"><span class="file-icon">🗐</span><div class="file-details"><div class="file-name">Empty folder</div></div></div></div>';
+    if (!items || !Array.isArray(items) || items.length === 0) {
+    if (path === '/') out.innerHTML += '<div class="file-entry"><div class="file-info"><span class="file-icon">🗐︎</span><div class="file-details"><div class="file-name">Empty folder</div></div></div></div>';
     return;
   }
 
