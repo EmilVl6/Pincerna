@@ -176,11 +176,14 @@ body::after{
 .vpn-dot{width:12px;height:12px;background:#666;animation:none}
 .vpn-status-indicator.connected .vpn-dot{background:#22c55e;box-shadow:0 0 12px #22c55e;animation:pulse 2s infinite}
 .vpn-status-indicator.disconnected .vpn-dot{background:#ef4444}
+.vpn-status-indicator.error .vpn-dot{background:#f59e0b;animation:pulse 1s infinite}
+.vpn-status-indicator.error #vpn-status-text{color:#f59e0b}
 #vpn-status-text{font-weight:600;color:#fff}
 .vpn-details{display:grid;grid-template-columns:repeat(3, 1fr);gap:12px}
 .vpn-stat{background:rgba(0,0,0,0.15);padding:12px;text-align:center;border:1px solid rgba(255,255,255,0.03)}
 .vpn-stat-label{display:block;font-size:10px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
 .vpn-stat-value{font-size:18px;font-weight:700;color:#fff;font-family:'Courier New', monospace}
+.vpn-actions{margin-top:12px;display:flex;gap:8px}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
 
 .file-controls{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:12px}

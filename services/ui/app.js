@@ -68,10 +68,14 @@ function showSection(sectionId) {
   if (sectionId === 'home') {
     const hero = document.getElementById('hero');
     const controls = document.getElementById('controls');
+    const vpnPanel = document.getElementById('vpn-panel');
     if (hero) hero.style.display = 'block';
     if (controls) controls.style.display = 'block';
+    if (vpnPanel) vpnPanel.style.display = 'block';
     const navHome = document.getElementById('nav-home');
     if (navHome) navHome.classList.add('active');
+    // Refresh VPN status when showing home
+    checkVPNStatus();
   } else if (sectionId === 'files') {
     const files = document.getElementById('files');
     if (files) files.style.display = 'block';
@@ -100,6 +104,40 @@ function formatUptime(seconds) {
   if (days > 0) return `${days}d ${hours}h`;
   if (hours > 0) return `${hours}h ${mins}m`;
   return `${mins}m`;
+}
+
+function downloadFile(item) {
+  const token = localStorage.getItem('pincerna_token');
+  if (!token) {
+    showMessage('Not authenticated', 'error');
+    return;
+  }
+  
+  // Create download URL with token
+  const downloadUrl = apiBase + '/files/download?path=' + encodeURIComponent(item.path) + '&token=' + encodeURIComponent(token);
+  
+  // Create a temporary link and click it
+  const link = document.createElement('a');
+  link.href = downloadUrl;
+  link.download = item.name;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  
+  showMessage(`Downloading ${item.name}...`, 'info', 2000);
+}
+
+function previewFile(item) {
+  const token = localStorage.getItem('pincerna_token');
+  if (!token) {
+    showMessage('Not authenticated', 'error');
+    return;
+  }
+  
+  // Create preview URL with token
+  const previewUrl = apiBase + '/files/preview?path=' + encodeURIComponent(item.path) + '&token=' + encodeURIComponent(token);
+  window.open(previewUrl, '_blank');
 }
 
 async function loadMetrics() {
@@ -156,15 +194,23 @@ async function loadMetrics() {
 }
 
 let vpnConnected = false;
+let vpnConfigured = true;
 
 async function checkVPNStatus() {
   try {
     const res = await apiFetch('/vpn/status');
     if (res && res.connected !== undefined) {
       vpnConnected = res.connected;
-      updateVPNUI(res.connected);
+      vpnConfigured = res.config_exists !== false;
+      updateVPNUI(res.connected, res);
+      if (res.connected) getVPNStats();
+    } else if (res && res.error) {
+      vpnConnected = false;
+      updateVPNUI(false, { error: res.error });
     }
-  } catch (e) {}
+  } catch (e) {
+    updateVPNUI(false, { error: 'Failed to check VPN status' });
+  }
 }
 
 async function getVPNStats() {
@@ -182,14 +228,18 @@ async function getVPNStats() {
   } catch (e) {}
 }
 
-function updateVPNUI(connected) {
+function updateVPNUI(connected, details = {}) {
   const btn = document.getElementById('btn-vpn');
   const indicator = document.getElementById('vpn-indicator');
   const statusText = document.getElementById('vpn-status-text');
   const vpnPanel = document.getElementById('vpn-panel');
   
   if (btn) {
-    if (connected) {
+    if (details.error) {
+      btn.textContent = 'VPN Error';
+      btn.classList.remove('active');
+      btn.style.background = '#ef4444';
+    } else if (connected) {
       btn.textContent = 'VPN Connected ✓';
       btn.classList.add('active');
       btn.style.background = '#22c55e';
@@ -198,24 +248,38 @@ function updateVPNUI(connected) {
       btn.classList.remove('active');
       btn.style.background = '';
     }
+    btn.disabled = false;
   }
   
   if (indicator) {
-    indicator.className = 'vpn-status-indicator ' + (connected ? 'connected' : 'disconnected');
+    if (details.error) {
+      indicator.className = 'vpn-status-indicator error';
+    } else {
+      indicator.className = 'vpn-status-indicator ' + (connected ? 'connected' : 'disconnected');
+    }
   }
   if (statusText) {
-    statusText.textContent = connected ? 'Connected' : 'Disconnected';
+    if (details.error) {
+      statusText.textContent = 'Error';
+    } else {
+      statusText.textContent = connected ? 'Connected' : 'Disconnected';
+    }
   }
   
-    if (vpnPanel) {
-    vpnPanel.style.display = connected ? 'block' : 'none';
+  // Always show VPN panel on home section for status visibility
+  if (vpnPanel) {
+    const isHomeSection = document.getElementById('hero')?.style.display !== 'none';
+    vpnPanel.style.display = isHomeSection ? 'block' : 'none';
     if (connected) getVPNStats();
   }
 }
 
 async function toggleVPN() {
   const btn = document.getElementById('btn-vpn');
-  if (btn) btn.textContent = vpnConnected ? 'Disconnecting...' : 'Connecting...';
+  if (btn) {
+    btn.textContent = vpnConnected ? 'Disconnecting...' : 'Connecting...';
+    btn.disabled = true;
+  }
   
   try {
     const res = await apiFetch('/vpn/toggle', { method: 'POST' });
@@ -229,9 +293,11 @@ async function toggleVPN() {
       checkVPNStatus();
     }
   } catch (e) {
-    showMessage('VPN toggle failed', 'error');
+    showMessage('VPN toggle failed: ' + e.message, 'error');
     checkVPNStatus();
   }
+  
+  if (btn) btn.disabled = false;
 }
 
 let currentPath = '/';
@@ -360,7 +426,7 @@ function renderFileList(items, path) {
     if (downloadBtn) {
       downloadBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        window.open(apiBase + '/files/download?path=' + encodeURIComponent(item.path), '_blank');
+        downloadFile(item);
       });
     }
 
@@ -548,10 +614,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnMetrics = document.getElementById('btn-metrics');
   if (btnMetrics) btnMetrics.addEventListener('click', loadMetrics);
 
-    const btnRefreshMetrics = document.getElementById('btn-refresh-metrics');
+  const btnRefreshMetrics = document.getElementById('btn-refresh-metrics');
   if (btnRefreshMetrics) btnRefreshMetrics.addEventListener('click', loadMetrics);
 
-    const btnRestart = document.getElementById('btn-restart');
+  // VPN refresh button
+  const btnVpnRefresh = document.getElementById('btn-vpn-refresh');
+  if (btnVpnRefresh) btnVpnRefresh.addEventListener('click', () => {
+    checkVPNStatus();
+    showMessage('VPN status refreshed', 'info', 1500);
+  });
+
+  const btnRestart = document.getElementById('btn-restart');
   if (btnRestart) {
     btnRestart.addEventListener('click', async () => {
       if (!confirm('Are you sure you want to restart the service?')) return;
@@ -592,7 +665,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (ctxDownload) {
     ctxDownload.addEventListener('click', () => {
       if (selectedFile && !selectedFile.is_dir) {
-        window.open(apiBase + '/files/download?path=' + encodeURIComponent(selectedFile.path), '_blank');
+        downloadFile(selectedFile);
       }
       hideContextMenu();
     });
@@ -634,9 +707,15 @@ document.addEventListener('DOMContentLoaded', () => {
     hidePreloader(1500);
   });
 
-    checkVPNStatus();
+  // Initial VPN status check
+  checkVPNStatus();
   
-    setInterval(() => {
+  // Periodic VPN status and stats refresh
+  setInterval(() => {
+    checkVPNStatus();
+  }, 15000);
+  
+  setInterval(() => {
     if (vpnConnected) getVPNStats();
   }, 30000);
 });

@@ -594,14 +594,59 @@ def list_files():
 		return jsonify(error=str(e)), 500
 
 @app.route("/files/download")
-@protected
 def download_file():
+	"""Download a file - supports both Authorization header and token query param"""
+	# Check authorization - first try header, then query param
+	token = request.headers.get('Authorization') or request.args.get('token')
+	if not token:
+		return jsonify(error='Missing token'), 401
+	try:
+		jwt.decode(token, SECRET, algorithms=['HS256'])
+	except:
+		return jsonify(error='Invalid token'), 401
+	
 	path = request.args.get('path', '')
 	full_path = _safe_path(path)
 	if not full_path or not os.path.isfile(full_path):
 		return jsonify(error='File not found'), 404
+	
 	from flask import send_file
-	return send_file(full_path, as_attachment=True)
+	try:
+		# Get the filename for download
+		filename = os.path.basename(full_path)
+		return send_file(
+			full_path,
+			as_attachment=True,
+			download_name=filename
+		)
+	except Exception as e:
+		logging.exception('Download failed')
+		return jsonify(error=str(e)), 500
+
+@app.route("/files/preview")
+def preview_file():
+	"""Preview a file inline - for images, PDFs, etc"""
+	token = request.headers.get('Authorization') or request.args.get('token')
+	if not token:
+		return jsonify(error='Missing token'), 401
+	try:
+		jwt.decode(token, SECRET, algorithms=['HS256'])
+	except:
+		return jsonify(error='Invalid token'), 401
+	
+	path = request.args.get('path', '')
+	full_path = _safe_path(path)
+	if not full_path or not os.path.isfile(full_path):
+		return jsonify(error='File not found'), 404
+	
+	from flask import send_file
+	import mimetypes
+	try:
+		mimetype = mimetypes.guess_type(full_path)[0] or 'application/octet-stream'
+		return send_file(full_path, mimetype=mimetype)
+	except Exception as e:
+		logging.exception('Preview failed')
+		return jsonify(error=str(e)), 500
 
 @app.route("/files/upload", methods=["POST"])
 @protected
@@ -751,14 +796,34 @@ def move_file_endpoint():
 @app.route("/vpn/status")
 @protected
 def vpn_status():
-	
+	"""Get VPN connection status with additional details"""
 	try:
 		import subprocess
 		result = subprocess.run(['ip', 'link', 'show', 'wg0'], capture_output=True, text=True)
-		connected = result.returncode == 0 and 'UP' in result.stdout
-		return jsonify(connected=connected)
-	except:
-		return jsonify(connected=False)
+		is_up = result.returncode == 0 and 'UP' in result.stdout
+		
+		if is_up:
+			# Get additional info
+			wg_result = subprocess.run(['sudo', 'wg', 'show', 'wg0'], capture_output=True, text=True)
+			has_peers = 'peer:' in wg_result.stdout if wg_result.returncode == 0 else False
+			return jsonify(connected=True, interface='wg0', has_peers=has_peers)
+		else:
+			# Check if config exists
+			config_exists = os.path.exists('/etc/wireguard/wg0.conf')
+			return jsonify(connected=False, config_exists=config_exists)
+	except Exception as e:
+		return jsonify(connected=False, error=str(e))
+
+@app.route("/vpn/config")
+@protected
+def vpn_config_info():
+	"""Check if VPN is configured"""
+	try:
+		config_path = '/etc/wireguard/wg0.conf'
+		config_exists = os.path.exists(config_path)
+		return jsonify(configured=config_exists, config_path=config_path)
+	except Exception as e:
+		return jsonify(configured=False, error=str(e))
 
 @app.route("/vpn/toggle", methods=["POST"])
 @protected
@@ -766,16 +831,88 @@ def vpn_toggle():
 	try:
 		import subprocess
 		
+		# Check if config exists first
+		if not os.path.exists('/etc/wireguard/wg0.conf'):
+			return jsonify(error='VPN not configured. Missing /etc/wireguard/wg0.conf'), 400
+		
 		result = subprocess.run(['ip', 'link', 'show', 'wg0'], capture_output=True, text=True)
 		is_up = result.returncode == 0 and 'UP' in result.stdout
+		
 		if is_up:
-			subprocess.run(['sudo', 'wg-quick', 'down', 'wg0'], capture_output=True)
-			return jsonify(connected=False, message='VPN disconnected')
+			down_result = subprocess.run(['sudo', 'wg-quick', 'down', 'wg0'], capture_output=True, text=True)
+			if down_result.returncode != 0:
+				return jsonify(error=f'Failed to disconnect: {down_result.stderr}'), 500
+			return jsonify(connected=False, message='VPN disconnected successfully')
 		else:
-			subprocess.run(['sudo', 'wg-quick', 'up', 'wg0'], capture_output=True)
-			return jsonify(connected=True, message='VPN connected')
+			up_result = subprocess.run(['sudo', 'wg-quick', 'up', 'wg0'], capture_output=True, text=True)
+			if up_result.returncode != 0:
+				error_msg = up_result.stderr.strip() or 'Unknown error'
+				return jsonify(error=f'Failed to connect: {error_msg}'), 500
+			return jsonify(connected=True, message='VPN connected successfully')
 	except Exception as e:
+		logging.exception('VPN toggle failed')
 		return jsonify(error=str(e)), 500
+
+# Cloud API prefix aliases for all endpoints
+@app.route("/cloud/api/health")
+def health_alias():
+	return health()
+
+@app.route("/cloud/api/metrics")
+def metrics_alias():
+	return metrics()
+
+@app.route("/cloud/api/vpn/status")
+def vpn_status_alias():
+	return vpn_status()
+
+@app.route("/cloud/api/vpn/stats")
+def vpn_stats_alias():
+	return vpn_stats()
+
+@app.route("/cloud/api/vpn/config")
+def vpn_config_alias():
+	return vpn_config_info()
+
+@app.route("/cloud/api/vpn/toggle", methods=["POST"])
+def vpn_toggle_alias():
+	return vpn_toggle()
+
+@app.route("/cloud/api/files")
+def files_list_alias():
+	return list_files()
+
+@app.route("/cloud/api/files", methods=["DELETE"])
+def files_delete_alias():
+	return delete_file()
+
+@app.route("/cloud/api/files/download")
+def files_download_alias():
+	return download_file()
+
+@app.route("/cloud/api/files/preview")
+def files_preview_alias():
+	return preview_file()
+
+@app.route("/cloud/api/files/upload", methods=["POST"])
+def files_upload_alias():
+	return upload_file()
+
+@app.route("/cloud/api/files/rename", methods=["POST"])
+def files_rename_alias():
+	return rename_file_endpoint()
+
+@app.route("/cloud/api/files/mkdir", methods=["POST"])
+def files_mkdir_alias():
+	return make_directory()
+
+@app.route("/cloud/api/files/move", methods=["POST"])
+def files_move_alias():
+	return move_file_endpoint()
+
+@app.route("/cloud/api/restart", methods=["POST"])
+def restart_alias():
+	return restart_service()
 
 if __name__ == "__main__":
 	app.run(host="0.0.0.0", port=5002)
