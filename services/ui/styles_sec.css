@@ -57,21 +57,50 @@ body{
 .site-footer{text-align:center;color:var(--muted);padding:28px 0;font-size:0.9rem}
 
 @media (max-width:720px){
-  .container{padding:0 10px;margin:12px auto}
-  .card{padding:14px;margin:12px 0}
-  .brand-text{display:none}
+  .container{padding:0 10px !important;margin:12px auto !important}
+  .card{padding:14px !important;margin:12px 0 !important}
+  .brand-text{display:none !important}
   
-  /* Header mobile layout */
-  .site-header{flex-wrap:wrap;padding:10px 12px;gap:8px}
-  .header-right{width:100%;justify-content:space-between;order:1;gap:8px}
-  .nav{order:2;width:100%;justify-content:center;gap:2px;flex-wrap:wrap}
-  .nav a{margin-left:0;padding:8px 10px;font-size:0.85rem}
-  .user-greeting{font-size:0.85rem;display:none}
-  .signout-link{font-size:0.8rem;padding:6px 10px}
+  /* Header mobile layout - complete rewrite */
+  .site-header{
+    flex-direction:column !important;
+    padding:10px !important;
+    gap:10px !important;
+  }
+  .brand{width:100%;justify-content:center}
+  .header-right{
+    width:100% !important;
+    flex-direction:column !important;
+    align-items:center !important;
+    gap:10px !important;
+  }
+  .nav{
+    width:100% !important;
+    justify-content:center !important;
+    flex-wrap:wrap !important;
+    gap:4px !important;
+    order:0 !important;
+  }
+  .nav a{
+    margin:0 !important;
+    padding:10px 12px !important;
+    font-size:0.9rem !important;
+    flex:1 !important;
+    text-align:center !important;
+    min-width:70px !important;
+  }
+  .user-greeting{display:none !important}
+  .signout-link{
+    width:100% !important;
+    text-align:center !important;
+    padding:10px !important;
+    margin:0 !important;
+    background:rgba(255,255,255,0.05) !important;
+  }
   
   /* Hero section */
-  .card h1{font-size:1.4rem}
-  .card h2{font-size:1rem}
+  #hero h1, .card h1{font-size:1.2rem !important;white-space:normal !important;word-break:break-word}
+  .card h2{font-size:1rem !important}
   .lead{font-size:0.9rem}
   .row{flex-direction:column;align-items:stretch}
   .row > div{display:flex;flex-direction:column;gap:8px}
@@ -119,6 +148,9 @@ body{
   .device-quick-actions{justify-content:center}
   .quick-action{padding:8px 12px;font-size:0.8rem}
   
+  /* Hide grid lines on mobile - they don't render well */
+  .grid-lines{display:none}
+  
   /* Network map */
   .network-map{min-height:auto !important;height:auto !important;padding-bottom:20px}
   .network-map-container{min-height:auto}
@@ -156,9 +188,10 @@ body{
 
 /* Extra small screens */
 @media (max-width:400px){
-  .container{padding:0 8px}
-  .card{padding:12px;margin:8px 0}
-  .nav a{padding:6px 8px;font-size:0.8rem;min-height:40px}
+  .container{padding:0 8px !important}
+  .card{padding:12px !important;margin:8px 0 !important}
+  #hero h1, .card h1{font-size:1rem !important}
+  .nav a{padding:8px 6px !important;font-size:0.75rem !important;min-height:40px;min-width:60px !important}
   .btn{padding:10px 12px;font-size:0.85rem}
   .metrics-grid{grid-template-columns:1fr 1fr;gap:6px}
   .metric-widget{padding:10px 6px}
@@ -178,8 +211,9 @@ body{
 }
 
 
-.preloader{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:9999}
-.preloader-img{width:120px;height:120px;max-width:28vw}
+.preloader{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;box-sizing:border-box}
+.preloader-content{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;width:100%;max-width:300px}
+.preloader-img{width:100px;height:100px}
 .preloader-progress{margin-top:16px}
 .preloader-indicator{color:var(--muted);font-size:0.9rem;margin-top:12px}
 .preloader-steps{list-style:none;padding:6px 0 0 0;margin:4px 0 0 0;max-width:360px;margin-left:auto;margin-right:auto}
