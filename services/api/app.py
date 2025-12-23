@@ -15,7 +15,7 @@ import hashlib
 import base64
 
 app = Flask(__name__)
-SECRET = "bartendershandbook"
+SECRET = os.environ.get('JWT_SECRET', 'bartendershandbook-change-in-production')
 
 
 EMAIL_CODES = {}
@@ -96,7 +96,16 @@ def send_code():
 	data = request.get_json() or {}
 	email = (data.get('email') or '').strip().lower()
 	
-	if email != 'emilvinod@gmail.com':
+	# Load allowed users
+	try:
+		base = os.path.dirname(__file__)
+		allowed_path = os.path.join(base, 'allowed_users.json')
+		with open(allowed_path, 'r', encoding='utf-8') as f:
+			allowed = [e.lower() for e in json.load(f)]
+	except Exception:
+		allowed = ['emilvinod@gmail.com']
+	
+	if email not in allowed:
 		return jsonify(error='unknown_account'), 400
 	
 	code = str(int(100000 + (int(time.time()*1000) % 900000)))
@@ -923,6 +932,18 @@ def scan_device_ports(ip):
 		parts = ip.split('.')
 		if len(parts) != 4 or not all(0 <= int(p) <= 255 for p in parts):
 			return jsonify(error='Invalid IP address'), 400
+		
+		# Only allow scanning private network IPs (security measure)
+		first_octet = int(parts[0])
+		second_octet = int(parts[1])
+		is_private = (
+			first_octet == 10 or  # 10.0.0.0/8
+			(first_octet == 172 and 16 <= second_octet <= 31) or  # 172.16.0.0/12
+			(first_octet == 192 and second_octet == 168) or  # 192.168.0.0/16
+			first_octet == 127  # localhost
+		)
+		if not is_private:
+			return jsonify(error='Can only scan private network addresses'), 400
 	except:
 		return jsonify(error='Invalid IP address'), 400
 	

@@ -1,6 +1,7 @@
 #Python
 __pycache__/
 *.pyc
+*.pyo
 
 #venv
 bin/
@@ -8,9 +9,25 @@ lib/
 lib64/
 include/
 pyvenv.cfg
+venv/
+.venv/
 
 #env
 .env
+.env.local
+.env.*.local
+*.env
+
+#logs
+*.log
+api.log
+
+#secrets - never commit these
+*secret*
+*credentials*
+*.pem
+*.key
 
 #os
 .DS_Store
+Thumbs.db

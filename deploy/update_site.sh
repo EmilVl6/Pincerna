@@ -111,9 +111,16 @@ log_step "2/8" "Checking credentials"
 if [ ! -f "$ENV_FILE" ]; then
     echo "Creating new credentials file at $ENV_FILE"
     echo "You will need to edit this file and add your keys manually."
+    
+    # Generate a random JWT secret
+    JWT_SECRET_GENERATED=$(openssl rand -hex 32)
+    
     cat > "$ENV_FILE" <<EOL
 # Pincerna Environment Configuration
 # Edit this file to add your credentials
+
+# JWT Secret (auto-generated, do not share)
+JWT_SECRET=${JWT_SECRET_GENERATED}
 
 # Google OAuth (from console.cloud.google.com)
 GOOGLE_CLIENT_ID=
@@ -133,6 +140,15 @@ else
     log_success "Credentials file exists at $ENV_FILE (not modified)"
     # Source existing values to check them
     . "$ENV_FILE" 2>/dev/null || true
+    
+    # Add JWT_SECRET if missing from existing file
+    if [ -z "$JWT_SECRET" ]; then
+        JWT_SECRET_GENERATED=$(openssl rand -hex 32)
+        echo "" >> "$ENV_FILE"
+        echo "# JWT Secret (auto-generated)" >> "$ENV_FILE"
+        echo "JWT_SECRET=${JWT_SECRET_GENERATED}" >> "$ENV_FILE"
+        log_success "Added JWT_SECRET to existing config"
+    fi
 fi
 
 # Check if credentials are set
