@@ -142,7 +142,7 @@ else
     . "$ENV_FILE" 2>/dev/null || true
     
     # Add JWT_SECRET if missing from existing file
-    if [ -z "$JWT_SECRET" ]; then
+    if [ -z "${JWT_SECRET:-}" ]; then
         JWT_SECRET_GENERATED=$(openssl rand -hex 32)
         echo "" >> "$ENV_FILE"
         echo "# JWT Secret (auto-generated)" >> "$ENV_FILE"
@@ -153,10 +153,10 @@ fi
 
 # Check if credentials are set
 MISSING_CREDS=""
-[ -z "$GOOGLE_CLIENT_ID" ] && MISSING_CREDS="$MISSING_CREDS GOOGLE_CLIENT_ID"
-[ -z "$GOOGLE_CLIENT_SECRET" ] && MISSING_CREDS="$MISSING_CREDS GOOGLE_CLIENT_SECRET"
-[ -z "$TURNSTILE_SITEKEY" ] && MISSING_CREDS="$MISSING_CREDS TURNSTILE_SITEKEY"
-[ -z "$TURNSTILE_SECRET" ] && MISSING_CREDS="$MISSING_CREDS TURNSTILE_SECRET"
+[ -z "${GOOGLE_CLIENT_ID:-}" ] && MISSING_CREDS="$MISSING_CREDS GOOGLE_CLIENT_ID"
+[ -z "${GOOGLE_CLIENT_SECRET:-}" ] && MISSING_CREDS="$MISSING_CREDS GOOGLE_CLIENT_SECRET"
+[ -z "${TURNSTILE_SITEKEY:-}" ] && MISSING_CREDS="$MISSING_CREDS TURNSTILE_SITEKEY"
+[ -z "${TURNSTILE_SECRET:-}" ] && MISSING_CREDS="$MISSING_CREDS TURNSTILE_SECRET"
 
 if [ -n "$MISSING_CREDS" ]; then
     log_warn "Missing credentials in $ENV_FILE:$MISSING_CREDS"
