@@ -107,12 +107,10 @@ fi
 
 log_step "2/8" "Checking credentials"
 
-# Only create env file if it doesn't exist - NEVER overwrite existing credentials
 if [ ! -f "$ENV_FILE" ]; then
     echo "Creating new credentials file at $ENV_FILE"
     echo "You will need to edit this file and add your keys manually."
     
-    # Generate a random JWT secret
     JWT_SECRET_GENERATED=$(openssl rand -hex 32)
     
     cat > "$ENV_FILE" <<EOL
@@ -138,10 +136,8 @@ EOL
     log_warn "Run: sudo nano $ENV_FILE"
 else
     log_success "Credentials file exists at $ENV_FILE (not modified)"
-    # Source existing values to check them
     . "$ENV_FILE" 2>/dev/null || true
     
-    # Add JWT_SECRET if missing from existing file
     if [ -z "${JWT_SECRET:-}" ]; then
         JWT_SECRET_GENERATED=$(openssl rand -hex 32)
         echo "" >> "$ENV_FILE"
@@ -151,7 +147,6 @@ else
     fi
 fi
 
-# Check if credentials are set
 MISSING_CREDS=""
 [ -z "${GOOGLE_CLIENT_ID:-}" ] && MISSING_CREDS="$MISSING_CREDS GOOGLE_CLIENT_ID"
 [ -z "${GOOGLE_CLIENT_SECRET:-}" ] && MISSING_CREDS="$MISSING_CREDS GOOGLE_CLIENT_SECRET"
@@ -176,7 +171,6 @@ chmod 750 "$FILES_ROOT"
 log_success "File storage ready at $FILES_ROOT"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 log_step "4/8" "Setting up Python environment"
 
 
@@ -263,11 +257,9 @@ if [ -f "$REPO_ROOT/nginx/pincerna_auth.conf.example" ]; then
     ln -sf "$NGINX_AVAILABLE" "$NGINX_ENABLED"
 fi
 
-# Remove default nginx site and any configs referencing snakeoil certs
 rm -f /etc/nginx/sites-enabled/default 2>/dev/null
 find /etc/nginx/sites-enabled -xtype l -delete 2>/dev/null || true
 
-# Disable any config files that reference snakeoil (but not our site)
 for conf in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/*.conf; do
     [ -f "$conf" ] || continue
     [ "$conf" = "$NGINX_ENABLED" ] && continue

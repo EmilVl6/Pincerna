@@ -4,8 +4,6 @@ import datetime
 import logging
 import psutil
 import os
-import smtplib
-from email.message import EmailMessage
 import time
 import json
 import urllib.request
@@ -17,8 +15,6 @@ import base64
 app = Flask(__name__)
 SECRET = os.environ.get('JWT_SECRET', 'bartendershandbook-change-in-production')
 
-
-EMAIL_CODES = {}
 
 OAUTH_STORE = {}
 OAUTH_STATE_FILE = '/tmp/pincerna_oauth_state.json'
@@ -55,105 +51,6 @@ def login():
 	}, SECRET, algorithm="HS256")
 	return jsonify(token=token)
 
-
-def send_smtp_mail(to_addr: str, subject: str, body: str):
-	"""Send mail using configured SMTP. Configuration via env vars:
-	SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM
-	"""
-	host = os.environ.get('SMTP_HOST')
-	port = int(os.environ.get('SMTP_PORT', '0') or 0)
-	user = os.environ.get('SMTP_USER')
-	pwd = os.environ.get('SMTP_PASS')
-	mail_from = os.environ.get('SMTP_FROM') or f'no-reply@{os.environ.get("DOMAIN","emilvinod.com")}'
-	if not host or port == 0:
-		raise RuntimeError('SMTP not configured')
-	msg = EmailMessage()
-	msg['Subject'] = subject
-	msg['From'] = mail_from
-	msg['To'] = to_addr
-	msg.set_content(body)
-	
-	if port == 465:
-		with smtplib.SMTP_SSL(host, port) as s:
-			if user and pwd:
-				s.login(user, pwd)
-			s.send_message(msg)
-	else:
-		with smtplib.SMTP(host, port, timeout=10) as s:
-			s.ehlo()
-			try:
-				s.starttls()
-				s.ehlo()
-			except Exception:
-				pass
-			if user and pwd:
-				s.login(user, pwd)
-			s.send_message(msg)
-
-
-@app.route('/send_code', methods=['POST'])
-def send_code():
-	data = request.get_json() or {}
-	email = (data.get('email') or '').strip().lower()
-	
-	# Load allowed users
-	try:
-		base = os.path.dirname(__file__)
-		allowed_path = os.path.join(base, 'allowed_users.json')
-		with open(allowed_path, 'r', encoding='utf-8') as f:
-			allowed = [e.lower() for e in json.load(f)]
-	except Exception:
-		allowed = ['emilvinod@gmail.com']
-	
-	if email not in allowed:
-		return jsonify(error='unknown_account'), 400
-	
-	code = str(int(100000 + (int(time.time()*1000) % 900000)))
-	expires = int(time.time()) + 10*60
-	EMAIL_CODES[email] = {'code': code, 'expires': expires}
-	
-	try:
-		subject = 'Pincerna sign-in code'
-		body = f'Your Pincerna sign-in code is: {code}\n\nThis code expires in 10 minutes.'
-		send_smtp_mail(email, subject, body)
-		return jsonify(status='sent')
-	except Exception as e:
-		
-		logging.exception('send_code failed')
-		return jsonify(error='send_failed', detail=str(e)), 500
-
-
-@app.route('/verify_code', methods=['POST'])
-def verify_code():
-	data = request.get_json() or {}
-	email = (data.get('email') or '').strip().lower()
-	code = (data.get('code') or '').strip()
-	stored = EMAIL_CODES.get(email)
-	if not stored:
-		return jsonify(error='no_code'), 400
-	if int(time.time()) > stored.get('expires', 0):
-		del EMAIL_CODES[email]
-		return jsonify(error='expired'), 400
-	if code != stored.get('code'):
-		return jsonify(error='invalid'), 400
-	
-	token = jwt.encode({
-		'user': email,
-		'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=12)
-	}, SECRET, algorithm='HS256')
-	
-	try: del EMAIL_CODES[email]
-	except: pass
-	return jsonify(token=token)
-
-
-@app.route('/cloud/api/send_code', methods=['POST'])
-def send_code_alias():
-	return send_code()
-
-@app.route('/cloud/api/verify_code', methods=['POST'])
-def verify_code_alias():
-	return verify_code()
 
 @app.route('/cloud/api/verify_google', methods=['POST'])
 def verify_google_alias():
