@@ -85,7 +85,20 @@ function showSection(sectionId) {
     if (networkPanel) networkPanel.style.display = 'block';
     const navNetwork = document.getElementById('nav-network');
     if (navNetwork) navNetwork.classList.add('active');
-    scanNetwork();  // Auto-scan on open
+    // Update toggle button to reflect current view mode
+    const btn = document.getElementById('btn-toggle-view');
+    if (btn) btn.textContent = viewMode === 'grid' ? 'Map View' : 'Grid View';
+    // Restore saved state or auto-scan if no cached data
+    if (restoreNetworkState() && networkDevices.length > 0) {
+      // Re-render with cached data
+      if (viewMode === 'map') {
+        renderNetworkMap(networkDevices, networkGateway);
+      } else {
+        renderNetworkDevices(networkDevices, networkGateway);
+      }
+    } else {
+      scanNetwork();
+    }
   } else if (sectionId === 'about') {
     const about = document.getElementById('about');
     if (about) about.style.display = 'block';
@@ -264,6 +277,29 @@ function saveDeviceNicknames() {
   } catch (e) {}
 }
 
+// Persist network state to sessionStorage (survives navigation)
+function saveNetworkState() {
+  try {
+    sessionStorage.setItem('pincerna_network_devices', JSON.stringify(networkDevices));
+    sessionStorage.setItem('pincerna_network_gateway', networkGateway);
+    sessionStorage.setItem('pincerna_network_viewmode', viewMode);
+  } catch (e) {}
+}
+
+function restoreNetworkState() {
+  try {
+    const devices = sessionStorage.getItem('pincerna_network_devices');
+    const gateway = sessionStorage.getItem('pincerna_network_gateway');
+    const mode = sessionStorage.getItem('pincerna_network_viewmode');
+    if (devices) networkDevices = JSON.parse(devices);
+    if (gateway) networkGateway = gateway;
+    if (mode) viewMode = mode;
+    return networkDevices.length > 0;
+  } catch (e) {
+    return false;
+  }
+}
+
 function getDeviceDisplayName(device) {
   return deviceNicknames[device.ip] || device.hostname || device.ip;
 }
@@ -301,6 +337,7 @@ async function scanNetwork() {
     if (res && res.devices) {
       networkDevices = res.devices;
       networkGateway = res.gateway || '';
+      saveNetworkState();
       
       // Mark gateway device
       if (networkGateway) {
@@ -702,6 +739,7 @@ async function scanDevicePorts(ip) {
         device.services = res.ports;
         servicesEl.innerHTML = renderDeviceServices(device);
         if (actionsEl) actionsEl.innerHTML = renderQuickActions(device);
+        saveNetworkState(); // Persist port scan results
       }
       
       if (res.ports.length === 0) {
@@ -721,34 +759,45 @@ function renderNetworkMap(devices, gatewayIp) {
   
   container.className = 'network-map-container';
   
-  // Find the gateway/router
-  const gateway = devices.find(d => d.ip === gatewayIp) || devices.find(d => (d.hostname || '').toLowerCase().includes('router'));
+  // Find the gateway/router using multiple detection methods
+  const gateway = devices.find(d => d.ip === gatewayIp) || 
+                  devices.find(d => d.is_gateway) ||
+                  devices.find(d => (d.hostname || '').toLowerCase().includes('router')) ||
+                  devices.find(d => d.ip && d.ip.endsWith('.1'));
   const server = devices.find(d => d.is_server);
   const otherDevices = devices.filter(d => d !== gateway && d !== server);
   
+  // Categorize devices for better layout
+  const networkDeviceTypes = categorizeDevices(otherDevices);
+  
+  // Calculate dynamic height based on device count
+  const deviceRows = Math.ceil(otherDevices.length / 6);
+  const mapHeight = Math.max(520, 340 + (deviceRows * 100));
+  
   // Create SVG for connections
   const mapHtml = `
-    <div class="network-map">
+    <div class="network-map" style="height:${mapHeight}px">
       <svg class="network-lines" id="network-svg"></svg>
       
-      <!-- Internet Cloud -->
-      <div class="map-node internet" id="node-internet">
+      <!-- Tier 1: Internet Cloud -->
+      <div class="map-node internet" id="node-internet" style="top:20px;left:50%;transform:translateX(-50%)">
         <div class="map-node-icon">☁️</div>
         <div class="map-node-label">Internet</div>
       </div>
       
-      <!-- Router/Gateway -->
+      <!-- Tier 2: Router/Gateway -->
       ${gateway ? `
-      <div class="map-node router" id="node-gateway" data-ip="${gateway.ip}">
+      <div class="map-node router" id="node-gateway" data-ip="${gateway.ip}" style="top:100px;left:50%;transform:translateX(-50%)">
         <div class="map-node-icon">📡</div>
         <div class="map-node-label">${getDeviceDisplayName(gateway)}</div>
         <div class="map-node-ip">${gateway.ip}</div>
+        <div class="map-node-badge">Gateway</div>
       </div>
       ` : ''}
       
-      <!-- Server (Pincerna) -->
+      <!-- Tier 3: Server (Pincerna) -->
       ${server ? `
-      <div class="map-node server" id="node-server" data-ip="${server.ip}">
+      <div class="map-node server" id="node-server" data-ip="${server.ip}" style="top:200px;left:50%;transform:translateX(-50%)">
         <div class="map-node-icon">🖥️</div>
         <div class="map-node-label">${getDeviceDisplayName(server)}</div>
         <div class="map-node-ip">${server.ip}</div>
@@ -756,18 +805,9 @@ function renderNetworkMap(devices, gatewayIp) {
       </div>
       ` : ''}
       
-      <!-- Other Devices -->
-      <div class="map-devices-ring" id="devices-ring">
-        ${otherDevices.map((device, i) => `
-          <div class="map-node device ${device.online ? 'online' : 'offline'}" 
-               id="node-${device.ip.replace(/\./g, '-')}" 
-               data-ip="${device.ip}"
-               style="--device-index: ${i}; --total-devices: ${otherDevices.length}">
-            <div class="map-node-icon">${getDeviceIcon(device)}</div>
-            <div class="map-node-label">${getDeviceDisplayName(device)}</div>
-            <div class="map-node-ip">${device.ip}</div>
-          </div>
-        `).join('')}
+      <!-- Tier 4: Client Devices - arranged in rows -->
+      <div class="map-devices-area" id="devices-area">
+        ${renderMapDevices(otherDevices)}
       </div>
     </div>
     
@@ -806,6 +846,62 @@ function renderNetworkMap(devices, gatewayIp) {
       document.getElementById('map-device-detail').style.display = 'none';
     });
   }
+}
+
+function categorizeDevices(devices) {
+  // Group devices by type for smarter layout
+  const categories = {
+    computers: [],
+    mobile: [],
+    iot: [],
+    other: []
+  };
+  
+  devices.forEach(device => {
+    const icon = getDeviceIcon(device);
+    if (['💻', '🖥️', '🖳', '🖴'].includes(icon)) {
+      categories.computers.push(device);
+    } else if (['📱', '📲'].includes(icon)) {
+      categories.mobile.push(device);
+    } else if (['💡', '🔊', '📺', '🎮', '📷', '🖨️'].includes(icon)) {
+      categories.iot.push(device);
+    } else {
+      categories.other.push(device);
+    }
+  });
+  
+  return categories;
+}
+
+function renderMapDevices(devices) {
+  if (!devices.length) return '';
+  
+  // Calculate positions in a grid layout
+  const perRow = Math.min(6, devices.length);
+  const nodeWidth = 110;
+  const nodeGap = 20;
+  const totalWidth = perRow * nodeWidth + (perRow - 1) * nodeGap;
+  
+  return devices.map((device, i) => {
+    const row = Math.floor(i / perRow);
+    const col = i % perRow;
+    const devicesInRow = Math.min(perRow, devices.length - row * perRow);
+    const rowWidth = devicesInRow * nodeWidth + (devicesInRow - 1) * nodeGap;
+    const xOffset = col * (nodeWidth + nodeGap) + (nodeWidth / 2);
+    const leftPercent = ((xOffset / rowWidth) * 100);
+    const yPos = 300 + row * 100;
+    
+    return `
+      <div class="map-node device ${device.online ? 'online' : 'offline'}" 
+           id="node-${device.ip.replace(/\./g, '-')}" 
+           data-ip="${device.ip}"
+           style="position:absolute;top:${yPos}px;left:calc(${(col + 0.5) * (100 / devicesInRow)}% - 55px);width:100px">
+        <div class="map-node-icon">${getDeviceIcon(device)}</div>
+        <div class="map-node-label">${getDeviceDisplayName(device)}</div>
+        <div class="map-node-ip">${device.ip}</div>
+      </div>
+    `;
+  }).join('');
 }
 
 function drawNetworkLines() {
@@ -889,6 +985,7 @@ async function scanDevicePortsForMap(ip) {
       const device = networkDevices.find(d => d.ip === ip);
       if (device) {
         device.services = res.ports;
+        saveNetworkState(); // Persist port scan results
         const actionsEl = document.getElementById('detail-actions');
         const servicesEl = document.getElementById('detail-services');
         if (actionsEl) actionsEl.innerHTML = renderQuickActions(device) || '<span class="no-actions">No remote access ports</span>';
@@ -900,14 +997,15 @@ async function scanDevicePortsForMap(ip) {
 
 function toggleNetworkView() {
   viewMode = viewMode === 'grid' ? 'map' : 'grid';
+  saveNetworkState();
   const btn = document.getElementById('btn-toggle-view');
   if (btn) btn.textContent = viewMode === 'grid' ? 'Map View' : 'Grid View';
   
   if (networkDevices.length > 0) {
     if (viewMode === 'map') {
-      renderNetworkMap(networkDevices);
+      renderNetworkMap(networkDevices, networkGateway);
     } else {
-      renderNetworkDevices(networkDevices);
+      renderNetworkDevices(networkDevices, networkGateway);
     }
   }
 }
