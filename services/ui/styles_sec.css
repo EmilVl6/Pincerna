@@ -305,17 +305,17 @@ body::after{
 .btn.warn:hover{background:#c0392b}
 
 .metrics-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));gap:12px;margin-bottom:16px}
-.metric-widget{background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);border:2px solid #0f3460;padding:16px;text-align:center;position:relative;overflow:hidden}
+.metric-widget{background:#ffffff;border:1px solid rgba(0,0,0,0.06);padding:16px;text-align:center;position:relative;overflow:hidden;color:#000}
 .metric-widget::before{display:none}
-.metric-icon{font-size:24px;margin-bottom:8px}
-.metric-value{font-size:28px;font-weight:700;color:#fff;font-family:'Courier New', monospace}
-.metric-label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#9aa0a6;margin-top:4px;font-weight:600}
+.metric-icon{font-size:24px;margin-bottom:8px;color:inherit}
+.metric-value{font-size:28px;font-weight:700;color:#000;font-family:'Courier New', monospace}
+.metric-label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#333;margin-top:4px;font-weight:600}
 .metric-sub{font-size:10px;color:var(--muted);margin-top:4px}
 .metrics-refresh{display:flex;align-items:center;gap:12px;margin-top:12px}
 .metrics-refresh .meta{color:var(--muted);font-size:0.85rem}
 
 .vpn-stats{display:flex;flex-direction:column;gap:16px}
-.vpn-status-indicator{display:flex;align-items:center;gap:12px;padding:12px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.05)}
+.vpn-status-indicator{display:flex;align-items:center;gap:12px;padding:12px;background:rgba(255,255,255,0.95);border:1px solid rgba(0,0,0,0.06)}
 .vpn-dot{width:12px;height:12px;background:#666;animation:none}
 .vpn-status-indicator.connected .vpn-dot{background:#22c55e;box-shadow:0 0 12px #22c55e;animation:pulse 2s infinite}
 .vpn-status-indicator.disconnected .vpn-dot{background:#ef4444}
@@ -323,11 +323,11 @@ body::after{
 .vpn-status-indicator.error #vpn-status-text{color:#f59e0b}
 .vpn-status-indicator.not-configured .vpn-dot{background:#6b7280}
 .vpn-status-indicator.not-configured #vpn-status-text{color:#9ca3af}
-#vpn-status-text{font-weight:600;color:#fff}
+#vpn-status-text{font-weight:600;color:#000}
 .vpn-details{display:grid;grid-template-columns:repeat(3, 1fr);gap:12px}
-.vpn-stat{background:rgba(0,0,0,0.15);padding:12px;text-align:center;border:1px solid rgba(255,255,255,0.03)}
+.vpn-stat{background:#ffffff;padding:12px;text-align:center;border:1px solid rgba(0,0,0,0.04)}
 .vpn-stat-label{display:block;font-size:10px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
-.vpn-stat-value{font-size:18px;font-weight:700;color:#fff;font-family:'Courier New', monospace}
+.vpn-stat-value{font-size:18px;font-weight:700;color:#000;font-family:'Courier New', monospace}
 .vpn-actions{margin-top:12px;display:flex;gap:8px}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
 
@@ -374,16 +374,16 @@ body::after{
 @keyframes spin{to{transform:rotate(360deg)}}
 
 .network-devices-grid{position:relative;display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:16px}
-.network-device{background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);border:1px solid #0f3460;padding:16px;position:relative;transition:all 0.2s ease;z-index:1}
-.network-device:hover{border-color:var(--primary);transform:translateY(-2px);box-shadow:0 8px 24px rgba(255,130,0,0.15)}
+.network-device{background:#ffffff;border:1px solid rgba(0,0,0,0.06);padding:16px;position:relative;transition:all 0.2s ease;z-index:1;color:#000}
+.network-device:hover{border-color:rgba(0,0,0,0.12);transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,0.06)}
 .network-device.online{border-left:3px solid #22c55e}
-.network-device.offline{border-left:3px solid #666;opacity:0.6}
+.network-device.offline{border-left:3px solid #666;opacity:0.9}
 .network-device.server{border-left:3px solid var(--primary)}
 
 .device-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .device-header-info{flex:1;min-width:0}
-.device-icon{font-size:28px;filter:drop-shadow(0 0 6px rgba(255,130,0,0.3))}
-.device-name{font-weight:600;color:#fff;font-size:0.95rem;word-break:break-word}
+.device-icon{font-size:28px;color:inherit;filter:none}
+.device-name{font-weight:600;color:#000;font-size:0.95rem;word-break:break-word}
 .device-hostname{font-size:0.75rem;color:var(--muted);margin-top:2px}
 .device-type{font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px}
 .device-edit-btn{background:transparent;border:none;color:var(--muted);cursor:pointer;padding:4px 8px;font-size:14px;opacity:0;transition:opacity 0.2s}
