@@ -85,17 +85,9 @@ function showSection(sectionId) {
     if (networkPanel) networkPanel.style.display = 'block';
     const navNetwork = document.getElementById('nav-network');
     if (navNetwork) navNetwork.classList.add('active');
-    // Update toggle button to reflect current view mode
-    const btn = document.getElementById('btn-toggle-view');
-    if (btn) btn.textContent = viewMode === 'grid' ? 'Map View' : 'Grid View';
     // Restore saved state or auto-scan if no cached data
     if (restoreNetworkState() && networkDevices.length > 0) {
-      // Re-render with cached data
-      if (viewMode === 'map') {
-        renderNetworkMap(networkDevices, networkGateway);
-      } else {
-        renderNetworkDevices(networkDevices, networkGateway);
-      }
+      renderNetworkDevices(networkDevices, networkGateway);
     } else {
       scanNetwork();
     }
@@ -259,7 +251,6 @@ async function getVPNStats() {
 let networkDevices = [];
 let isScanning = false;
 let deviceNicknames = {};
-let viewMode = 'grid'; // 'grid' or 'map'
 let networkGateway = '';  // Store gateway IP for device classification
 
 // Load saved nicknames from localStorage
@@ -281,7 +272,6 @@ function saveNetworkState() {
   try {
     sessionStorage.setItem('pincerna_network_devices', JSON.stringify(networkDevices));
     sessionStorage.setItem('pincerna_network_gateway', networkGateway);
-    sessionStorage.setItem('pincerna_network_viewmode', viewMode);
   } catch (e) {}
 }
 
@@ -289,10 +279,8 @@ function restoreNetworkState() {
   try {
     const devices = sessionStorage.getItem('pincerna_network_devices');
     const gateway = sessionStorage.getItem('pincerna_network_gateway');
-    const mode = sessionStorage.getItem('pincerna_network_viewmode');
     if (devices) networkDevices = JSON.parse(devices);
     if (gateway) networkGateway = gateway;
-    if (mode) viewMode = mode;
     return networkDevices.length > 0;
   } catch (e) {
     return false;
@@ -355,11 +343,7 @@ async function scanNetwork() {
       if (res.devices.length === 0) {
         if (emptyEl) emptyEl.style.display = 'block';
       } else {
-        if (viewMode === 'map') {
-          renderNetworkMap(res.devices, networkGateway);
-        } else {
-          renderNetworkDevices(res.devices, networkGateway);
-        }
+        renderNetworkDevices(res.devices, networkGateway);
       }
     } else if (res && res.error) {
       showMessage('Network scan failed: ' + res.error, 'error');
@@ -737,265 +721,6 @@ async function scanDevicePorts(ip) {
     }
   } catch (e) {
     servicesEl.innerHTML = '<span style="font-size:0.75rem;color:var(--muted)">Scan failed</span>';
-  }
-}
-
-// ==================== NETWORK MAP ====================
-
-function renderNetworkMap(devices, gatewayIp) {
-  const container = document.getElementById('network-devices');
-  if (!container) return;
-  
-  container.className = 'network-map-container';
-  
-  // Find the gateway/router using multiple detection methods
-  const gateway = devices.find(d => d.ip === gatewayIp) || 
-                  devices.find(d => d.is_gateway) ||
-                  devices.find(d => (d.hostname || '').toLowerCase().includes('router')) ||
-                  devices.find(d => d.ip && d.ip.endsWith('.1'));
-  const server = devices.find(d => d.is_server);
-  const otherDevices = devices.filter(d => d !== gateway && d !== server);
-  
-  // Categorize devices for better layout
-  const networkDeviceTypes = categorizeDevices(otherDevices);
-  
-  // Calculate dynamic height based on device count
-  const deviceRows = Math.ceil(otherDevices.length / 6);
-  const mapHeight = Math.max(520, 340 + (deviceRows * 100));
-  
-  // Create SVG for connections
-  const mapHtml = `
-    <div class="network-map" style="height:${mapHeight}px">
-      <svg class="network-lines" id="network-svg"></svg>
-      
-      <!-- Tier 1: Internet Cloud -->
-      <div class="map-node internet" id="node-internet" style="top:20px;left:50%;transform:translateX(-50%)">
-        <div class="map-node-icon">☁️</div>
-        <div class="map-node-label">Internet</div>
-      </div>
-      
-      <!-- Tier 2: Router/Gateway -->
-      ${gateway ? `
-      <div class="map-node router" id="node-gateway" data-ip="${gateway.ip}" style="top:100px;left:50%;transform:translateX(-50%)">
-        <div class="map-node-icon">📡</div>
-        <div class="map-node-label">${getDeviceDisplayName(gateway)}</div>
-        <div class="map-node-ip">${gateway.ip}</div>
-        <div class="map-node-badge">Gateway</div>
-      </div>
-      ` : ''}
-      
-      <!-- Tier 3: Server (Pincerna) -->
-      ${server ? `
-      <div class="map-node server" id="node-server" data-ip="${server.ip}" style="top:200px;left:50%;transform:translateX(-50%)">
-        <div class="map-node-icon">🖥️</div>
-        <div class="map-node-label">${getDeviceDisplayName(server)}</div>
-        <div class="map-node-ip">${server.ip}</div>
-        <div class="map-node-badge">This Server</div>
-      </div>
-      ` : ''}
-      
-      <!-- Tier 4: Client Devices - arranged in rows -->
-      <div class="map-devices-area" id="devices-area">
-        ${renderMapDevices(otherDevices)}
-      </div>
-    </div>
-    
-    <!-- Device Detail Panel -->
-    <div class="map-device-detail" id="map-device-detail" style="display:none">
-      <div class="detail-header">
-        <span class="detail-icon" id="detail-icon"></span>
-        <div class="detail-info">
-          <div class="detail-name" id="detail-name"></div>
-          <div class="detail-ip" id="detail-ip"></div>
-        </div>
-        <button class="detail-close" id="detail-close">✕</button>
-      </div>
-      <div class="detail-actions" id="detail-actions"></div>
-      <div class="detail-services" id="detail-services"></div>
-    </div>
-  `;
-  
-  container.innerHTML = mapHtml;
-  
-  // Draw connection lines after a brief delay to let layout settle
-  setTimeout(() => drawNetworkLines(), 100);
-  
-  // Add click handlers for nodes
-  container.querySelectorAll('.map-node[data-ip]').forEach(node => {
-    node.addEventListener('click', () => {
-      const ip = node.dataset.ip;
-      showMapDeviceDetail(ip);
-    });
-  });
-  
-  // Close detail panel
-  const closeBtn = document.getElementById('detail-close');
-  if (closeBtn) {
-    closeBtn.addEventListener('click', () => {
-      document.getElementById('map-device-detail').style.display = 'none';
-    });
-  }
-}
-
-function categorizeDevices(devices) {
-  // Group devices by type for smarter layout
-  const categories = {
-    computers: [],
-    mobile: [],
-    iot: [],
-    other: []
-  };
-  
-  devices.forEach(device => {
-    const icon = getDeviceIcon(device);
-    if (['💻', '🖥️', '🖳', '🖴'].includes(icon)) {
-      categories.computers.push(device);
-    } else if (['📱', '📲'].includes(icon)) {
-      categories.mobile.push(device);
-    } else if (['💡', '🔊', '📺', '🎮', '📷', '🖨️'].includes(icon)) {
-      categories.iot.push(device);
-    } else {
-      categories.other.push(device);
-    }
-  });
-  
-  return categories;
-}
-
-function renderMapDevices(devices) {
-  if (!devices.length) return '';
-  
-  // Calculate positions in a grid layout
-  const perRow = Math.min(6, devices.length);
-  const nodeWidth = 110;
-  const nodeGap = 20;
-  const totalWidth = perRow * nodeWidth + (perRow - 1) * nodeGap;
-  
-  return devices.map((device, i) => {
-    const row = Math.floor(i / perRow);
-    const col = i % perRow;
-    const devicesInRow = Math.min(perRow, devices.length - row * perRow);
-    const rowWidth = devicesInRow * nodeWidth + (devicesInRow - 1) * nodeGap;
-    const xOffset = col * (nodeWidth + nodeGap) + (nodeWidth / 2);
-    const leftPercent = ((xOffset / rowWidth) * 100);
-    const yPos = 300 + row * 100;
-    
-    return `
-      <div class="map-node device ${device.online ? 'online' : 'offline'}" 
-           id="node-${device.ip.replace(/\./g, '-')}" 
-           data-ip="${device.ip}"
-           style="position:absolute;top:${yPos}px;left:calc(${(col + 0.5) * (100 / devicesInRow)}% - 55px);width:100px">
-        <div class="map-node-icon">${getDeviceIcon(device)}</div>
-        <div class="map-node-label">${getDeviceDisplayName(device)}</div>
-        <div class="map-node-ip">${device.ip}</div>
-      </div>
-    `;
-  }).join('');
-}
-
-function drawNetworkLines() {
-  const svg = document.getElementById('network-svg');
-  if (!svg) return;
-  
-  const container = svg.parentElement;
-  const rect = container.getBoundingClientRect();
-  svg.setAttribute('width', rect.width);
-  svg.setAttribute('height', rect.height);
-  
-  let lines = '';
-  
-  const internet = document.getElementById('node-internet');
-  const gateway = document.getElementById('node-gateway');
-  const server = document.getElementById('node-server');
-  
-  // Helper to get center of element relative to container
-  function getCenter(el) {
-    if (!el) return null;
-    const r = el.getBoundingClientRect();
-    return {
-      x: r.left + r.width / 2 - rect.left,
-      y: r.top + r.height / 2 - rect.top
-    };
-  }
-  
-  // Internet to Gateway
-  const internetPos = getCenter(internet);
-  const gatewayPos = getCenter(gateway);
-  const serverPos = getCenter(server);
-  
-  if (internetPos && gatewayPos) {
-    lines += `<line x1="${internetPos.x}" y1="${internetPos.y}" x2="${gatewayPos.x}" y2="${gatewayPos.y}" class="network-line primary"/>`;
-  }
-  
-  // Gateway to Server
-  if (gatewayPos && serverPos) {
-    lines += `<line x1="${gatewayPos.x}" y1="${gatewayPos.y}" x2="${serverPos.x}" y2="${serverPos.y}" class="network-line primary"/>`;
-  }
-  
-  // Gateway to all devices
-  document.querySelectorAll('.map-node.device').forEach(node => {
-    const pos = getCenter(node);
-    if (gatewayPos && pos) {
-      const isOnline = node.classList.contains('online');
-      lines += `<line x1="${gatewayPos.x}" y1="${gatewayPos.y}" x2="${pos.x}" y2="${pos.y}" class="network-line ${isOnline ? '' : 'offline'}"/>`;
-    }
-  });
-  
-  svg.innerHTML = lines;
-}
-
-function showMapDeviceDetail(ip) {
-  const device = networkDevices.find(d => d.ip === ip);
-  if (!device) return;
-  
-  const panel = document.getElementById('map-device-detail');
-  const iconEl = document.getElementById('detail-icon');
-  const nameEl = document.getElementById('detail-name');
-  const ipEl = document.getElementById('detail-ip');
-  const actionsEl = document.getElementById('detail-actions');
-  const servicesEl = document.getElementById('detail-services');
-  
-  if (iconEl) iconEl.textContent = getDeviceIcon(device);
-  if (nameEl) nameEl.textContent = getDeviceDisplayName(device);
-  if (ipEl) ipEl.textContent = device.ip;
-  if (actionsEl) actionsEl.innerHTML = renderQuickActions(device) || '<span class="no-actions">Scan for services...</span>';
-  if (servicesEl) servicesEl.innerHTML = renderDeviceServices(device);
-  
-  if (panel) panel.style.display = 'block';
-  
-  // Trigger port scan
-  scanDevicePortsForMap(ip);
-}
-
-async function scanDevicePortsForMap(ip) {
-  try {
-    const res = await apiFetch(`/network/device/${ip}/ports`);
-    if (res && res.ports) {
-      const device = networkDevices.find(d => d.ip === ip);
-      if (device) {
-        device.services = res.ports;
-        saveNetworkState(); // Persist port scan results
-        const actionsEl = document.getElementById('detail-actions');
-        const servicesEl = document.getElementById('detail-services');
-        if (actionsEl) actionsEl.innerHTML = renderQuickActions(device) || '<span class="no-actions">No remote access ports</span>';
-        if (servicesEl) servicesEl.innerHTML = renderDeviceServices(device);
-      }
-    }
-  } catch (e) {}
-}
-
-function toggleNetworkView() {
-  viewMode = viewMode === 'grid' ? 'map' : 'grid';
-  saveNetworkState();
-  const btn = document.getElementById('btn-toggle-view');
-  if (btn) btn.textContent = viewMode === 'grid' ? 'Map View' : 'Grid View';
-  
-  if (networkDevices.length > 0) {
-    if (viewMode === 'map') {
-      renderNetworkMap(networkDevices, networkGateway);
-    } else {
-      renderNetworkDevices(networkDevices, networkGateway);
-    }
   }
 }
 
@@ -1452,11 +1177,8 @@ document.addEventListener('DOMContentLoaded', () => {
   
   const btnScanNetwork = document.getElementById('btn-scan-network');
   if (btnScanNetwork) btnScanNetwork.addEventListener('click', scanNetwork);
-  
-  const btnToggleView = document.getElementById('btn-toggle-view');
-  if (btnToggleView) btnToggleView.addEventListener('click', toggleNetworkView);
 
-    const fileInput = document.getElementById('file-input');
+  const fileInput = document.getElementById('file-input');
   if (fileInput) {
     fileInput.addEventListener('change', (ev) => {
       const files = ev.target.files;

@@ -94,6 +94,7 @@ body{
     text-align:center !important;
     min-width:auto !important;
     white-space:nowrap !important;
+    justify-content:center !important;
   }
   .user-greeting{display:none !important}
   .signout-link{
