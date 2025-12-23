@@ -14,7 +14,7 @@ VENV_PATH="$REPO_ROOT/venv"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
+BLUE='\033[38;2;255;122;0m'
 NC='\033[0m' 
 
 
@@ -70,9 +70,30 @@ get_credential() {
 
 
 echo ""
-echo -e "${BLUE}=========================================${NC}"
-echo -e "${BLUE}   Pincerna Complete Installer v2.0     ${NC}"
-echo -e "${BLUE}=========================================${NC}"
+echo -ne "${BLUE}"
+cat <<'BANNER'
+                        +++++++++++++           
+             .++++++++++++++++++++       
+         +=. :++++++++++++++++++++     
+     +++++=. :++++++++++++++++++++   
+    ++++++++-..-+++++++++++++++++++  
+ +++++++++++-  =++++++++++++++++++ 
++++++++++++++:..=+++++++++++++++++
+++++++++++++++=. .++++++++++++++++
++++++++++++++++... .++++++++++++++
++++++++++++++++..+=. :++++++++++++
++++++++++++++++..+++=..-++++++++++
++++++++++++++++.:+++++=..+++++++++
++++++++++++++++.:+++++++=.:+++++++
+ +++++++++++++++.:++++++++++.=++++ 
+    ++++++++++++++.-+++++++++++:-++  
+     +++++++++++++:-++++++++++++++   
+         +++++++++++:=++++++++++++     
+             +++++++++.-++++++++++       
+                    *++++++++++++++           
+BANNER
+echo -ne "${NC}"
+echo -e "${BLUE}    Pincerna Installer v1.0-beta    ${NC}"
 echo ""
 
 check_root
@@ -80,7 +101,7 @@ check_root
 
 
 
-log_step "1/8" "Installing system dependencies"
+log_step "1/7" "Installing system dependencies"
 
 
 PACKAGES="nginx python3 python3-venv python3-pip rsync curl openssl nmap"
@@ -105,7 +126,7 @@ fi
 
 
 
-log_step "2/8" "Checking credentials"
+log_step "2/7" "Checking credentials"
 
 if [ ! -f "$ENV_FILE" ]; then
     echo "Creating new credentials file at $ENV_FILE"
@@ -163,7 +184,7 @@ fi
 
 
 
-log_step "3/8" "Setting up file storage"
+log_step "3/7" "Setting up file storage"
 
 mkdir -p "$FILES_ROOT"
 chown www-data:www-data "$FILES_ROOT"
@@ -171,7 +192,7 @@ chmod 750 "$FILES_ROOT"
 log_success "File storage ready at $FILES_ROOT"
 
 
-log_step "4/8" "Setting up Python environment"
+log_step "4/7" "Setting up Python environment"
 
 
 if [ ! -d "$VENV_PATH" ]; then
