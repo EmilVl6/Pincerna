@@ -221,7 +221,6 @@ def oauth_callback():
 	_load_oauth_store()
 	stored = OAUTH_STORE.get(state)
 	if not stored or stored.get('expires',0) < int(time.time()):
-		# State expired or not found - show error instead of silent redirect
 		return _access_denied_page("Session expired. Please try signing in again."), 200
 	
 	code_verifier = stored.get('code_verifier')
@@ -433,7 +432,6 @@ def list_files():
 @app.route("/files/download")
 def download_file():
 	"""Download a file - supports both Authorization header and token query param"""
-	# Check authorization - first try header, then query param
 	token = request.headers.get('Authorization') or request.args.get('token')
 	if not token:
 		return jsonify(error='Missing token'), 401
@@ -449,7 +447,6 @@ def download_file():
 	
 	from flask import send_file
 	try:
-		# Get the filename for download
 		filename = os.path.basename(full_path)
 		return send_file(
 			full_path,
@@ -630,21 +627,16 @@ def move_file_endpoint():
 	except Exception as e:
 		return jsonify(error=str(e)), 500
 
-# ==================== NETWORK SCANNING ====================
-
 def get_local_network_range():
 	"""Get the local network CIDR range"""
 	import subprocess
 	try:
-		# Get default gateway interface IP
 		result = subprocess.run(['ip', 'route', 'get', '1.1.1.1'], capture_output=True, text=True)
 		if result.returncode == 0:
-			# Parse output like: "1.1.1.1 via 192.168.1.1 dev eth0 src 192.168.1.100"
 			parts = result.stdout.split()
 			for i, part in enumerate(parts):
 				if part == 'src' and i + 1 < len(parts):
 					local_ip = parts[i + 1]
-					# Assume /24 network
 					prefix = '.'.join(local_ip.split('.')[:3])
 					return f"{prefix}.0/24", local_ip
 	except:
@@ -662,7 +654,6 @@ def network_scan():
 		network_range, server_ip = get_local_network_range()
 		devices = []
 		
-		# Try nmap first (fast and accurate)
 		try:
 			result = subprocess.run(
 				['nmap', '-sn', '-oG', '-', network_range],
@@ -686,7 +677,6 @@ def network_scan():
 						}
 						devices.append(device)
 		except (FileNotFoundError, subprocess.TimeoutExpired):
-			# Fallback: use ARP table
 			result = subprocess.run(['ip', 'neigh'], capture_output=True, text=True)
 			if result.returncode == 0:
 				for line in result.stdout.split('\n'):
@@ -705,7 +695,6 @@ def network_scan():
 							}
 							devices.append(device)
 		
-		# Add the server itself
 		if not any(d['ip'] == server_ip for d in devices):
 			devices.insert(0, {
 				'ip': server_ip,
@@ -715,10 +704,8 @@ def network_scan():
 				'services': [{'port': 80, 'name': 'http'}, {'port': 443, 'name': 'https'}]
 			})
 		
-		# Sort: server first, then by IP
 		devices.sort(key=lambda d: (not d.get('is_server'), tuple(map(int, d['ip'].split('.')))))
 		
-		# Get gateway IP
 		gateway_ip = ''
 		try:
 			gw_result = subprocess.run(['ip', 'route'], capture_output=True, text=True)
@@ -745,7 +732,7 @@ def get_hostname(ip):
 	import socket
 	try:
 		hostname = socket.gethostbyaddr(ip)[0]
-		return hostname.split('.')[0]  # Return short hostname
+		return hostname.split('.')[0]
 	except:
 		return ''
 
@@ -755,20 +742,18 @@ def scan_device_ports(ip):
 	"""Scan common ports on a device"""
 	import socket
 	
-	# Validate IP format
 	try:
 		parts = ip.split('.')
 		if len(parts) != 4 or not all(0 <= int(p) <= 255 for p in parts):
 			return jsonify(error='Invalid IP address'), 400
 		
-		# Only allow scanning private network IPs (security measure)
 		first_octet = int(parts[0])
 		second_octet = int(parts[1])
 		is_private = (
-			first_octet == 10 or  # 10.0.0.0/8
-			(first_octet == 172 and 16 <= second_octet <= 31) or  # 172.16.0.0/12
-			(first_octet == 192 and second_octet == 168) or  # 192.168.0.0/16
-			first_octet == 127  # localhost
+			first_octet == 10 or
+			(first_octet == 172 and 16 <= second_octet <= 31) or
+			(first_octet == 192 and second_octet == 168) or
+			first_octet == 127
 		)
 		if not is_private:
 			return jsonify(error='Can only scan private network addresses'), 400
@@ -812,7 +797,6 @@ def network_info():
 	try:
 		network_range, server_ip = get_local_network_range()
 		
-		# Get gateway
 		gateway = ''
 		try:
 			result = subprocess.run(['ip', 'route'], capture_output=True, text=True)
@@ -823,7 +807,6 @@ def network_info():
 		except:
 			pass
 		
-		# Get hostname
 		import socket
 		hostname = socket.gethostname()
 		
@@ -836,7 +819,6 @@ def network_info():
 	except Exception as e:
 		return jsonify(error=str(e)), 500
 
-# Cloud API prefix aliases for all endpoints
 @app.route("/cloud/api/health")
 def health_alias():
 	return health()
