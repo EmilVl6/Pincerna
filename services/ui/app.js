@@ -544,16 +544,16 @@ function getFileIcon(name, isDir) {
   'exe': '⚙',
   'sh': '⚙',
   'bat': '⚙'
-}
-;
+  };
   return icons[ext] || '🗎';
 }
 
 function renderFileList(items, path) {
   const out = document.getElementById('file-list');
+  if (!out) return;
   out.innerHTML = '';
 
-    if (path && path !== '/') {
+  if (path && path !== '/') {
     const upDiv = document.createElement('div');
     upDiv.className = 'file-entry file-dir';
     upDiv.innerHTML = `
