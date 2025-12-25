@@ -22,6 +22,17 @@ function showUserGreeting() {
   }
 }
 
+async function logout() {
+  try {
+    await apiFetch('/auth/logout', { method: 'POST' });
+  } catch (e) {
+    // ignore network errors during logout
+  }
+  localStorage.removeItem('pincerna_token');
+  localStorage.removeItem('pincerna_user');
+  window.location.href = 'auth.html';
+}
+
 async function loadStreamingFiles() {
   const filesEl = document.getElementById('streaming-files');
   if (!filesEl) return;
