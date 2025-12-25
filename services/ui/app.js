@@ -9,6 +9,19 @@ function getUserInfo() {
   return null;
 }
 
+function showUserGreeting() {
+  const info = getUserInfo();
+  const el = document.getElementById('user-greeting');
+  if (!el) return;
+  if (info) {
+    const name = info.name || (info.email ? info.email.split('@')[0] : null);
+    if (name) el.textContent = `Hi, ${name}`;
+    else el.textContent = '';
+  } else {
+    el.textContent = '';
+  }
+}
+
 async function loadStreamingFiles() {
   const filesEl = document.getElementById('streaming-files');
   if (!filesEl) return;
