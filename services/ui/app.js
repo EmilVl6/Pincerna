@@ -4,78 +4,169 @@ const $ = sel => document.querySelector(sel);
 function getUserInfo() {
   try {
     const raw = localStorage.getItem('pincerna_user');
-    if (raw) return JSON.parse(raw);
-  } catch (e) {}
-  return null;
-}
+async function loadStreamingFiles() {
+  const filesEl = document.getElementById('streaming-files');
+  if (!filesEl) return;
+  try {
+    // Fetch indexed video files from the background indexer
+    let res = await apiFetch('/streaming/index');
+    if (res && res.error === 'server_returned_html') {
+      // try to fetch raw HTML for debugging and log it to console
+      try {
+        const raw = await fetch(apiBase + '/streaming/index');
+        const body = await raw.text();
+        console.error('streaming/index returned HTML:', body.substring(0, 2000));
+      } catch (e) {
+        console.error('Failed to fetch raw streaming/index HTML', e);
+      }
+      // fall back to unindexed scan endpoint
+      const fallback = await apiFetch('/streaming/videos');
+      if (fallback && fallback.files) {
+        res = fallback;
+      } else {
+        showMessage('Server returned HTML for streaming index; check backend logs', 'error', 6000);
+        filesEl.innerHTML = '';
+        return;
+      }
+    }
 
-function showUserGreeting() {
-  const user = getUserInfo();
-  const greetEl = document.getElementById('user-greeting');
-  const titleEl = document.getElementById('welcome-title');
-  if (user && user.given_name) {
-    if (greetEl) greetEl.textContent = 'Hi, ' + user.given_name;
-    if (titleEl) titleEl.textContent = 'Hi ' + user.given_name + '!';
-  } else if (user && user.name) {
-    if (greetEl) greetEl.textContent = 'Hi, ' + user.name.split(' ')[0];
-    if (titleEl) titleEl.textContent = 'Hi ' + user.name.split(' ')[0] + '!';
+    if (res && res.files) {
+      // replace heavy background-image approach with incremental rendering + <img loading="lazy">
+      STREAM_FILES = res.files || [];
+      STREAM_OFFSET = 0;
+
+      filesEl.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <input id="stream-search" placeholder="Search" style="flex:1;padding:8px;border:1px solid rgba(0,0,0,0.06)">
+        </div>
+        <div id="stream-grid" class="stream-grid"></div>
+        <div id="stream-sentinel" style="height:1px"></div>
+      `;
+
+      const search = document.getElementById('stream-search');
+      const grid = document.getElementById('stream-grid');
+      const sentinel = document.getElementById('stream-sentinel');
+
+      function setupThumbObserver() {
+        if (STREAM_THUMB_OBSERVER) return;
+        STREAM_THUMB_OBSERVER = new IntersectionObserver((entries, obs) => {
+          entries.forEach(en => {
+            if (!en.isIntersecting) return;
+            const img = en.target;
+            const src = img.dataset && img.dataset.src;
+            if (src && !img.src) {
+              img.src = src;
+              img.addEventListener('error', () => img.classList.add('thumb-error'));
+            }
+            obs.unobserve(img);
+          });
+        }, { rootMargin: '200px' });
+      }
+
+      function setupSentinelObserver() {
+        if (STREAM_SENTINEL_OBSERVER) return;
+        STREAM_SENTINEL_OBSERVER = new IntersectionObserver((entries) => {
+          entries.forEach(en => {
+            if (en.isIntersecting) {
+              renderNextBatch();
+            }
+          });
+        }, { rootMargin: '400px' });
+        if (sentinel) STREAM_SENTINEL_OBSERVER.observe(sentinel);
+      }
+
+      function createCard(f) {
+        const thumb = f.thumbnail || ('/cloud/api/thumbnail?path=' + encodeURIComponent(f.path));
+        const card = document.createElement('div');
+        card.className = 'stream-card';
+        card.dataset.path = f.path;
+        card.dataset.name = f.name;
+
+        const banner = document.createElement('div');
+        banner.className = 'stream-card-banner';
+        const img = document.createElement('img');
+        img.className = 'stream-thumb';
+        img.alt = f.name;
+        img.loading = 'lazy';
+        img.dataset.src = thumb;
+        img.style.width = '100%';
+        img.style.height = '150px';
+        img.style.objectFit = 'cover';
+        banner.appendChild(img);
+
+        const title = document.createElement('div');
+        title.className = 'stream-card-title';
+        title.textContent = f.name;
+
+        card.appendChild(banner);
+        card.appendChild(title);
+
+        card.addEventListener('click', async () => {
+          const path = card.dataset.path;
+          const info = await apiFetch('/streaming/video?path=' + encodeURIComponent(path));
+          if (info && !info.error) {
+            showStreamingPlayerByInfo(info);
+          } else {
+            showStreamingPlayer(path, card.dataset.name);
+          }
+        });
+
+        return { card, img };
+      }
+
+      function renderNextBatch() {
+        if (!grid) return;
+        const start = STREAM_OFFSET;
+        const end = Math.min(STREAM_FILES.length, STREAM_OFFSET + STREAM_BATCH);
+        const slice = STREAM_FILES.slice(start, end);
+        if (slice.length === 0) {
+          // nothing left; disconnect sentinel
+          if (STREAM_SENTINEL_OBSERVER && sentinel) STREAM_SENTINEL_OBSERVER.unobserve(sentinel);
+          return;
+        }
+        STREAM_OFFSET = end;
+        setupThumbObserver();
+        slice.forEach(f => {
+          const { card, img } = createCard(f);
+          grid.appendChild(card);
+          if (img && STREAM_THUMB_OBSERVER) STREAM_THUMB_OBSERVER.observe(img);
+        });
+        // if there are still items, ensure sentinel is observed
+        if (STREAM_OFFSET < STREAM_FILES.length) setupSentinelObserver();
+      }
+
+      // reset grid when searching
+      function resetStreamGrid(list) {
+        STREAM_FILES = list;
+        STREAM_OFFSET = 0;
+        grid.innerHTML = '';
+        if (STREAM_SENTINEL_OBSERVER && sentinel) STREAM_SENTINEL_OBSERVER.observe(sentinel);
+        renderNextBatch();
+      }
+
+      search.addEventListener('input', () => {
+        const q = search.value.trim().toLowerCase();
+        if (!q) return resetStreamGrid(res.files || []);
+        const filtered = (res.files || []).filter(f => (f.name || '').toLowerCase().includes(q));
+        resetStreamGrid(filtered);
+      });
+
+      // initial render (first batch)
+      renderNextBatch();
+
+      // try to pre-observe sentinel for infinite scroll
+      setupSentinelObserver();
+
+      // hide preloader as soon as first batch is appended
+      hidePreloader(400);
+    } else if (res && res.error) {
+      filesEl.innerHTML = '';
+      showMessage('Failed to list Streaming folder: ' + res.error, 'error');
+    }
+  } catch (e) {
+    showMessage('Failed to load Streaming folder', 'error');
   }
 }
-
-function logout() {
-  localStorage.removeItem('pincerna_token');
-  localStorage.removeItem('pincerna_user');
-  window.location.href = 'auth.html';
-}
-
-function hidePreloader(delay = 2000) {
-  const p = document.getElementById('preloader');
-  if (!p) return;
-  const minAnimationTime = 1800;
-  const actualDelay = Math.max(delay, minAnimationTime);
-  setTimeout(() => {
-    p.style.transition = 'opacity 400ms ease';
-    p.style.opacity = '0';
-    setTimeout(() => { p.style.display = 'none'; }, 420);
-  }, actualDelay);
-}
-
-function showMessage(msg, level = 'info', timeout = 4000) {
-  const t = document.createElement('div');
-  t.className = 'toast ' + (level || 'info');
-  t.textContent = typeof msg === 'string' ? msg : JSON.stringify(msg);
-  document.body.appendChild(t);
-  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300) }, timeout);
-}
-
-async function apiFetch(path, opts = {}) {
-  const headers = opts.headers || {};
-  const token = localStorage.getItem('pincerna_token');
-  if (token) headers['Authorization'] = token;
-  try {
-    const res = await fetch(apiBase + path, { ...opts, headers });
-    const txt = await res.text();
-    if (typeof txt === 'string' && txt.trim().startsWith('<')) return { error: 'server_returned_html' };
-    try { return JSON.parse(txt) } catch (e) { return txt }
-  } catch (e) { return { error: e.message } }
-}
-
-function showSection(sectionId) {
-  ['hero', 'controls', 'files', 'metrics', 'about', 'streaming-panel'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
-  });
-  document.querySelectorAll('.nav a').forEach(a => a.classList.remove('active'));
-
-  if (sectionId === 'home') {
-    const hero = document.getElementById('hero');
-    const controls = document.getElementById('controls');
-    if (hero) hero.style.display = 'block';
-    if (controls) controls.style.display = 'block';
-    const navHome = document.getElementById('nav-home');
-    if (navHome) navHome.classList.add('active');
-  } else if (sectionId === 'files') {
-    const files = document.getElementById('files');
     if (files) files.style.display = 'block';
     const navFiles = document.getElementById('nav-files');
     if (navFiles) navFiles.classList.add('active');
