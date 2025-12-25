@@ -11,6 +11,8 @@ import urllib.parse
 import secrets
 import hashlib
 import base64
+import threading
+import shutil
 
 app = Flask(__name__)
 SECRET = os.environ.get('JWT_SECRET', 'bartendershandbook-change-in-production')
@@ -947,3 +949,66 @@ def storage_backup_alias():
 
 if __name__ == "__main__":
 	app.run(host="0.0.0.0", port=5002)
+
+
+known_mounts = set()
+backup_lock = threading.Lock()
+
+def _storage_watcher_loop():
+	poll = int(os.environ.get('FILES_DEVICE_POLL_INTERVAL', '15'))
+	auto_backup = os.environ.get('AUTO_BACKUP_ON_ATTACH', '1') == '1'
+	base = _get_files_base()
+	while True:
+		try:
+			current = set()
+			for p in psutil.disk_partitions(all=False):
+				if not p.mountpoint:
+					continue
+				if p.fstype in ('tmpfs', 'devtmpfs'):
+					continue
+				current.add(p.mountpoint)
+
+			added = current - known_mounts
+			removed = known_mounts - current
+
+			if added:
+				for m in added:
+					logging.info('storage attached %s', m)
+					if auto_backup:
+						src = os.path.join(m, 'Streaming')
+						if os.path.exists(src):
+							try:
+								dest_base = os.path.join(base, 'backups')
+								os.makedirs(dest_base, exist_ok=True)
+								label = os.path.basename(os.path.normpath(m)) or 'device'
+								dest = os.path.join(dest_base, label)
+								with backup_lock:
+									if os.path.exists(dest):
+										shutil.rmtree(dest)
+									shutil.copytree(src, dest, dirs_exist_ok=True)
+									logging.info('backup completed %s -> %s', src, dest)
+							except Exception as e:
+								logging.exception('auto backup failed')
+
+			if removed:
+				for m in removed:
+					logging.info('storage removed %s', m)
+
+			known_mounts.clear()
+			known_mounts.update(current)
+		except Exception:
+			logging.exception('storage watcher error')
+		time.sleep(poll)
+
+@app.before_first_request
+def _start_storage_watcher():
+	try:
+		base = _get_files_base()
+		streaming_dir = os.path.join(base, 'Streaming')
+		backups_dir = os.path.join(base, 'backups')
+		os.makedirs(streaming_dir, exist_ok=True)
+		os.makedirs(backups_dir, exist_ok=True)
+	except Exception:
+		logging.exception('failed to ensure streaming/backups directories')
+	t = threading.Thread(target=_storage_watcher_loop, daemon=True)
+	t.start()

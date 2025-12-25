@@ -441,6 +441,7 @@ async function listStorageDevices() {
     const res = await apiFetch('/storage/devices');
     if (res && res.devices) {
       renderStorageDevices(res.devices);
+      renderFilesStoragePanel(res.devices);
     } else if (res && res.error) {
       showMessage('Storage list failed: ' + res.error, 'error');
     }
@@ -448,6 +449,31 @@ async function listStorageDevices() {
     showMessage('Storage list failed', 'error');
   } finally {
     if (scanningEl) scanningEl.style.display = 'none';
+  }
+}
+
+function renderFilesStoragePanel(devices) {
+  const panel = document.getElementById('files-storage-devices');
+  if (!panel) return;
+  panel.innerHTML = devices.map(d => `
+    <div style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.04);display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-weight:600">${d.device || d.mountpoint}</div>
+        <div style="font-size:0.85rem;color:#666">${d.mountpoint} • ${formatBytes(d.total)}</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="(function(){ const src='${d.mountpoint}'; if(confirm('Backup streaming from ' + src + '?')) { apiFetch('/storage/backup', { method: 'POST', body: JSON.stringify({ source: src }), headers: { 'Content-Type': 'application/json' } }).then(r=>{ if(r && r.success) showMessage('Backup done','info'); else showMessage('Backup failed','error'); }); } })()">Backup</button>
+      </div>
+    </div>
+  `).join('');
+
+  const backupsPanel = document.getElementById('files-backups');
+  if (backupsPanel) {
+    apiFetch('/files?path=' + encodeURIComponent('/backups')).then(res => {
+      if (res && res.files) {
+        backupsPanel.innerHTML = res.files.map(f => `<div style="padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.03)">${f.name}</div>`).join('');
+      } else backupsPanel.innerHTML = '<div style="color:#666">No backups</div>';
+    });
   }
 }
 
@@ -492,9 +518,43 @@ async function loadStreamingFiles() {
   const filesEl = document.getElementById('streaming-files');
   if (!filesEl) return;
   try {
-    const res = await apiFetch('/files?path=/Streaming');
+    const res = await apiFetch('/files?path=' + encodeURIComponent('/Streaming'));
     if (res && res.files) {
-      filesEl.innerHTML = `<h3>Streaming folder</h3><div class="file-list" style="padding:12px">${res.files.map(f => `<div style="padding:6px 0">${f.is_dir ? 'DIR' : 'FILE'} ${f.name} ${f.size || ''}</div>`).join('')}</div>`;
+      const files = res.files || [];
+      filesEl.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <input id="stream-search" placeholder="Search" style="flex:1;padding:8px;border:1px solid rgba(0,0,0,0.06)">
+        </div>
+        <div id="stream-grid" class="stream-grid">${files.map(f => `
+          <div class="stream-card" data-path="${f.path}" data-name="${f.name}" data-isdir="${f.is_dir}">
+            <div class="stream-card-banner"></div>
+            <div class="stream-card-title">${f.name}</div>
+          </div>
+        `).join('')}</div>
+      `;
+
+      const search = document.getElementById('stream-search');
+      const grid = document.getElementById('stream-grid');
+      search.addEventListener('input', () => {
+        const q = search.value.trim().toLowerCase();
+        Array.from(grid.children).forEach(card => {
+          const name = (card.dataset.name || '').toLowerCase();
+          card.style.display = name.includes(q) ? '' : 'none';
+        });
+      });
+
+      grid.querySelectorAll('.stream-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+          const isDir = card.dataset.isdir === 'true';
+          const path = card.dataset.path;
+          const name = card.dataset.name;
+          if (isDir) {
+            loadStreamingFiles(path);
+          } else {
+            showStreamingPlayer(path, name);
+          }
+        });
+      });
     } else if (res && res.error) {
       filesEl.innerHTML = '';
       showMessage('Failed to list Streaming folder: ' + res.error, 'error');
@@ -502,6 +562,38 @@ async function loadStreamingFiles() {
   } catch (e) {
     showMessage('Failed to load Streaming folder', 'error');
   }
+}
+
+function showStreamingPlayer(path, name) {
+  const token = localStorage.getItem('pincerna_token') || '';
+  const src = apiBase + '/files/preview?path=' + encodeURIComponent(path) + '&token=' + encodeURIComponent(token);
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  const videoExts = ['mp4','webm','ogg','mov'];
+  const audioExts = ['mp3','wav','m4a','aac','flac'];
+
+  const existing = document.getElementById('streaming-player-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'streaming-player-modal';
+  modal.className = 'connection-modal';
+
+  let mediaHtml = '';
+  if (videoExts.includes(ext)) mediaHtml = `<video controls autoplay style="width:100%;height:auto;max-height:70vh"><source src="${src}"></video>`;
+  else if (audioExts.includes(ext)) mediaHtml = `<audio controls autoplay style="width:100%"><source src="${src}"></audio>`;
+  else mediaHtml = `<div style="padding:12px">Cannot play this file in-browser. <a href="${src}" target="_blank">Open</a></div>`;
+
+  modal.innerHTML = `
+    <div class="connection-modal-content">
+      <div class="connection-modal-header">
+        <h3>${name}</h3>
+        <button class="connection-modal-close" onclick="document.getElementById('streaming-player-modal')?.remove()">✕</button>
+      </div>
+      <div class="connection-modal-body">${mediaHtml}</div>
+    </div>
+  `;
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
 }
 
 function drawGridLines(gatewayIp) {

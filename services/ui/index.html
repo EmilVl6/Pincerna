@@ -133,6 +133,16 @@
 
     <section class="card" id="files" style="display:none">
       <h2>Files</h2>
+      <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px">
+        <div style="flex:1">
+          <h3 style="margin:6px 0">Storage Devices</h3>
+          <div id="files-storage-devices" style="padding:8px;border:1px solid rgba(0,0,0,0.04);background:#fff"></div>
+        </div>
+        <div style="width:300px">
+          <h3 style="margin:6px 0">Backups</h3>
+          <div id="files-backups" style="padding:8px;border:1px solid rgba(0,0,0,0.04);background:#fff;max-height:220px;overflow:auto"></div>
+        </div>
+      </div>
       <div class="file-controls row">
         <div class="file-actions-left">
           <label class="btn" id="upload-btn">
@@ -147,6 +157,7 @@
           <span class="status" id="files-path">/</span>
         </div>
       </div>
+      <div id="files-streaming-area" style="margin-top:12px"></div>
       <div id="upload-progress" class="upload-progress" style="display:none">
         <div class="upload-progress-bar">
           <div class="upload-progress-fill" id="upload-fill"></div>
