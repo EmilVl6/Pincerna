@@ -433,8 +433,8 @@ else
         h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
         thumb="$thumbs_dir/${h}.jpg"
         if [ ! -f "$thumb" ]; then
-            # try to generate thumbnail (best-effort)
-            ffmpeg -y -ss 5 -i "$f" -frames:v 1 -q:v 2 "$thumb" >/dev/null 2>&1 || true
+            # try to generate thumbnail (best-effort, scaled and lower quality for speed)
+            ffmpeg -y -ss 5 -i "$f" -vframes 1 -vf scale=640:-1 -q:v 8 "$thumb" >/dev/null 2>&1 || true
         fi
         pct=$((count*100/total))
         # simple progress bar

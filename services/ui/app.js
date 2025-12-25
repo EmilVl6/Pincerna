@@ -1396,8 +1396,13 @@ async function pollStorageStatus() {
     const res = await apiFetch('/cloud/api/storage/status');
     if (Array.isArray(res) && res.length > 0) {
       // show any new backups not seen before (deduplicate by dest)
+      const now = Date.now();
+      const RECENT_MS = 10 * 60 * 1000; // only notify for backups within last 10 minutes
       for (const b of res) {
-        if (!b || !b.dest) continue;
+        if (!b || !b.dest || !b.when) continue;
+        const whenTs = Date.parse(b.when);
+        if (isNaN(whenTs)) continue;
+        if (now - whenTs > RECENT_MS) continue;
         if (!_seenBackups.has(b.dest)) {
           _seenBackups.add(b.dest);
           showMessage('Backup completed: ' + b.dest, 'info', 5000);
