@@ -61,7 +61,7 @@ async function apiFetch(path, opts = {}) {
 }
 
 function showSection(sectionId) {
-  ['hero', 'controls', 'files', 'metrics', 'about', 'network-panel'].forEach(id => {
+  ['hero', 'controls', 'files', 'metrics', 'about', 'streaming-panel'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
@@ -79,16 +79,12 @@ function showSection(sectionId) {
     if (files) files.style.display = 'block';
     const navFiles = document.getElementById('nav-files');
     if (navFiles) navFiles.classList.add('active');
-  } else if (sectionId === 'network') {
-    const networkPanel = document.getElementById('network-panel');
-    if (networkPanel) networkPanel.style.display = 'block';
-    const navNetwork = document.getElementById('nav-network');
-    if (navNetwork) navNetwork.classList.add('active');
-    if (restoreNetworkState() && networkDevices.length > 0) {
-      renderNetworkDevices(networkDevices, networkGateway);
-    } else {
-      scanNetwork();
-    }
+  } else if (sectionId === 'streaming') {
+    const streamingPanel = document.getElementById('streaming-panel');
+    if (streamingPanel) streamingPanel.style.display = 'block';
+    const navStreaming = document.getElementById('nav-streaming');
+    if (navStreaming) navStreaming.classList.add('active');
+    loadStreamingPanel();
   } else if (sectionId === 'about') {
     const about = document.getElementById('about');
     if (about) about.style.display = 'block';
@@ -423,6 +419,89 @@ function renderNetworkDevices(devices, gatewayIp) {
   });
   
   setTimeout(() => drawGridLines(gatewayIp), 100);
+}
+
+async function loadStreamingPanel() {
+  const devicesEl = document.getElementById('streaming-devices');
+  const filesEl = document.getElementById('streaming-files');
+  const emptyEl = document.getElementById('streaming-empty');
+  if (devicesEl) devicesEl.innerHTML = '';
+  if (filesEl) filesEl.innerHTML = '';
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  listStorageDevices();
+  loadStreamingFiles();
+}
+
+async function listStorageDevices() {
+  const devicesEl = document.getElementById('streaming-devices');
+  const scanningEl = document.getElementById('streaming-scanning');
+  if (scanningEl) scanningEl.style.display = 'flex';
+  try {
+    const res = await apiFetch('/storage/devices');
+    if (res && res.devices) {
+      renderStorageDevices(res.devices);
+    } else if (res && res.error) {
+      showMessage('Storage list failed: ' + res.error, 'error');
+    }
+  } catch (e) {
+    showMessage('Storage list failed', 'error');
+  } finally {
+    if (scanningEl) scanningEl.style.display = 'none';
+  }
+}
+
+function renderStorageDevices(devices) {
+  const grid = document.getElementById('streaming-devices');
+  if (!grid) return;
+  grid.className = 'network-devices-grid';
+  grid.innerHTML = devices.map(d => {
+    const name = d.device || d.mountpoint;
+    const label = d.mountpoint.replace(/\//g, '_') || name;
+    return `
+      <div class="network-device" data-mount="${d.mountpoint}">
+        <div class="device-header">
+          <span class="device-icon">▣</span>
+          <div class="device-header-info">
+            <div class="device-name">${name}</div>
+            <div class="device-hostname">${d.mountpoint}</div>
+          </div>
+          <button class="device-edit-btn backup-btn" data-mount="${d.mountpoint}">Backup</button>
+        </div>
+        <div class="device-info">
+          <div class="device-ip">${formatBytes(d.used)} used / ${formatBytes(d.total)}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  grid.querySelectorAll('.backup-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const src = btn.dataset.mount;
+      if (!confirm('Start backup from ' + src + ' to local backups?')) return;
+      showMessage('Starting backup', 'info');
+      const res = await apiFetch('/storage/backup', { method: 'POST', body: JSON.stringify({ source: src }), headers: { 'Content-Type': 'application/json' } });
+      if (res && res.success) showMessage('Backup completed', 'info');
+      else showMessage('Backup failed: ' + (res.error || 'unknown'), 'error');
+    });
+  });
+}
+
+async function loadStreamingFiles() {
+  const filesEl = document.getElementById('streaming-files');
+  if (!filesEl) return;
+  try {
+    const res = await apiFetch('/files?path=/Streaming');
+    if (res && res.files) {
+      filesEl.innerHTML = `<h3>Streaming folder</h3><div class="file-list" style="padding:12px">${res.files.map(f => `<div style="padding:6px 0">${f.is_dir ? 'DIR' : 'FILE'} ${f.name} ${f.size || ''}</div>`).join('')}</div>`;
+    } else if (res && res.error) {
+      filesEl.innerHTML = '';
+      showMessage('Failed to list Streaming folder: ' + res.error, 'error');
+    }
+  } catch (e) {
+    showMessage('Failed to load Streaming folder', 'error');
+  }
 }
 
 function drawGridLines(gatewayIp) {
@@ -1125,19 +1204,19 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
     const navHome = $('#nav-home');
-  const navFiles = $('#nav-files');
-  const navNetwork = $('#nav-network');
-  const navAbout = $('#nav-about');
-  if (navHome) navHome.addEventListener('click', (e) => { e.preventDefault(); showSection('home'); });
-  if (navFiles) navFiles.addEventListener('click', (e) => { e.preventDefault(); showSection('files'); refreshFiles(); });
-  if (navNetwork) navNetwork.addEventListener('click', (e) => { e.preventDefault(); showSection('network'); });
-  if (navAbout) navAbout.addEventListener('click', (e) => { e.preventDefault(); showSection('about'); });
+    const navFiles = $('#nav-files');
+    const navStreaming = $('#nav-streaming');
+    const navAbout = $('#nav-about');
+    if (navHome) navHome.addEventListener('click', (e) => { e.preventDefault(); showSection('home'); });
+    if (navFiles) navFiles.addEventListener('click', (e) => { e.preventDefault(); showSection('files'); refreshFiles(); });
+    if (navStreaming) navStreaming.addEventListener('click', (e) => { e.preventDefault(); showSection('streaming'); });
+    if (navAbout) navAbout.addEventListener('click', (e) => { e.preventDefault(); showSection('about'); });
 
-  const btnViewNetwork = document.getElementById('btn-view-network');
-  if (btnViewNetwork) btnViewNetwork.addEventListener('click', () => showSection('network'));
+    const btnViewStreaming = document.getElementById('btn-view-network');
+    if (btnViewStreaming) btnViewStreaming.addEventListener('click', () => showSection('streaming'));
   
-  const btnScanNetwork = document.getElementById('btn-scan-network');
-  if (btnScanNetwork) btnScanNetwork.addEventListener('click', scanNetwork);
+    const btnScanDevices = document.getElementById('btn-scan-devices');
+    if (btnScanDevices) btnScanDevices.addEventListener('click', listStorageDevices);
 
   const fileInput = document.getElementById('file-input');
   if (fileInput) {

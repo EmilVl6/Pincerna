@@ -839,6 +839,66 @@ def scan_device_ports_alias(ip):
 def network_info_alias():
 	return network_info()
 
+
+@app.route("/storage/devices")
+@protected
+def storage_devices():
+	parts = []
+	try:
+		for p in psutil.disk_partitions(all=False):
+			if not p.mountpoint:
+				continue
+			if p.fstype in ('tmpfs', 'devtmpfs'):
+				continue
+			try:
+				usage = psutil.disk_usage(p.mountpoint)
+			except Exception:
+				continue
+			parts.append({
+				'device': p.device,
+				'mountpoint': p.mountpoint,
+				'fstype': p.fstype,
+				'total': usage.total,
+				'used': usage.used,
+				'free': usage.free,
+				'percent': usage.percent
+			})
+	except Exception as e:
+		return jsonify(error=str(e)), 500
+	return jsonify(devices=parts)
+
+
+@app.route("/storage/backup", methods=["POST"])
+@protected
+def storage_backup():
+	data = request.get_json() or {}
+	src = data.get('source')
+	if not src:
+		return jsonify(error='missing_source'), 400
+	base = _get_files_base()
+	dest_base = os.path.join(base, 'backups')
+	try:
+		os.makedirs(dest_base, exist_ok=True)
+	except Exception as e:
+		return jsonify(error=str(e)), 500
+	if not os.path.exists(src):
+		return jsonify(error='source_not_found'), 404
+	try:
+		usage = psutil.disk_usage(src)
+		free = psutil.disk_usage(base).free
+		if free < usage.used:
+			return jsonify(error='insufficient_space'), 400
+		import shutil
+		label = os.path.basename(os.path.normpath(src)) or 'device'
+		dest = os.path.join(dest_base, label)
+		if os.path.exists(dest):
+			shutil.rmtree(dest)
+		shutil.copytree(src, dest)
+		return jsonify(success=True, dest=dest)
+	except Exception as e:
+		logging.exception('backup failed')
+		return jsonify(error=str(e)), 500
+
 @app.route("/cloud/api/files")
 def files_list_alias():
 	return list_files()
@@ -874,6 +934,16 @@ def files_move_alias():
 @app.route("/cloud/api/restart", methods=["POST"])
 def restart_alias():
 	return restart_service()
+
+
+@app.route("/cloud/api/storage/devices")
+def storage_devices_alias():
+	return storage_devices()
+
+
+@app.route("/cloud/api/storage/backup", methods=["POST"])
+def storage_backup_alias():
+	return storage_backup()
 
 if __name__ == "__main__":
 	app.run(host="0.0.0.0", port=5002)

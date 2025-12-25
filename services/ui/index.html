@@ -32,7 +32,7 @@
       <span id="user-greeting" class="user-greeting"></span>
       <nav class="nav" aria-label="Main">
         <a href="#" id="nav-home" class="active">Dashboard</a>
-        <a href="#" id="nav-network">Network</a>
+        <a href="#" id="nav-streaming">Streaming</a>
         <a href="#" id="nav-files">Files</a>
         <a href="#" id="nav-about">About</a>
       </nav>
@@ -52,25 +52,25 @@
       </div>
     </section>
 
-    <section class="card" id="network-panel" style="display:none">
-      <h2>Home Network</h2>
+    <section class="card" id="streaming-panel" style="display:none">
+      <h2>Streaming</h2>
       <div class="network-header">
         <div class="network-status">
           <span class="network-status-dot connected"></span>
-          <span id="network-status-text">Connected to local network</span>
+          <span id="streaming-status-text">Streaming folder and attached storage</span>
         </div>
         <div class="network-actions">
-          <button id="btn-scan-network" class="btn primary">Scan Network</button>
+          <button id="btn-scan-devices" class="btn primary">Detect Storage</button>
         </div>
       </div>
-      <div id="network-scanning" class="network-scanning" style="display:none">
+      <div id="streaming-scanning" class="network-scanning" style="display:none">
         <div class="scanning-spinner"></div>
-        <span>Scanning network</span>
+        <span>Detecting devices</span>
       </div>
-      <div id="network-devices" class="network-devices-grid">
-      </div>
-      <div id="network-empty" class="network-empty" style="display:none">
-        <p>No devices found. Click "Scan Network" to discover devices.</p>
+      <div id="streaming-devices" class="network-devices-grid"></div>
+      <div id="streaming-files" style="margin-top:12px"></div>
+      <div id="streaming-empty" class="network-empty" style="display:none">
+        <p>No streaming content found. Ensure a folder named "Streaming" exists in the files root.</p>
       </div>
     </section>
 
