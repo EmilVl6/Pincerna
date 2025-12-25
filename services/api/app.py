@@ -1075,7 +1075,7 @@ def _storage_watcher_loop():
 						src = os.path.join(m, 'Streaming')
 						if os.path.exists(src):
 							try:
-									dest_base = os.path.join(base, 'Backups')
+								dest_base = os.path.join(base, 'Backups')
 								os.makedirs(dest_base, exist_ok=True)
 								label = os.path.basename(os.path.normpath(m)) or 'device'
 								dest = os.path.join(dest_base, label)
@@ -1083,9 +1083,9 @@ def _storage_watcher_loop():
 									if os.path.exists(dest):
 										shutil.rmtree(dest)
 									shutil.copytree(src, dest, dirs_exist_ok=True)
-										logging.info('backup completed %s -> %s', src, dest)
-										RECENT_BACKUPS.appendleft({'when': datetime.datetime.utcnow().isoformat(), 'source': src, 'dest': dest})
-							except Exception as e:
+								logging.info('backup completed %s -> %s', src, dest)
+								RECENT_BACKUPS.appendleft({'when': datetime.datetime.utcnow().isoformat(), 'source': src, 'dest': dest})
+							except Exception:
 								logging.exception('auto backup failed')
 
 			if removed:
