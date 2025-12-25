@@ -49,6 +49,38 @@ _load_oauth_store()
 logging.basicConfig(filename="api.log", level=logging.INFO)
 
 RECENT_BACKUPS = deque(maxlen=50)
+VIDEO_INDEX = {}
+VIDEO_INDEX_LOCK = threading.Lock()
+
+def _thumbs_dir():
+	base = _get_files_base()
+	thumbs = os.path.join(base, '.thumbs')
+	try:
+		os.makedirs(thumbs, exist_ok=True)
+	except Exception:
+		pass
+	return thumbs
+
+def _ensure_thumbnail(full):
+	"""Ensure a thumbnail exists for `full` and return the thumbnail path on disk."""
+	thumbs = _thumbs_dir()
+	h = hashlib.md5(full.encode('utf-8')).hexdigest()
+	thumb_path = os.path.join(thumbs, f"{h}.jpg")
+	if os.path.exists(thumb_path):
+		return thumb_path
+	try:
+		cmd = ['ffmpeg', '-y', '-ss', '5', '-i', full, '-frames:v', '1', '-q:v', '2', thumb_path]
+		subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=25)
+		return thumb_path
+	except Exception:
+		# If thumbnail generation fails, ensure no partial file remains
+		try:
+			if os.path.exists(thumb_path):
+				os.remove(thumb_path)
+		except Exception:
+			pass
+		return None
+
 
 @app.route("/login", methods=["POST"])
 def login():
@@ -1080,6 +1112,51 @@ def streaming_videos():
 		logging.exception('streaming videos scan failed')
 		return jsonify(error=str(e)), 500
 
+
+@app.route('/cloud/api/streaming/index')
+def streaming_index():
+	"""Return the current in-memory index of video files."""
+	with VIDEO_INDEX_LOCK:
+		items = list(VIDEO_INDEX.values())
+	# sort by mtime desc
+	items.sort(key=lambda x: x.get('mtime', ''), reverse=True)
+	return jsonify(files=items)
+
+
+@app.route('/cloud/api/streaming/video')
+def streaming_video_detail():
+	path = request.args.get('path', '')
+	if not path:
+		return jsonify(error='missing_path'), 400
+	# normalize path (path given is relative to FILES_ROOT, leading slash)
+	full = _safe_path(path)
+	if not full or not os.path.isfile(full):
+		return jsonify(error='file_not_found'), 404
+	with VIDEO_INDEX_LOCK:
+		info = VIDEO_INDEX.get(full)
+	if info:
+		return jsonify(info)
+	# fallback: build minimal metadata
+	try:
+		stat = os.stat(full)
+		thumb = _ensure_thumbnail(full)
+		rel_thumb = None
+		if thumb:
+			# return thumbnail URL via existing endpoint
+			rel_thumb = '/cloud/api/thumbnail?path=' + urllib.parse.quote(path)
+		info = {
+			'name': os.path.basename(full),
+			'path': path,
+			'size': stat.st_size,
+			'mtime': datetime.datetime.fromtimestamp(stat.st_mtime).isoformat(),
+			'thumbnail': rel_thumb
+		}
+		return jsonify(info)
+	except Exception as e:
+		logging.exception('video detail failed')
+		return jsonify(error=str(e)), 500
+
+
 if __name__ == "__main__":
 	app.run(host="0.0.0.0", port=5002)
 
@@ -1134,6 +1211,57 @@ def _storage_watcher_loop():
 			logging.exception('storage watcher error')
 		time.sleep(poll)
 
+
+def _video_indexer_loop():
+	"""Background thread that scans FILES_ROOT for video files and keeps an index with thumbnails."""
+	interval = int(os.environ.get('VIDEO_INDEX_INTERVAL', '30'))
+	video_exts = {'.mp4', '.mkv', '.mov', '.avi', '.webm', '.m4v', '.mpg', '.mpeg', '.ts', '.flv'}
+	base = _get_files_base()
+	while True:
+		try:
+			new_index = {}
+			for root, dirs, files in os.walk(base):
+				for fname in files:
+					ext = os.path.splitext(fname)[1].lower()
+					if ext not in video_exts:
+						continue
+					full = os.path.join(root, fname)
+					try:
+						stat = os.stat(full)
+						mtime = int(stat.st_mtime)
+						size = stat.st_size
+						# Check existing entry to avoid regenerating thumbnail unnecessarily
+						with VIDEO_INDEX_LOCK:
+							existing = VIDEO_INDEX.get(full)
+						if existing and existing.get('mtime_ts') == mtime and existing.get('size') == size:
+							# reuse existing
+							new_index[full] = existing
+							continue
+						# generate thumbnail (best-effort)
+						thumb_path = _ensure_thumbnail(full)
+						thumb_url = None
+						rel = '/' + os.path.relpath(full, base).replace('\\', '/')
+						if thumb_path:
+							thumb_url = '/cloud/api/thumbnail?path=' + urllib.parse.quote(rel)
+						item = {
+							'name': fname,
+							'path': rel,
+							'size': size,
+							'mtime': datetime.datetime.fromtimestamp(stat.st_mtime).isoformat(),
+							'mtime_ts': mtime,
+							'thumbnail': thumb_url
+						}
+						new_index[full] = item
+					except Exception:
+						pass
+			# swap indexes
+			with VIDEO_INDEX_LOCK:
+				VIDEO_INDEX.clear()
+				VIDEO_INDEX.update(new_index)
+		except Exception:
+			logging.exception('video indexer error')
+		time.sleep(interval)
+
 @app.before_first_request
 def _start_storage_watcher():
 	try:
@@ -1146,3 +1274,7 @@ def _start_storage_watcher():
 		logging.exception('failed to ensure streaming/backups directories')
 	t = threading.Thread(target=_storage_watcher_loop, daemon=True)
 	t.start()
+
+	# start video indexer thread
+	t2 = threading.Thread(target=_video_indexer_loop, daemon=True)
+	t2.start()

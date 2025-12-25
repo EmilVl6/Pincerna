@@ -475,8 +475,8 @@ async function loadStreamingFiles() {
   const filesEl = document.getElementById('streaming-files');
   if (!filesEl) return;
   try {
-    // Fetch video files across the configured FILES_ROOT
-    const res = await apiFetch('/streaming/videos');
+    // Fetch indexed video files from the background indexer
+    const res = await apiFetch('/streaming/index');
     if (res && res.files) {
       const files = res.files || [];
       filesEl.innerHTML = `
@@ -484,9 +484,9 @@ async function loadStreamingFiles() {
           <input id="stream-search" placeholder="Search" style="flex:1;padding:8px;border:1px solid rgba(0,0,0,0.06)">
         </div>
         <div id="stream-grid" class="stream-grid">${files.map(f => {
-          const thumb = '/cloud/api/thumbnail?path=' + encodeURIComponent(f.path);
+          const thumb = f.thumbnail || ('/cloud/api/thumbnail?path=' + encodeURIComponent(f.path));
           return `
-          <div class="stream-card" data-path="${f.path}" data-name="${f.name}" data-isdir="${f.is_dir}">
+          <div class="stream-card" data-path="${f.path}" data-name="${f.name}">
             <div class="stream-card-banner" style="background-image:url('${thumb}');background-size:cover;background-position:center"></div>
             <div class="stream-card-title">${f.name}</div>
           </div>
@@ -504,10 +504,15 @@ async function loadStreamingFiles() {
       });
 
       grid.querySelectorAll('.stream-card').forEach(card => {
-        card.addEventListener('click', (e) => {
+        card.addEventListener('click', async (e) => {
           const path = card.dataset.path;
-          const name = card.dataset.name;
-          showStreamingPlayer(path, name);
+          // fetch details from server
+          const info = await apiFetch('/streaming/video?path=' + encodeURIComponent(path));
+          if (info && !info.error) {
+            showStreamingPlayerByInfo(info);
+          } else {
+            showStreamingPlayer(path, card.dataset.name);
+          }
         });
       });
     } else if (res && res.error) {
@@ -1402,4 +1407,46 @@ async function pollStorageStatus() {
 function startStorageStatusPolling() {
   pollStorageStatus();
   setInterval(pollStorageStatus, 8000);
+}
+
+function showStreamingPlayerByInfo(info) {
+  const path = info.path;
+  const name = info.name || (path.split('/').pop());
+  const token = localStorage.getItem('pincerna_token') || '';
+  const src = apiBase + '/files/preview?path=' + encodeURIComponent(path) + '&token=' + encodeURIComponent(token);
+
+  const existing = document.getElementById('streaming-player-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'streaming-player-modal';
+  modal.className = 'connection-modal';
+
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  const videoExts = ['mp4','webm','ogg','mov'];
+  const audioExts = ['mp3','wav','m4a','aac','flac'];
+
+  let mediaHtml = '';
+  if (videoExts.includes(ext)) mediaHtml = `<video controls autoplay style="width:100%;height:auto;max-height:70vh"><source src="${src}"></video>`;
+  else if (audioExts.includes(ext)) mediaHtml = `<audio controls autoplay style="width:100%"><source src="${src}"></audio>`;
+  else mediaHtml = `<div style="padding:12px">Cannot play this file in-browser. <a href="${src}" target="_blank">Open</a></div>`;
+
+  const metaHtml = `
+    <div style="margin-top:8px;font-size:0.95rem;color:var(--muted)">
+      <div><strong>Size:</strong> ${info.size ? formatBytes(info.size) : 'unknown'}</div>
+      <div><strong>Modified:</strong> ${info.mtime || ''}</div>
+    </div>
+  `;
+
+  modal.innerHTML = `
+    <div class="connection-modal-content">
+      <div class="connection-modal-header">
+        <h3>${name}</h3>
+        <button class="connection-modal-close" onclick="document.getElementById('streaming-player-modal')?.remove()">✕</button>
+      </div>
+      <div class="connection-modal-body">${mediaHtml}${metaHtml}</div>
+    </div>
+  `;
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
 }
