@@ -82,6 +82,23 @@ def _ensure_thumbnail(full):
 		return None
 
 
+@app.route('/cloud/api/thumbnail_file')
+def thumbnail_file():
+	"""Serve a previously-generated thumbnail by hash (no regeneration)."""
+	h = request.args.get('h')
+	if not h:
+		return jsonify(error='missing_hash'), 400
+	thumbs = _thumbs_dir()
+	thumb_path = os.path.join(thumbs, f"{h}.jpg")
+	if not os.path.exists(thumb_path):
+		return jsonify(error='thumbnail_not_found'), 404
+	try:
+		return send_file(thumb_path, mimetype='image/jpeg')
+	except Exception as e:
+		logging.exception('thumbnail_file send failed')
+		return jsonify(error=str(e)), 500
+
+
 @app.route("/login", methods=["POST"])
 def login():
 	token = jwt.encode({
@@ -1142,8 +1159,8 @@ def streaming_video_detail():
 		thumb = _ensure_thumbnail(full)
 		rel_thumb = None
 		if thumb:
-			# return thumbnail URL via existing endpoint
-			rel_thumb = '/cloud/api/thumbnail?path=' + urllib.parse.quote(path)
+			h = hashlib.md5(full.encode('utf-8')).hexdigest()
+			rel_thumb = '/cloud/api/thumbnail_file?h=' + h
 		info = {
 			'name': os.path.basename(full),
 			'path': path,
@@ -1242,7 +1259,9 @@ def _video_indexer_loop():
 						thumb_url = None
 						rel = '/' + os.path.relpath(full, base).replace('\\', '/')
 						if thumb_path:
-							thumb_url = '/cloud/api/thumbnail?path=' + urllib.parse.quote(rel)
+							# compute hash and provide a stable thumbnail-file URL
+							h = hashlib.md5(full.encode('utf-8')).hexdigest()
+							thumb_url = '/cloud/api/thumbnail_file?h=' + h
 						item = {
 							'name': fname,
 							'path': rel,

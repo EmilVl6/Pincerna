@@ -432,7 +432,7 @@ else
         mtime=$(date -r "$f" --iso-8601=seconds 2>/dev/null || echo "")
         rel="/$(echo "$f" | sed "s#^$FILES_ROOT/##")"
         h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
-        thumb_rel="/.thumbs/${h}.jpg"
+        thumb_rel="/cloud/api/thumbnail_file?h=${h}"
         # escape JSON strings
         name_esc=$(printf '%s' "$(basename "$f")" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
         rel_esc=$(printf '%s' "$rel" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
