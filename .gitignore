@@ -22,7 +22,7 @@ venv/
 *.log
 api.log
 
-#secrets - never commit these
+#secrets
 *secret*
 *credentials*
 *.pem
