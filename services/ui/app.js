@@ -422,14 +422,8 @@ function renderNetworkDevices(devices, gatewayIp) {
 }
 
 async function loadStreamingPanel() {
-  const devicesEl = document.getElementById('streaming-devices');
   const filesEl = document.getElementById('streaming-files');
-  const emptyEl = document.getElementById('streaming-empty');
-  if (devicesEl) devicesEl.innerHTML = '';
   if (filesEl) filesEl.innerHTML = '';
-  if (emptyEl) emptyEl.style.display = 'none';
-
-  listStorageDevices();
   loadStreamingFiles();
 }
 
