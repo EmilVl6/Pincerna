@@ -4,6 +4,11 @@ const $ = sel => document.querySelector(sel);
 function getUserInfo() {
   try {
     const raw = localStorage.getItem('pincerna_user');
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return null;
+}
+
 async function loadStreamingFiles() {
   const filesEl = document.getElementById('streaming-files');
   if (!filesEl) return;
