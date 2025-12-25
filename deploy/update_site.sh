@@ -104,7 +104,7 @@ check_root
 log_step "1/7" "Installing system dependencies"
 
 
-PACKAGES="nginx python3 python3-venv python3-pip rsync curl openssl nmap"
+PACKAGES="nginx python3 python3-venv python3-pip rsync curl openssl nmap ntfs-3g"
 NEED_INSTALL=""
 for pkg in $PACKAGES; do
     if ! dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
@@ -190,6 +190,71 @@ mkdir -p "$FILES_ROOT"
 chown www-data:www-data "$FILES_ROOT"
 chmod 750 "$FILES_ROOT"
 log_success "File storage ready at $FILES_ROOT"
+
+
+# Attempt to auto-detect removable/unmounted partitions and mount them under FILES_ROOT
+detect_and_mount_drives() {
+    log_step "3.1/7" "Auto-detecting unmounted drives and mounting under $FILES_ROOT"
+
+    # List block partitions (no loop devices), show NAME,FSTYPE,UUID,LABEL,MOUNTPOINT
+    while IFS= read -r line; do
+        name=$(echo "$line" | awk '{print $1}')
+        fstype=$(echo "$line" | awk '{print $2}')
+        uuid=$(echo "$line" | awk '{print $3}')
+        label=$(echo "$line" | awk '{print $4}')
+        mnt=$(echo "$line" | awk '{print $5}')
+
+        # Skip already mounted or empty names
+        [ -z "$name" ] && continue
+        [ "$mnt" != "-" ] && continue
+
+        # Only consider sd* and nvme partitions
+        case "$name" in
+            /dev/sd*|/dev/nvme*|/dev/hd*) ;;
+            *) continue ;;
+        esac
+
+        # Choose a mount dir name: label or basename
+        dirname="$label"
+        if [ -z "$dirname" ] || [ "$dirname" = "-" ]; then
+            dirname=$(basename "$name")
+        fi
+
+        mountpoint="$FILES_ROOT/$dirname"
+        mkdir -p "$mountpoint"
+        chown www-data:www-data "$mountpoint" || true
+
+        # Try mounting with appropriate driver
+        if [ "$fstype" = "ntfs" ] || [ "$fstype" = "ntfs3" ]; then
+            mount_cmd=(ntfs-3g "$name" "$mountpoint")
+        else
+            mount_cmd=(mount "$name" "$mountpoint")
+        fi
+
+        if "${mount_cmd[@]}" >/dev/null 2>&1; then
+            log_success "Mounted $name -> $mountpoint"
+            # Add a simple fstab entry for persistence if UUID is available
+            if [ -n "$uuid" ] && [ "$uuid" != "-" ]; then
+                # Check if already in fstab
+                if ! grep -q "$uuid" /etc/fstab 2>/dev/null; then
+                    fstype_entry="$fstype"
+                    if [ "$fstype" = "ntfs" ] || [ "$fstype" = "ntfs3" ]; then
+                        opts="defaults,uid=www-data,gid=www-data"
+                        fstype_entry="ntfs-3g"
+                    else
+                        opts="defaults"
+                    fi
+                    echo "UUID=$uuid    $mountpoint    $fstype_entry    $opts    0    2" >> /etc/fstab
+                    log_success "Added fstab entry for $name"
+                fi
+            fi
+        else
+            log_warn "Failed to mount $name to $mountpoint"
+        fi
+    done < <(lsblk -plno NAME,FSTYPE,UUID,LABEL,MOUNTPOINT | awk '{ if($1!="") print $0 }')
+}
+
+detect_and_mount_drives || true
 
 
 log_step "4/7" "Setting up Python environment"
