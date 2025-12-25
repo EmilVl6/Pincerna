@@ -104,7 +104,7 @@ check_root
 log_step "1/7" "Installing system dependencies"
 
 
-PACKAGES="nginx python3 python3-venv python3-pip rsync curl openssl nmap ntfs-3g"
+PACKAGES="nginx python3 python3-venv python3-pip rsync curl openssl nmap ntfs-3g ffmpeg"
 NEED_INSTALL=""
 for pkg in $PACKAGES; do
     if ! dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
@@ -390,6 +390,62 @@ else
     log_error "Nginx configuration test failed:"
     nginx -t
 fi
+
+
+log_step "7.1/7" "Indexing video files and generating thumbnails"
+
+VID_EXTS='-iname *.mp4 -o -iname *.mkv -o -iname *.mov -o -iname *.avi -o -iname *.webm -o -iname *.m4v -o -iname *.mpg -o -iname *.mpeg -o -iname *.ts -o -iname *.flv'
+thumbs_dir="$FILES_ROOT/.thumbs"
+manifest="$FILES_ROOT/.video_index.json"
+mkdir -p "$thumbs_dir"
+
+mapfile -t videos < <(find "$FILES_ROOT" -type f \( $VID_EXTS \) 2>/dev/null || true)
+total=${#videos[@]}
+if [ "$total" -eq 0 ]; then
+    log_warn "No video files found under $FILES_ROOT"
+else
+    echo "Found $total video(s). Generating thumbnails..."
+    count=0
+    for f in "${videos[@]}"; do
+        count=$((count+1))
+        base=$(basename "$f")
+        h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
+        thumb="$thumbs_dir/${h}.jpg"
+        if [ ! -f "$thumb" ]; then
+            # try to generate thumbnail (best-effort)
+            ffmpeg -y -ss 5 -i "$f" -frames:v 1 -q:v 2 "$thumb" >/dev/null 2>&1 || true
+        fi
+        pct=$((count*100/total))
+        # simple progress bar
+        filled=$((pct/2))
+        empty=$((50-filled))
+        printf "\r[%s%s] %d/%d %s" "$(printf '%0.s#' $(seq 1 $filled))" "$(printf '%0.s-' $(seq 1 $empty))" "$count" "$total" "$base"
+    done
+    echo
+
+    # write manifest
+    echo '[' > "$manifest"
+    first=1
+    for f in "${videos[@]}"; do
+        if [ "$first" -eq 1 ]; then first=0; else echo ',' >> "$manifest"; fi
+        size=$(stat -c%s "$f" 2>/dev/null || echo 0)
+        mtime=$(date -r "$f" --iso-8601=seconds 2>/dev/null || echo "")
+        rel="/$(echo "$f" | sed "s#^$FILES_ROOT/##")"
+        h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
+        thumb_rel="/.thumbs/${h}.jpg"
+        # escape JSON strings
+        name_esc=$(printf '%s' "$(basename "$f")" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
+        rel_esc=$(printf '%s' "$rel" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
+        mtime_esc=$(printf '%s' "$mtime" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
+        thumb_esc=$(printf '%s' "$thumb_rel" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
+        printf '{"name":%s,"path":%s,"size":%s,"mtime":%s,"thumbnail":%s}' "$name_esc" "$rel_esc" "$size" "$mtime_esc" "$thumb_esc" >> "$manifest"
+    done
+    echo ']' >> "$manifest"
+    log_success "Video manifest written to $manifest"
+fi
+
+# restart backend so it picks up thumbnails/index
+systemctl restart pincerna.service || true
 
 
 
