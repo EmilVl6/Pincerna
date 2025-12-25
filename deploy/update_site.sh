@@ -37,6 +37,25 @@ log_error() {
 }
 
 
+# Simple spinner functions for long-running steps
+_spinner_pid=0
+spinner_start() {
+    local msg="$1"
+    ( while :; do for c in '|/-\\'; do printf "\r%s %s" "${c}" "$msg"; sleep 0.18; done; done ) &
+    _spinner_pid=$!
+    disown $_spinner_pid 2>/dev/null || true
+}
+
+spinner_stop() {
+    if [ "$_spinner_pid" -ne 0 ] 2>/dev/null; then
+        kill "$_spinner_pid" 2>/dev/null || true
+        wait "$_spinner_pid" 2>/dev/null || true
+        _spinner_pid=0
+        printf "\r"
+    fi
+}
+
+
 check_root() {
     if [ "$EUID" -ne 0 ]; then
         echo "This script must be run as root (use sudo)"
@@ -406,6 +425,8 @@ if [ "$total" -eq 0 ]; then
 else
     echo "Found $total video(s). Generating thumbnails..."
     count=0
+    # start spinner alongside progress output to show activity during pauses
+    spinner_start "Generating thumbnails..."
     for f in "${videos[@]}"; do
         count=$((count+1))
         base=$(basename "$f")
@@ -422,10 +443,12 @@ else
         printf "\r[%s%s] %d/%d %s" "$(printf '%0.s#' $(seq 1 $filled))" "$(printf '%0.s-' $(seq 1 $empty))" "$count" "$total" "$base"
     done
     echo
+    spinner_stop
 
     # write manifest
     echo '[' > "$manifest"
     first=1
+    spinner_start "Writing manifest..."
     for f in "${videos[@]}"; do
         if [ "$first" -eq 1 ]; then first=0; else echo ',' >> "$manifest"; fi
         size=$(stat -c%s "$f" 2>/dev/null || echo 0)
@@ -441,11 +464,14 @@ else
         printf '{"name":%s,"path":%s,"size":%s,"mtime":%s,"thumbnail":%s}' "$name_esc" "$rel_esc" "$size" "$mtime_esc" "$thumb_esc" >> "$manifest"
     done
     echo ']' >> "$manifest"
+    spinner_stop
     log_success "Video manifest written to $manifest"
 fi
 
 # restart backend so it picks up thumbnails/index
+spinner_start "Restarting backend..."
 systemctl restart pincerna.service || true
+spinner_stop
 
 
 
