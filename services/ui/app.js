@@ -477,7 +477,27 @@ async function loadStreamingFiles() {
   try {
     // Fetch indexed video files from the background indexer
     const res = await apiFetch('/streaming/index');
-    if (res && res.files) {
+      if (res && res.error === 'server_returned_html') {
+        // try to fetch raw HTML for debugging and log it to console
+        try {
+          const raw = await fetch(apiBase + '/streaming/index');
+          const body = await raw.text();
+          console.error('streaming/index returned HTML:', body.substring(0, 2000));
+        } catch (e) {
+          console.error('Failed to fetch raw streaming/index HTML', e);
+        }
+        // fall back to unindexed scan endpoint
+        const fallback = await apiFetch('/streaming/videos');
+        if (fallback && fallback.files) {
+          res = fallback;
+        } else {
+          showMessage('Server returned HTML for streaming index; check backend logs', 'error', 6000);
+          filesEl.innerHTML = '';
+          return;
+        }
+      }
+
+      if (res && res.files) {
       const files = res.files || [];
       filesEl.innerHTML = `
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
@@ -515,10 +535,10 @@ async function loadStreamingFiles() {
           }
         });
       });
-    } else if (res && res.error) {
-      filesEl.innerHTML = '';
-      showMessage('Failed to list Streaming folder: ' + res.error, 'error');
-    }
+      } else if (res && res.error) {
+        filesEl.innerHTML = '';
+        showMessage('Failed to list Streaming folder: ' + res.error, 'error');
+      }
   } catch (e) {
     showMessage('Failed to load Streaming folder', 'error');
   }
@@ -1391,6 +1411,11 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 let _seenBackups = new Set();
+// restore seen backups from sessionStorage so reloads don't re-notify
+try {
+  const sb = sessionStorage.getItem('pincerna_seen_backups');
+  if (sb) JSON.parse(sb).forEach(s => _seenBackups.add(s));
+} catch (e) {}
 async function pollStorageStatus() {
   try {
     const res = await apiFetch('/cloud/api/storage/status');
@@ -1398,14 +1423,21 @@ async function pollStorageStatus() {
       // show any new backups not seen before (deduplicate by dest)
       const now = Date.now();
       const RECENT_MS = 10 * 60 * 1000; // only notify for backups within last 10 minutes
+      // only show at most one new toast per poll
+      let shown = 0;
       for (const b of res) {
+        if (shown >= 1) break;
         if (!b || !b.dest || !b.when) continue;
         const whenTs = Date.parse(b.when);
         if (isNaN(whenTs)) continue;
         if (now - whenTs > RECENT_MS) continue;
-        if (!_seenBackups.has(b.dest)) {
-          _seenBackups.add(b.dest);
+        // normalize dest path to avoid minor differences
+        const destNorm = b.dest.replace(/\/g, '/').replace(/\/\/+$/, '');
+        if (!_seenBackups.has(destNorm)) {
+          _seenBackups.add(destNorm);
+          try { sessionStorage.setItem('pincerna_seen_backups', JSON.stringify(Array.from(_seenBackups))); } catch (e) {}
           showMessage('Backup completed: ' + b.dest, 'info', 5000);
+          shown++;
         }
       }
     }
