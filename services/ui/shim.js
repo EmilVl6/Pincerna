@@ -22,4 +22,20 @@
       try { window.location.href = 'auth.html'; } catch(e){}
     };
   }
+  
+  if (!window.hidePreloader) {
+    window.hidePreloader = function(delay=0) {
+      try {
+        const el = document.getElementById('preloader');
+        if (!el) return;
+        setTimeout(() => { el.style.display = 'none'; }, delay);
+      } catch(e){}
+    };
+  }
+
+  if (!window.showPreloader) {
+    window.showPreloader = function() {
+      try { const el = document.getElementById('preloader'); if (!el) return; el.style.display = 'block'; } catch(e){}
+    };
+  }
 })();
