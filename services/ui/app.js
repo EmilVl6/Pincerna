@@ -172,6 +172,22 @@ async function loadStreamingFiles() {
     showMessage('Failed to load Streaming folder', 'error');
   }
 }
+function showSection(sectionId) {
+  ['hero', 'controls', 'files', 'metrics', 'about', 'streaming-panel'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  document.querySelectorAll('.nav a').forEach(a => a.classList.remove('active'));
+
+  if (sectionId === 'home') {
+    const hero = document.getElementById('hero');
+    const controls = document.getElementById('controls');
+    if (hero) hero.style.display = 'block';
+    if (controls) controls.style.display = 'block';
+    const navHome = document.getElementById('nav-home');
+    if (navHome) navHome.classList.add('active');
+  } else if (sectionId === 'files') {
+    const files = document.getElementById('files');
     if (files) files.style.display = 'block';
     const navFiles = document.getElementById('nav-files');
     if (navFiles) navFiles.classList.add('active');
@@ -567,78 +583,7 @@ function renderFilesStoragePanel(devices) {
 }
 
 
-async function loadStreamingFiles() {
-  const filesEl = document.getElementById('streaming-files');
-  if (!filesEl) return;
-  try {
-    // Fetch indexed video files from the background indexer
-    const res = await apiFetch('/streaming/index');
-      if (res && res.error === 'server_returned_html') {
-        // try to fetch raw HTML for debugging and log it to console
-        try {
-          const raw = await fetch(apiBase + '/streaming/index');
-          const body = await raw.text();
-          console.error('streaming/index returned HTML:', body.substring(0, 2000));
-        } catch (e) {
-          console.error('Failed to fetch raw streaming/index HTML', e);
-        }
-        // fall back to unindexed scan endpoint
-        const fallback = await apiFetch('/streaming/videos');
-        if (fallback && fallback.files) {
-          res = fallback;
-        } else {
-          showMessage('Server returned HTML for streaming index; check backend logs', 'error', 6000);
-          filesEl.innerHTML = '';
-          return;
-        }
-      }
 
-      if (res && res.files) {
-      const files = res.files || [];
-      filesEl.innerHTML = `
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-          <input id="stream-search" placeholder="Search" style="flex:1;padding:8px;border:1px solid rgba(0,0,0,0.06)">
-        </div>
-        <div id="stream-grid" class="stream-grid">${files.map(f => {
-          const thumb = f.thumbnail || ('/cloud/api/thumbnail?path=' + encodeURIComponent(f.path));
-          return `
-          <div class="stream-card" data-path="${f.path}" data-name="${f.name}">
-            <div class="stream-card-banner" style="background-image:url('${thumb}');background-size:cover;background-position:center"></div>
-            <div class="stream-card-title">${f.name}</div>
-          </div>
-        `}).join('')}</div>
-      `;
-
-      const search = document.getElementById('stream-search');
-      const grid = document.getElementById('stream-grid');
-      search.addEventListener('input', () => {
-        const q = search.value.trim().toLowerCase();
-        Array.from(grid.children).forEach(card => {
-          const name = (card.dataset.name || '').toLowerCase();
-          card.style.display = name.includes(q) ? '' : 'none';
-        });
-      });
-
-      grid.querySelectorAll('.stream-card').forEach(card => {
-        card.addEventListener('click', async (e) => {
-          const path = card.dataset.path;
-          // fetch details from server
-          const info = await apiFetch('/streaming/video?path=' + encodeURIComponent(path));
-          if (info && !info.error) {
-            showStreamingPlayerByInfo(info);
-          } else {
-            showStreamingPlayer(path, card.dataset.name);
-          }
-        });
-      });
-      } else if (res && res.error) {
-        filesEl.innerHTML = '';
-        showMessage('Failed to list Streaming folder: ' + res.error, 'error');
-      }
-  } catch (e) {
-    showMessage('Failed to load Streaming folder', 'error');
-  }
-}
 
 function showStreamingPlayer(path, name) {
   const token = localStorage.getItem('pincerna_token') || '';
@@ -1528,7 +1473,7 @@ async function pollStorageStatus() {
         if (isNaN(whenTs)) continue;
         if (now - whenTs > RECENT_MS) continue;
         // normalize dest path to avoid minor differences
-        const destNorm = b.dest.replace(/\/g, '/').replace(/\/\/+$/, '');
+        const destNorm = b.dest.replace(/\\/g, '/').replace(/\/+$/, '');
         if (!_seenBackups.has(destNorm)) {
           _seenBackups.add(destNorm);
           try { sessionStorage.setItem('pincerna_seen_backups', JSON.stringify(Array.from(_seenBackups))); } catch (e) {}
