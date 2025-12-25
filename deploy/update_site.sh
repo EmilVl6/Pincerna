@@ -418,70 +418,158 @@ thumbs_dir="$FILES_ROOT/.thumbs"
 manifest="$FILES_ROOT/.video_index.json"
 mkdir -p "$thumbs_dir"
 
-mapfile -t videos < <(find "$FILES_ROOT" -type f \( $VID_EXTS \) 2>/dev/null || true)
-total=${#videos[@]}
-if [ "$total" -eq 0 ]; then
-    log_warn "No video files found under $FILES_ROOT"
-else
-    echo "Found $total video(s). Generating thumbnails..."
-    count=0
-    # start spinner alongside progress output to show activity during pauses
-    spinner_start "Generating thumbnails..."
-    for f in "${videos[@]}"; do
-        count=$((count+1))
-        base=$(basename "$f")
-        h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
-        thumb="$thumbs_dir/${h}.jpg"
-        if [ ! -f "$thumb" ]; then
-            # try to generate thumbnail (best-effort, scaled and lower quality for speed)
-            ffmpeg -y -ss 5 -i "$f" -vframes 1 -vf scale=640:-1 -q:v 8 "$thumb" >/dev/null 2>&1 || true
-        fi
-        pct=$((count*100/total))
-        # simple progress bar
-        filled=$((pct/2))
-        empty=$((50-filled))
-        printf "\r[%s%s] %d/%d %s" "$(printf '%0.s#' $(seq 1 $filled))" "$(printf '%0.s-' $(seq 1 $empty))" "$count" "$total" "$base"
-    done
-    echo
-    spinner_stop
+idx_ts="$FILES_ROOT/.video_index.ts"
+tmp_manifest=$(mktemp)
 
-    # write manifest to temp file first and atomically move if changed
-    tmp_manifest=$(mktemp)
-    echo '[' > "$tmp_manifest"
-    first=1
-    spinner_start "Writing manifest..."
-    for f in "${videos[@]}"; do
-        if [ "$first" -eq 1 ]; then first=0; else echo ',' >> "$tmp_manifest"; fi
-        size=$(stat -c%s "$f" 2>/dev/null || echo 0)
-        mtime=$(date -r "$f" --iso-8601=seconds 2>/dev/null || echo "")
-        rel="/$(echo "$f" | sed "s#^$FILES_ROOT/##")"
-        h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
-        thumb_rel="/cloud/api/thumbnail_file?h=${h}"
-        # escape JSON strings
-        name_esc=$(printf '%s' "$(basename "$f")" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
-        rel_esc=$(printf '%s' "$rel" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
-        mtime_esc=$(printf '%s' "$mtime" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
-        thumb_esc=$(printf '%s' "$thumb_rel" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
-        printf '{"name":%s,"path":%s,"size":%s,"mtime":%s,"thumbnail":%s}' "$name_esc" "$rel_esc" "$size" "$mtime_esc" "$thumb_esc" >> "$tmp_manifest"
-    done
-    echo ']' >> "$tmp_manifest"
-    spinner_stop
-    # compare with existing manifest if present
-    if [ -f "$manifest" ]; then
-        old_sum=$(md5sum "$manifest" | awk '{print $1}')
-        new_sum=$(md5sum "$tmp_manifest" | awk '{print $1}')
-    else
-        old_sum=""
-        new_sum=$(md5sum "$tmp_manifest" | awk '{print $1}')
+if [ -f "$manifest" ]; then
+    # incremental mode: find only files newer than last indexing timestamp
+    if [ ! -f "$idx_ts" ]; then
+        # create timestamp from existing manifest modification time
+        touch -r "$manifest" "$idx_ts" 2>/dev/null || touch "$idx_ts"
     fi
-    if [ "$old_sum" = "$new_sum" ]; then
-        log_success "Video manifest unchanged (no restart needed)"
-        rm -f "$tmp_manifest"
+    mapfile -t new_videos < <(find "$FILES_ROOT" -type f \( $VID_EXTS \) -newer "$idx_ts" 2>/dev/null || true)
+    total_new=${#new_videos[@]}
+    if [ "$total_new" -eq 0 ]; then
+        log_success "No new or modified videos since last index"
+        manifest_changed=0
+        # update timestamp to now
+        touch "$idx_ts"
+    else
+        echo "Found $total_new new/modified video(s). Generating thumbnails..."
+        count=0
+        spinner_start "Generating thumbnails..."
+        tmp_new_entries=$(mktemp)
+        for f in "${new_videos[@]}"; do
+            count=$((count+1))
+            base=$(basename "$f")
+            rel="/$(echo "$f" | sed "s#^$FILES_ROOT/##")"
+            size=$(stat -c%s "$f" 2>/dev/null || echo 0)
+            mtime_cur=$(date -r "$f" --iso-8601=seconds 2>/dev/null || echo "")
+            h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
+            thumb="$thumbs_dir/${h}.jpg"
+            if [ ! -f "$thumb" ]; then
+                ffmpeg -y -ss 5 -i "$f" -vframes 1 -vf scale=640:-1 -q:v 8 "$thumb" >/dev/null 2>&1 || true
+            fi
+            thumb_rel="/cloud/api/thumbnail_file?h=${h}"
+            # produce a JSON entry for this file
+            python3 - <<PY >> "$tmp_new_entries"
+import json,sys
+entry={
+  "name": sys.argv[1],
+  "path": sys.argv[2],
+  "size": int(sys.argv[3]),
+  "mtime": sys.argv[4],
+  "thumbnail": sys.argv[5]
+}
+print(json.dumps(entry))
+PY
+            "$base" "$rel" "$size" "$mtime_cur" "$thumb_rel"
+            pct=$((count*100/total_new))
+            filled=$((pct/2))
+            empty=$((50-filled))
+            printf "\r[%s%s] %d/%d %s" "$(printf '%0.s#' $(seq 1 $filled))" "$(printf '%0.s-' $(seq 1 $empty))" "$count" "$total_new" "$base"
+        done
+        echo
+        spinner_stop
+
+        # merge existing manifest with new entries using Python
+        python3 - <<PY > "$tmp_manifest"
+import json,os
+manifest_path = "$manifest"
+new_entries_path = "$tmp_new_entries"
+old = []
+if os.path.exists(manifest_path):
+    try:
+        old = json.load(open(manifest_path))
+    except Exception:
+        old = []
+new = []
+with open(new_entries_path) as f:
+    for l in f:
+        l=l.strip()
+        if not l: continue
+        try:
+            new.append(json.loads(l))
+        except Exception:
+            pass
+# build dict by path to de-duplicate/replace
+by_path = {e.get('path'): e for e in old}
+for e in new:
+    by_path[e.get('path')] = e
+out = list(by_path.values())
+json.dump(out, open('$tmp_manifest','w'))
+print()
+PY
+        rm -f "$tmp_new_entries"
+        # compare and move
+        if [ -f "$manifest" ]; then
+            old_sum=$(md5sum "$manifest" | awk '{print $1}')
+            new_sum=$(md5sum "$tmp_manifest" | awk '{print $1}')
+        else
+            old_sum=""
+            new_sum=$(md5sum "$tmp_manifest" | awk '{print $1}')
+        fi
+        if [ "$old_sum" = "$new_sum" ]; then
+            log_success "Video manifest unchanged (no restart needed)"
+            rm -f "$tmp_manifest"
+            manifest_changed=0
+        else
+            mv "$tmp_manifest" "$manifest"
+            log_success "Video manifest updated with new entries: $manifest"
+            manifest_changed=1
+        fi
+        touch "$idx_ts"
+    fi
+else
+    # no existing manifest: initial full scan
+    mapfile -t videos < <(find "$FILES_ROOT" -type f \( $VID_EXTS \) 2>/dev/null || true)
+    total=${#videos[@]}
+    if [ "$total" -eq 0 ]; then
+        log_warn "No video files found under $FILES_ROOT"
         manifest_changed=0
     else
+        echo "Found $total video(s). Generating thumbnails..."
+        count=0
+        spinner_start "Generating thumbnails..."
+        for f in "${videos[@]}"; do
+            count=$((count+1))
+            base=$(basename "$f")
+            h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
+            thumb="$thumbs_dir/${h}.jpg"
+            if [ ! -f "$thumb" ]; then
+                ffmpeg -y -ss 5 -i "$f" -vframes 1 -vf scale=640:-1 -q:v 8 "$thumb" >/dev/null 2>&1 || true
+            fi
+            pct=$((count*100/total))
+            filled=$((pct/2))
+            empty=$((50-filled))
+            printf "\r[%s%s] %d/%d %s" "$(printf '%0.s#' $(seq 1 $filled))" "$(printf '%0.s-' $(seq 1 $empty))" "$count" "$total" "$base"
+        done
+        echo
+        spinner_stop
+
+        # build manifest from full list
+        echo '[' > "$tmp_manifest"
+        first=1
+        spinner_start "Writing manifest..."
+        for f in "${videos[@]}"; do
+            if [ "$first" -eq 1 ]; then first=0; else echo ',' >> "$tmp_manifest"; fi
+            size=$(stat -c%s "$f" 2>/dev/null || echo 0)
+            mtime=$(date -r "$f" --iso-8601=seconds 2>/dev/null || echo "")
+            rel="/$(echo "$f" | sed "s#^$FILES_ROOT/##")"
+            h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
+            thumb_rel="/cloud/api/thumbnail_file?h=${h}"
+            name_esc=$(printf '%s' "$(basename "$f")" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
+            rel_esc=$(printf '%s' "$rel" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
+            mtime_esc=$(printf '%s' "$mtime" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
+            thumb_esc=$(printf '%s' "$thumb_rel" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
+            printf '{"name":%s,"path":%s,"size":%s,"mtime":%s,"thumbnail":%s}' "$name_esc" "$rel_esc" "$size" "$mtime_esc" "$thumb_esc" >> "$tmp_manifest"
+        done
+        echo ']' >> "$tmp_manifest"
+        spinner_stop
         mv "$tmp_manifest" "$manifest"
         log_success "Video manifest written to $manifest"
         manifest_changed=1
+        touch "$idx_ts"
     fi
 fi
 
