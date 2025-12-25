@@ -1044,6 +1044,42 @@ def thumbnail_alias():
 		logging.exception('thumbnail error')
 		return jsonify(error=str(e)), 500
 
+
+@app.route('/cloud/api/streaming/videos')
+def streaming_videos():
+	"""Return a list of video files found under FILES_ROOT (search recursive).
+	Paths are returned relative to FILES_ROOT (leading slash), suitable for /files/preview calls.
+	"""
+	try:
+		base = _get_files_base()
+		video_exts = {'.mp4', '.mkv', '.mov', '.avi', '.webm', '.m4v', '.mpg', '.mpeg', '.ts', '.flv'}
+		results = []
+		# Walk the files root
+		for root, dirs, files in os.walk(base):
+			for fname in files:
+				ext = os.path.splitext(fname)[1].lower()
+				if ext in video_exts:
+					full = os.path.join(root, fname)
+					try:
+						stat = os.stat(full)
+						rel = os.path.relpath(full, base)
+						rel_path = '/' + rel.replace('\\', '/')
+						results.append({
+							'name': fname,
+							'path': rel_path,
+							'size': stat.st_size,
+							'mtime': datetime.datetime.fromtimestamp(stat.st_mtime).isoformat()
+						})
+					except Exception:
+						pass
+		# sort by mtime desc
+		results.sort(key=lambda x: x.get('mtime', ''), reverse=True)
+		# limit to 1000 results to avoid huge responses
+		return jsonify(files=results[:1000])
+	except Exception as e:
+		logging.exception('streaming videos scan failed')
+		return jsonify(error=str(e)), 500
+
 if __name__ == "__main__":
 	app.run(host="0.0.0.0", port=5002)
 

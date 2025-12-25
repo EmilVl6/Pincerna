@@ -475,7 +475,8 @@ async function loadStreamingFiles() {
   const filesEl = document.getElementById('streaming-files');
   if (!filesEl) return;
   try {
-    const res = await apiFetch('/files?path=' + encodeURIComponent('/Streaming'));
+    // Fetch video files across the configured FILES_ROOT
+    const res = await apiFetch('/streaming/videos');
     if (res && res.files) {
       const files = res.files || [];
       filesEl.innerHTML = `
@@ -504,14 +505,9 @@ async function loadStreamingFiles() {
 
       grid.querySelectorAll('.stream-card').forEach(card => {
         card.addEventListener('click', (e) => {
-          const isDir = card.dataset.isdir === 'true';
           const path = card.dataset.path;
           const name = card.dataset.name;
-          if (isDir) {
-            loadStreamingFiles(path);
-          } else {
-            showStreamingPlayer(path, name);
-          }
+          showStreamingPlayer(path, name);
         });
       });
     } else if (res && res.error) {
