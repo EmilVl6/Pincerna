@@ -1390,15 +1390,18 @@ document.addEventListener('DOMContentLoaded', () => {
   startStorageStatusPolling();
 });
 
-let _lastBackupSeen = null;
+let _seenBackups = new Set();
 async function pollStorageStatus() {
   try {
     const res = await apiFetch('/cloud/api/storage/status');
     if (Array.isArray(res) && res.length > 0) {
-      const latest = res[0];
-      if (!_lastBackupSeen || latest.when !== _lastBackupSeen) {
-        _lastBackupSeen = latest.when;
-        showMessage('Backup completed: ' + latest.dest, 'info', 5000);
+      // show any new backups not seen before (deduplicate by dest)
+      for (const b of res) {
+        if (!b || !b.dest) continue;
+        if (!_seenBackups.has(b.dest)) {
+          _seenBackups.add(b.dest);
+          showMessage('Backup completed: ' + b.dest, 'info', 5000);
+        }
       }
     }
   } catch (e) {}
