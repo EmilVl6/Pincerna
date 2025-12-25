@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_file
 import jwt
 import datetime
 import logging
@@ -13,6 +13,9 @@ import hashlib
 import base64
 import threading
 import shutil
+import subprocess
+import tempfile
+from collections import deque
 
 app = Flask(__name__)
 SECRET = os.environ.get('JWT_SECRET', 'bartendershandbook-change-in-production')
@@ -44,6 +47,8 @@ def _save_oauth_store():
 _load_oauth_store()
 
 logging.basicConfig(filename="api.log", level=logging.INFO)
+
+RECENT_BACKUPS = deque(maxlen=50)
 
 @app.route("/login", methods=["POST"])
 def login():
@@ -878,7 +883,7 @@ def storage_backup():
 	if not src:
 		return jsonify(error='missing_source'), 400
 	base = _get_files_base()
-	dest_base = os.path.join(base, 'backups')
+	dest_base = os.path.join(base, 'Backups')
 	try:
 		os.makedirs(dest_base, exist_ok=True)
 	except Exception as e:
@@ -896,6 +901,7 @@ def storage_backup():
 		if os.path.exists(dest):
 			shutil.rmtree(dest)
 		shutil.copytree(src, dest)
+		RECENT_BACKUPS.appendleft({'when': datetime.datetime.utcnow().isoformat(), 'source': src, 'dest': dest})
 		return jsonify(success=True, dest=dest)
 	except Exception as e:
 		logging.exception('backup failed')
@@ -920,6 +926,58 @@ def files_preview_alias():
 @app.route("/cloud/api/files/upload", methods=["POST"])
 def files_upload_alias():
 	return upload_file()
+
+
+@app.route('/files/upload_chunk', methods=['POST'])
+@protected
+def upload_chunk():
+	upload_id = request.form.get('upload_id')
+	index = request.form.get('index')
+	total = request.form.get('total')
+	filename = request.form.get('filename')
+	path = request.form.get('path', '/')
+	if 'chunk' not in request.files or not upload_id or index is None:
+		return jsonify(error='missing_parameters'), 400
+	try:
+		tmp_base = os.path.join(tempfile.gettempdir(), 'pincerna_uploads')
+		os.makedirs(tmp_base, exist_ok=True)
+		upload_dir = os.path.join(tmp_base, upload_id)
+		os.makedirs(upload_dir, exist_ok=True)
+		chunk_file = request.files['chunk']
+		chunk_path = os.path.join(upload_dir, f"chunk_{int(index)}")
+		chunk_file.save(chunk_path)
+		return jsonify(success=True)
+	except Exception as e:
+		logging.exception('upload chunk failed')
+		return jsonify(error=str(e)), 500
+
+
+@app.route('/files/upload_complete', methods=['POST'])
+@protected
+def upload_complete():
+	data = request.get_json() or {}
+	upload_id = data.get('upload_id')
+	filename = data.get('filename')
+	path = data.get('path', '/')
+	if not upload_id or not filename:
+		return jsonify(error='missing_parameters'), 400
+	tmp_base = os.path.join(tempfile.gettempdir(), 'pincerna_uploads')
+	upload_dir = os.path.join(tmp_base, upload_id)
+	full_path = _safe_path(path)
+	if not full_path:
+		return jsonify(error='invalid_path'), 400
+	try:
+		parts = sorted([p for p in os.listdir(upload_dir) if p.startswith('chunk_')], key=lambda x: int(x.split('_')[1]))
+		dest_file = os.path.join(full_path, filename)
+		with open(dest_file, 'wb') as wfd:
+			for p in parts:
+				with open(os.path.join(upload_dir, p), 'rb') as rfd:
+					shutil.copyfileobj(rfd, wfd)
+		shutil.rmtree(upload_dir, ignore_errors=True)
+		return jsonify(success=True, path=dest_file)
+	except Exception as e:
+		logging.exception('complete upload failed')
+		return jsonify(error=str(e)), 500
 
 @app.route("/cloud/api/files/rename", methods=["POST"])
 def files_rename_alias():
@@ -946,6 +1004,45 @@ def storage_devices_alias():
 @app.route("/cloud/api/storage/backup", methods=["POST"])
 def storage_backup_alias():
 	return storage_backup()
+
+
+@app.route('/cloud/api/storage/status')
+def storage_status_alias():
+	return jsonify(list(RECENT_BACKUPS))
+
+
+@app.route('/cloud/api/files/upload_chunk', methods=['POST'])
+def files_upload_chunk_alias():
+	return upload_chunk()
+
+
+@app.route('/cloud/api/files/upload_complete', methods=['POST'])
+def files_upload_complete_alias():
+	return upload_complete()
+
+
+@app.route('/cloud/api/thumbnail')
+def thumbnail_alias():
+	path = request.args.get('path', '')
+	full = _safe_path(path)
+	if not full or not os.path.isfile(full):
+		return jsonify(error='file_not_found'), 404
+	try:
+		base = _get_files_base()
+		thumbs = os.path.join(base, '.thumbs')
+		os.makedirs(thumbs, exist_ok=True)
+		h = hashlib.md5(full.encode('utf-8')).hexdigest()
+		thumb_path = os.path.join(thumbs, f"{h}.jpg")
+		if not os.path.exists(thumb_path):
+			try:
+				cmd = ['ffmpeg', '-y', '-ss', '5', '-i', full, '-frames:v', '1', '-q:v', '2', thumb_path]
+				subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20)
+			except Exception:
+				return jsonify(error='thumbnail_failed'), 500
+		return send_file(thumb_path, mimetype='image/jpeg')
+	except Exception as e:
+		logging.exception('thumbnail error')
+		return jsonify(error=str(e)), 500
 
 if __name__ == "__main__":
 	app.run(host="0.0.0.0", port=5002)
@@ -978,7 +1075,7 @@ def _storage_watcher_loop():
 						src = os.path.join(m, 'Streaming')
 						if os.path.exists(src):
 							try:
-								dest_base = os.path.join(base, 'backups')
+									dest_base = os.path.join(base, 'Backups')
 								os.makedirs(dest_base, exist_ok=True)
 								label = os.path.basename(os.path.normpath(m)) or 'device'
 								dest = os.path.join(dest_base, label)
@@ -986,7 +1083,8 @@ def _storage_watcher_loop():
 									if os.path.exists(dest):
 										shutil.rmtree(dest)
 									shutil.copytree(src, dest, dirs_exist_ok=True)
-									logging.info('backup completed %s -> %s', src, dest)
+										logging.info('backup completed %s -> %s', src, dest)
+										RECENT_BACKUPS.appendleft({'when': datetime.datetime.utcnow().isoformat(), 'source': src, 'dest': dest})
 							except Exception as e:
 								logging.exception('auto backup failed')
 
@@ -1005,7 +1103,7 @@ def _start_storage_watcher():
 	try:
 		base = _get_files_base()
 		streaming_dir = os.path.join(base, 'Streaming')
-		backups_dir = os.path.join(base, 'backups')
+		backups_dir = os.path.join(base, 'Backups')
 		os.makedirs(streaming_dir, exist_ok=True)
 		os.makedirs(backups_dir, exist_ok=True)
 	except Exception:

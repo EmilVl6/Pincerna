@@ -440,7 +440,6 @@ async function listStorageDevices() {
   try {
     const res = await apiFetch('/storage/devices');
     if (res && res.devices) {
-      renderStorageDevices(res.devices);
       renderFilesStoragePanel(res.devices);
     } else if (res && res.error) {
       showMessage('Storage list failed: ' + res.error, 'error');
@@ -469,7 +468,7 @@ function renderFilesStoragePanel(devices) {
 
   const backupsPanel = document.getElementById('files-backups');
   if (backupsPanel) {
-    apiFetch('/files?path=' + encodeURIComponent('/backups')).then(res => {
+    apiFetch('/files?path=' + encodeURIComponent('/Backups')).then(res => {
       if (res && res.files) {
         backupsPanel.innerHTML = res.files.map(f => `<div style="padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.03)">${f.name}</div>`).join('');
       } else backupsPanel.innerHTML = '<div style="color:#666">No backups</div>';
@@ -477,42 +476,6 @@ function renderFilesStoragePanel(devices) {
   }
 }
 
-function renderStorageDevices(devices) {
-  const grid = document.getElementById('streaming-devices');
-  if (!grid) return;
-  grid.className = 'network-devices-grid';
-  grid.innerHTML = devices.map(d => {
-    const name = d.device || d.mountpoint;
-    const label = d.mountpoint.replace(/\//g, '_') || name;
-    return `
-      <div class="network-device" data-mount="${d.mountpoint}">
-        <div class="device-header">
-          <span class="device-icon">▣</span>
-          <div class="device-header-info">
-            <div class="device-name">${name}</div>
-            <div class="device-hostname">${d.mountpoint}</div>
-          </div>
-          <button class="device-edit-btn backup-btn" data-mount="${d.mountpoint}">Backup</button>
-        </div>
-        <div class="device-info">
-          <div class="device-ip">${formatBytes(d.used)} used / ${formatBytes(d.total)}</div>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  grid.querySelectorAll('.backup-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const src = btn.dataset.mount;
-      if (!confirm('Start backup from ' + src + ' to local backups?')) return;
-      showMessage('Starting backup', 'info');
-      const res = await apiFetch('/storage/backup', { method: 'POST', body: JSON.stringify({ source: src }), headers: { 'Content-Type': 'application/json' } });
-      if (res && res.success) showMessage('Backup completed', 'info');
-      else showMessage('Backup failed: ' + (res.error || 'unknown'), 'error');
-    });
-  });
-}
 
 async function loadStreamingFiles() {
   const filesEl = document.getElementById('streaming-files');
@@ -525,12 +488,14 @@ async function loadStreamingFiles() {
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
           <input id="stream-search" placeholder="Search" style="flex:1;padding:8px;border:1px solid rgba(0,0,0,0.06)">
         </div>
-        <div id="stream-grid" class="stream-grid">${files.map(f => `
+        <div id="stream-grid" class="stream-grid">${files.map(f => {
+          const thumb = '/cloud/api/thumbnail?path=' + encodeURIComponent(f.path);
+          return `
           <div class="stream-card" data-path="${f.path}" data-name="${f.name}" data-isdir="${f.is_dir}">
-            <div class="stream-card-banner"></div>
+            <div class="stream-card-banner" style="background-image:url('${thumb}');background-size:cover;background-position:center"></div>
             <div class="stream-card-title">${f.name}</div>
           </div>
-        `).join('')}</div>
+        `}).join('')}</div>
       `;
 
       const search = document.getElementById('stream-search');
@@ -1205,8 +1170,16 @@ async function uploadFile(file) {
   formData.append('path', currentPath);
   
   try {
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    const videoExts = ['mp4','mkv','mov','webm','avi'];
+    const largeThreshold = 8 * 1024 * 1024;
+    if (videoExts.includes(ext) && file.size > largeThreshold) {
+      await chunkedUpload(file, progressFill, statusText);
+      refreshFiles();
+      return;
+    }
+
     const xhr = new XMLHttpRequest();
-    
     xhr.upload.addEventListener('progress', (e) => {
       if (e.lengthComputable && progressFill) {
         const percent = Math.round((e.loaded / e.total) * 100);
@@ -1214,33 +1187,70 @@ async function uploadFile(file) {
         if (statusText) statusText.textContent = `Uploading ${file.name} ${percent}%`;
       }
     });
-    
     xhr.addEventListener('load', () => {
       if (xhr.status === 200) {
         if (statusText) statusText.textContent = `Uploaded ${file.name} ✓`;
-        setTimeout(() => {
-          if (progressDiv) progressDiv.style.display = 'none';
-        }, 2000);
+        setTimeout(() => { if (progressDiv) progressDiv.style.display = 'none'; }, 2000);
         refreshFiles();
       } else {
         if (statusText) statusText.textContent = `Upload failed`;
         showMessage('Upload failed', 'error');
       }
     });
-    
-    xhr.addEventListener('error', () => {
-      if (statusText) statusText.textContent = `Upload error`;
-      showMessage('Upload failed', 'error');
-    });
-    
+    xhr.addEventListener('error', () => { if (statusText) statusText.textContent = `Upload error`; showMessage('Upload failed', 'error'); });
     const token = localStorage.getItem('pincerna_token');
     xhr.open('POST', apiBase + '/files/upload');
     if (token) xhr.setRequestHeader('Authorization', token);
     xhr.send(formData);
-    
   } catch (e) {
     showMessage('Upload failed: ' + e.message, 'error');
     if (progressDiv) progressDiv.style.display = 'none';
+  }
+}
+
+async function chunkedUpload(file, progressFill, statusText) {
+  const chunkSize = 4 * 1024 * 1024;
+  const total = file.size;
+  const totalChunks = Math.ceil(total / chunkSize);
+  const uploadId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8);
+  let uploadedBytes = 0;
+  const concurrency = 4;
+
+  const sendChunk = async (index) => {
+    const start = index * chunkSize;
+    const end = Math.min(start + chunkSize, total);
+    const blob = file.slice(start, end);
+    const fd = new FormData();
+    fd.append('upload_id', uploadId);
+    fd.append('index', index);
+    fd.append('total', totalChunks);
+    fd.append('filename', file.name);
+    fd.append('path', currentPath);
+    fd.append('chunk', blob);
+    const token = localStorage.getItem('pincerna_token');
+    const res = await fetch(apiBase + '/files/upload_chunk', { method: 'POST', body: fd, headers: token ? { 'Authorization': token } : {} });
+    if (!res.ok) throw new Error('chunk upload failed');
+    uploadedBytes += (end - start);
+    const percent = Math.round((uploadedBytes / total) * 100);
+    if (progressFill) progressFill.style.width = percent + '%';
+    if (statusText) statusText.textContent = `Uploading ${file.name} ${percent}%`;
+  };
+
+  const queue = Array.from({length: totalChunks}, (_, i) => i);
+  const runners = Array.from({length: Math.min(concurrency, queue.length)}, async () => {
+    while (queue.length) {
+      const idx = queue.shift();
+      await sendChunk(idx);
+    }
+  });
+  await Promise.all(runners);
+  if (statusText) statusText.textContent = `Finalizing ${file.name}`;
+  const completeResp = await apiFetch('/files/upload_complete', { method: 'POST', body: JSON.stringify({ upload_id: uploadId, filename: file.name, path: currentPath }), headers: { 'Content-Type': 'application/json' } });
+  if (completeResp && completeResp.success) {
+    if (statusText) statusText.textContent = `Uploaded ${file.name} ✓`;
+    setTimeout(() => { const progressDiv = document.getElementById('upload-progress'); if (progressDiv) progressDiv.style.display = 'none'; }, 1500);
+  } else {
+    throw new Error(completeResp && completeResp.error ? completeResp.error : 'upload_complete_failed');
   }
 }
 
@@ -1381,4 +1391,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (indicator) indicator.textContent = 'Cannot connect to server';
     hidePreloader(2500);
   });
+
+  startStorageStatusPolling();
 });
+
+let _lastBackupSeen = null;
+async function pollStorageStatus() {
+  try {
+    const res = await apiFetch('/cloud/api/storage/status');
+    if (Array.isArray(res) && res.length > 0) {
+      const latest = res[0];
+      if (!_lastBackupSeen || latest.when !== _lastBackupSeen) {
+        _lastBackupSeen = latest.when;
+        showMessage('Backup completed: ' + latest.dest, 'info', 5000);
+      }
+    }
+  } catch (e) {}
+}
+
+function startStorageStatusPolling() {
+  pollStorageStatus();
+  setInterval(pollStorageStatus, 8000);
+}
