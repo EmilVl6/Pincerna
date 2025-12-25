@@ -445,12 +445,13 @@ else
     echo
     spinner_stop
 
-    # write manifest
-    echo '[' > "$manifest"
+    # write manifest to temp file first and atomically move if changed
+    tmp_manifest=$(mktemp)
+    echo '[' > "$tmp_manifest"
     first=1
     spinner_start "Writing manifest..."
     for f in "${videos[@]}"; do
-        if [ "$first" -eq 1 ]; then first=0; else echo ',' >> "$manifest"; fi
+        if [ "$first" -eq 1 ]; then first=0; else echo ',' >> "$tmp_manifest"; fi
         size=$(stat -c%s "$f" 2>/dev/null || echo 0)
         mtime=$(date -r "$f" --iso-8601=seconds 2>/dev/null || echo "")
         rel="/$(echo "$f" | sed "s#^$FILES_ROOT/##")"
@@ -461,17 +462,38 @@ else
         rel_esc=$(printf '%s' "$rel" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
         mtime_esc=$(printf '%s' "$mtime" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
         thumb_esc=$(printf '%s' "$thumb_rel" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
-        printf '{"name":%s,"path":%s,"size":%s,"mtime":%s,"thumbnail":%s}' "$name_esc" "$rel_esc" "$size" "$mtime_esc" "$thumb_esc" >> "$manifest"
+        printf '{"name":%s,"path":%s,"size":%s,"mtime":%s,"thumbnail":%s}' "$name_esc" "$rel_esc" "$size" "$mtime_esc" "$thumb_esc" >> "$tmp_manifest"
     done
-    echo ']' >> "$manifest"
+    echo ']' >> "$tmp_manifest"
     spinner_stop
-    log_success "Video manifest written to $manifest"
+    # compare with existing manifest if present
+    if [ -f "$manifest" ]; then
+        old_sum=$(md5sum "$manifest" | awk '{print $1}')
+        new_sum=$(md5sum "$tmp_manifest" | awk '{print $1}')
+    else
+        old_sum=""
+        new_sum=$(md5sum "$tmp_manifest" | awk '{print $1}')
+    fi
+    if [ "$old_sum" = "$new_sum" ]; then
+        log_success "Video manifest unchanged (no restart needed)"
+        rm -f "$tmp_manifest"
+        manifest_changed=0
+    else
+        mv "$tmp_manifest" "$manifest"
+        log_success "Video manifest written to $manifest"
+        manifest_changed=1
+    fi
 fi
 
 # restart backend so it picks up thumbnails/index
 spinner_start "Restarting backend..."
-systemctl restart pincerna.service || true
-spinner_stop
+if [ "${manifest_changed:-1}" -eq 1 ]; then
+    spinner_start "Restarting backend..."
+    systemctl restart pincerna.service || true
+    spinner_stop
+else
+    log_success "Backend restart skipped (manifest unchanged)"
+fi
 
 
 
