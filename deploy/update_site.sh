@@ -213,8 +213,10 @@ fi
 log_step "3/7" "Setting up file storage"
 
 mkdir -p "$FILES_ROOT"
-chown www-data:www-data "$FILES_ROOT"
-chmod 750 "$FILES_ROOT"
+if [ "$FILES_ROOT" != "/" ]; then
+    chown www-data:www-data "$FILES_ROOT"
+    chmod 750 "$FILES_ROOT"
+fi
 log_success "File storage ready at $FILES_ROOT"
 
 
@@ -429,6 +431,7 @@ VID_EXTS='-iname *.mp4 -o -iname *.mkv -o -iname *.mov -o -iname *.avi -o -iname
 thumbs_dir="$FILES_ROOT/.thumbs"
 manifest="$FILES_ROOT/.video_index.json"
 mkdir -p "$thumbs_dir"
+chown www-data:www-data "$thumbs_dir"
 
 idx_ts="$FILES_ROOT/.video_index.ts"
 tmp_manifest=$(mktemp)
