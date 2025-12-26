@@ -89,24 +89,42 @@
         if (pathPart.startsWith(base)) pathPart = pathPart.slice(base.length);
         if (!pathPart.startsWith('/')) pathPart = '/' + pathPart;
         const url = origin + base + pathPart;
-        // Attempt primary fetch; if it 404s, try simple normalized fallbacks
+        // Attempt several candidate URLs to tolerate cached or rewritten bases.
         const doFetch = async (u) => await fetch(u, Object.assign({}, opts, { headers }));
-        let res = await doFetch(url);
-        if (res && res.status === 404) {
+        const candidates = [];
+        // primary
+        candidates.push(url);
+        try {
+          // Ensure pathPart is available here
+        } catch(e){}
+        // Always try canonical '/cloud/api' prefixed path
+        candidates.push(origin + '/cloud/api' + (pathPart || '/'));
+        // Try dropping any leading '/api' segment before '/cloud/api'
+        if (url.indexOf('/api/cloud/api') !== -1) candidates.push(url.replace('/api/cloud/api', '/cloud/api'));
+        // Collapse duplicated '/cloud/api' segments
+        if (url.indexOf('/cloud/api/cloud/api') !== -1) candidates.push(url.replace('/cloud/api/cloud/api', '/cloud/api'));
+        // If current url doesn't contain '/cloud/api', also try inserting it
+        if (url.indexOf('/cloud/api') === -1) {
+          const suffix = url.replace(origin, '');
+          candidates.push(origin + '/cloud/api' + (suffix.startsWith('/') ? suffix : '/' + suffix));
+        }
+
+        let res = null;
+        let lastErr = null;
+        for (const c of candidates) {
           try {
-            // Diagnostic hint for debugging cached client behavior
-            console.debug('apiFetch primary 404, trying fallbacks', { primary: url });
-          } catch(e){}
-          // Common malformed pattern observed: '/api/cloud/api/...' — fix by removing leading '/api'
-          let alt = url.replace('/api/cloud/api', '/cloud/api');
-          if (alt !== url) {
-            try { res = await doFetch(alt); if (res && res.status !== 404) return (res.headers.get('content-type') || '').includes('application/json') ? await res.json() : await res.text(); } catch(e){}
+            res = await doFetch(c);
+            if (res && res.status !== 404) {
+              // success (or other non-404 error)
+              break;
+            }
+          } catch (e) {
+            lastErr = e;
           }
-          // Another fallback: remove any duplicated '/cloud/api' segments
-          alt = url.replace('/cloud/api/cloud/api', '/cloud/api');
-          if (alt !== url) {
-            try { res = await doFetch(alt); if (res && res.status !== 404) return (res.headers.get('content-type') || '').includes('application/json') ? await res.json() : await res.text(); } catch(e){}
-          }
+        }
+        if (!res) {
+          if (lastErr) throw lastErr;
+          return { error: 'network_error' };
         }
         const contentType = res.headers.get('content-type') || '';
         if (!res.ok) {
