@@ -76,9 +76,18 @@
         // otherwise default to '/cloud/api'. Build an absolute URL using
         // location.origin so `<base>` in the page cannot cause relative-path
         // resolution issues (which produced requests like "api/cloud/api/...").
-        const base = (window.apiBase !== undefined) ? window.apiBase : '/cloud/api';
-        const origin = (window.location && window.location.origin) ? window.location.origin : '';
-        const pathPart = path && path.startsWith('/') ? path : ('/' + (path || ''));
+        let base = (window.apiBase !== undefined) ? window.apiBase : '/cloud/api';
+        // If an older cached bundle accidentally set a prefixed base (eg '/api/cloud/api'),
+        // normalize to the last occurrence of '/cloud/api' to avoid duplicates.
+        if (base.indexOf('/cloud/api') !== -1) {
+          base = base.slice(base.lastIndexOf('/cloud/api'));
+        }
+        const origin = (window.location && window.location.origin) ? window.location.origin.replace(/\/+$/,'') : '';
+        // If path already includes the base (e.g. '/cloud/api/storage/status'), strip it
+        // so we don't end up with '/cloud/api/cloud/api/...'.
+        let pathPart = path || '';
+        if (pathPart.startsWith(base)) pathPart = pathPart.slice(base.length);
+        if (!pathPart.startsWith('/')) pathPart = '/' + pathPart;
         const url = origin + base + pathPart;
         const res = await fetch(url, Object.assign({}, opts, { headers }));
         const contentType = res.headers.get('content-type') || '';
