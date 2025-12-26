@@ -37,6 +37,13 @@ def _load_oauth_store():
 				OAUTH_STORE = json.load(f)
 		else:
 			OAUTH_STORE = {}
+
+		def _save_oauth_store():
+			try:
+				with open(OAUTH_STATE_FILE, 'w', encoding='utf-8') as f:
+					json.dump(OAUTH_STORE, f)
+			except Exception as e:
+				logging.exception(f'failed to save oauth state to {OAUTH_STATE_FILE}: {e}')
 	except Exception as e:
 		logging.warning(f'Failed to load oauth state: {e}')
 		OAUTH_STORE = {}
