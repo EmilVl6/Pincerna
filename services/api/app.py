@@ -349,7 +349,6 @@ def oauth_callback():
 	short_token = token[:32] + '...' if token and len(token) > 32 else token
 	user_dbg = json.dumps(user_info)
 
-	# Use a plain template with % placeholders to avoid f-string brace parsing
 	html_template = """<!doctype html>
 <html>
 	<head>
