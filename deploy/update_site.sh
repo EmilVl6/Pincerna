@@ -416,7 +416,8 @@ storage_summary() {
             problem="no"
         fi
 
-        printf "- %s: size=%s included=%s paths=%s problem=%s\n" "$dev" "$size_info" "$included" "$include_paths" "$problem"
+        # Use echo to avoid printf treating leading '-' as an option in some shells
+        echo "- ${dev}: size=${size_info} included=${included} paths=${include_paths} problem=${problem}"
         if [ -n "$err" ]; then
             echo "  Recent kernel messages (truncated):"
             echo "$err" | sed -n '1,5p' | sed -e 's/^/    /'
@@ -427,26 +428,25 @@ storage_summary() {
 
 storage_summary || true
 
-# If called with --list, show detected mounts and sample file listings then exit
-if [ "${1:-}" = "--list" ] || [ "${1:-}" = "list" ]; then
-    echo "[LIST MODE] Files root: $FILES_ROOT"
-    echo "Top-level entries:"; ls -la "$FILES_ROOT" || true
-    echo
-    echo "Streaming contents (sample):"; ls -la "$FILES_ROOT/Streaming" 2>/dev/null | head -n 40 || echo "(none)"
-    echo
-    echo "Thumbnails (sample):"; ls -la "$FILES_ROOT/.thumbs" 2>/dev/null | head -n 40 || echo "(none)"
-    echo
+# Brief, user-friendly summary (default)
+brief_summary() {
+    echo "[STORAGE SUMMARY] Files root: $FILES_ROOT"
+    echo -n "  Top-level entries: "
+    ls -1A "$FILES_ROOT" 2>/dev/null | wc -l || echo "0"
+    echo -n "  Streaming files: "
+    find "$FILES_ROOT/Streaming" -type f 2>/dev/null | wc -l || echo "0"
+    echo -n "  Thumbnails: "
+    ls -1 "$FILES_ROOT/.thumbs" 2>/dev/null | wc -l || echo "0"
     if [ -f "$FILES_ROOT/.video_index.json" ]; then
-        echo ".video_index.json size:" $(wc -c < "$FILES_ROOT/.video_index.json")
-        echo "First 10 lines:"; head -n 10 "$FILES_ROOT/.video_index.json"
+        echo -n "  Manifest size: "
+        wc -c < "$FILES_ROOT/.video_index.json" 2>/dev/null | awk '{print $1 " bytes"}' || echo "unknown"
     else
-        echo "No .video_index.json manifest found"
+        echo "  Manifest: (none)"
     fi
-    echo
-    echo "Find sample videos (first 40):"
-    find "$FILES_ROOT" -type f \( -iname '*.mp4' -o -iname '*.mkv' -o -iname '*.mov' -o -iname '*.avi' \) 2>/dev/null | head -n 40 || true
-    exit 0
-fi
+    echo "  Note: if counts are zero, check dmesg for I/O errors or run imaging if the disk is flaky."
+}
+
+brief_summary
 
 
 log_step "4/7" "Setting up Python environment"
