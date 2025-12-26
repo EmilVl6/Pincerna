@@ -62,6 +62,13 @@ async function loadStreamingFiles() {
       res.files = res.files.filter((f, i, arr) => arr.findIndex(x => x.path === f.path) === i);
     }
 
+    // Cache a lightweight copy of the indexed files so we can show a default
+    // gallery if searches or reloads temporarily return no results.
+    try {
+      const cached = (res.files || []).map(f => ({ path: f.path, name: f.name, thumbnail: f.thumbnail, size: f.size }));
+      localStorage.setItem('pincerna_last_stream_files', JSON.stringify(cached.slice(0, 200)));
+    } catch (e) {}
+
     if (res && res.files) {
     // replace heavy background-image approach with incremental rendering + <img loading="lazy">
     // Ignore items that don't have a generated thumbnail (the user requested
@@ -282,6 +289,30 @@ async function loadStreamingFiles() {
 
       // reset grid when searching
       function resetStreamGrid(list) {
+        // If the incoming list is empty, try fallbacks: current server response
+        // (res.files) or a locally cached last-known set so the UI doesn't
+        // become just a title + search bar.
+        if (!list || list.length === 0) {
+          let fallback = (res && res.files) ? (res.files || []) : [];
+          // prefer items with thumbnails
+          fallback = fallback.filter(f => f && f.thumbnail);
+          if (!fallback || fallback.length === 0) {
+            try {
+              const cached = JSON.parse(localStorage.getItem('pincerna_last_stream_files') || '[]');
+              if (Array.isArray(cached) && cached.length) fallback = cached;
+            } catch (e) { fallback = []; }
+          }
+          // still empty -> show friendly empty state and return
+          if (!fallback || fallback.length === 0) {
+            STREAM_FILES = [];
+            STREAM_OFFSET = 0;
+            grid.innerHTML = '<div style="padding:18px;color:rgba(255,255,255,0.7);">No results found. Try clearing the search or <a id="stream-show-all" href="#">show all</a>.</div>';
+            const showAll = document.getElementById('stream-show-all');
+            if (showAll) showAll.addEventListener('click', (ev) => { ev.preventDefault(); resetStreamGrid(res.files || []); });
+            return;
+          }
+          list = fallback;
+        }
         STREAM_FILES = list;
         STREAM_OFFSET = 0;
         grid.innerHTML = '';
@@ -727,7 +758,12 @@ function renderFilesStoragePanel(devices) {
 
 function showStreamingPlayer(path, name) {
   const token = localStorage.getItem('pincerna_token') || '';
-  const src = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(path) + '&token=' + encodeURIComponent(token);
+  // prefer any preloaded preview element if available
+  let src = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(path) + '&token=' + encodeURIComponent(token);
+  try {
+    const preEl = document.querySelector(`.stream-card[data-path="${path}"] video.preview-preload`);
+    if (preEl && preEl.src) src = preEl.currentSrc || preEl.src;
+  } catch(e){}
   const ext = (name.split('.').pop() || '').toLowerCase();
   const videoExts = ['mp4','webm','ogg','mov'];
   const audioExts = ['mp3','wav','m4a','aac','flac'];
@@ -738,21 +774,32 @@ function showStreamingPlayer(path, name) {
   const modal = document.createElement('div');
   modal.id = 'streaming-player-modal';
   modal.className = 'streaming-player-modal';
+  // find thumbnail from the card if present
+  let poster = '';
+  try { poster = document.querySelector(`.stream-card[data-path="${path}"]`)?.dataset.thumb || ''; } catch(e){}
 
   let mediaHtml = '';
-  if (videoExts.includes(ext)) mediaHtml = `<video id="pincerna-player" controls autoplay playsinline style="width:100%;height:100%"><source src="${src}"></video>`;
-  else if (audioExts.includes(ext)) mediaHtml = `<audio id="pincerna-player" controls autoplay style="width:100%"><source src="${src}"></audio>`;
-  else mediaHtml = `<div style="padding:12px">Cannot play this file in-browser. <a href="${src}" target="_blank">Open</a></div>`;
+  if (videoExts.includes(ext)) {
+    mediaHtml = `<video id="pincerna-player" controls playsinline style="width:100%;height:100%" poster="${poster}"><source src="${src}"></video>`;
+  } else if (audioExts.includes(ext)) {
+    mediaHtml = `<audio id="pincerna-player" controls style="width:100%"><source src="${src}"></audio>`;
+  } else {
+    mediaHtml = `<div style="padding:12px">Cannot play this file in-browser. <a href="${src}" target="_blank">Open</a></div>`;
+  }
 
   modal.innerHTML = `
     <div class="streaming-player-wrap">
       <div class="streaming-player-header">
-        <h3>${name}</h3>
+        <h1 style="margin:0;font-size:1.6rem">${name}</h1>
         <div class="streaming-player-controls">
+          <button id="streaming-full" class="btn">Fullscreen</button>
           <button id="streaming-close" class="btn">Close</button>
         </div>
       </div>
       <div class="streaming-player-body">${mediaHtml}</div>
+      <div class="streaming-player-details" style="padding:12px 16px;color:rgba(255,255,255,0.8);font-size:0.95rem">
+        <div><strong>Path:</strong> ${path}</div>
+      </div>
     </div>
   `;
 
@@ -765,6 +812,27 @@ function showStreamingPlayer(path, name) {
   // Try to present as full viewport (visually full-screen)
   try { document.documentElement.style.overflow = 'hidden'; } catch(e){}
   document.getElementById('streaming-close').addEventListener('click', () => { try { document.documentElement.style.overflow = ''; } catch(e){}; closeModal(); });
+  // Fullscreen button: toggle fullscreen for the wrap
+  const wrap = modal.querySelector('.streaming-player-wrap');
+  document.getElementById('streaming-full').addEventListener('click', async () => {
+    try {
+      if (!document.fullscreenElement) await wrap.requestFullscreen();
+      else await document.exitFullscreen();
+    } catch(e) {}
+  });
+  // If a preloaded video exists, try to play it immediately (user clicked)
+  try {
+    const p = document.getElementById('pincerna-player');
+    if (p) {
+      // if video element not yet loaded source, set src
+      const source = p.querySelector('source');
+      if (source && source.src) {
+        try { p.currentTime = 0; p.play().catch(()=>{}); } catch(e){}
+      }
+      // clicking the body toggles fullscreen on the video wrapper
+      p.addEventListener('click', async (ev) => { ev.stopPropagation(); try { if (!document.fullscreenElement) await wrap.requestFullscreen(); } catch(e){} });
+    }
+  } catch(e){}
   // Close modal with Escape
   const escHandler = (e) => { if (e.key === 'Escape') { try { document.documentElement.style.overflow = ''; } catch(e){}; closeModal(); document.removeEventListener('keydown', escHandler); } };
   document.addEventListener('keydown', escHandler);
