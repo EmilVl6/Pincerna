@@ -498,13 +498,20 @@ def list_files():
 	try:
 		items = []
 		if os.path.isdir(full_path):
-			for name in os.listdir(full_path):
+			try:
+				names = os.listdir(full_path)
+			except (PermissionError, OSError) as e:
+				# I/O error reading directory (e.g. broken mount). Return an empty listing
+				logging.warning(f"Failed to list directory {full_path}: {e}")
+				names = []
+
+			for name in names:
 				try:
 					item_path = os.path.join(full_path, name)
 					rel_path = os.path.join(path, name)
 					stat = os.stat(item_path)
 					size = stat.st_size if not os.path.isdir(item_path) else None
-					
+                    
 					if size is not None:
 						if size > 1024*1024*1024:
 							size_str = f"{size/(1024*1024*1024):.1f} GB"
@@ -524,11 +531,13 @@ def list_files():
 						'mtime': datetime.datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M')
 					})
 				except (PermissionError, OSError):
-					pass
-		
+					# skip unreadable files
+					continue
+
 		items.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
 		return jsonify(files=items, path=path)
 	except Exception as e:
+		logging.exception('list_files failed')
 		return jsonify(error=str(e)), 500
 
 @app.route("/files/download")

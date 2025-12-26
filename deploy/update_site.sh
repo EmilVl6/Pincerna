@@ -428,6 +428,12 @@ thumbs_dir="$FILES_ROOT/.thumbs"
 manifest="$FILES_ROOT/.video_index.json"
 mkdir -p "$thumbs_dir"
 
+# If the files root is not accessible (I/O error, disconnected mount), skip indexing to avoid failures
+if [ ! -d "$FILES_ROOT" ] || [ ! -r "$FILES_ROOT" ]; then
+    log_warn "Files root $FILES_ROOT is not accessible, skipping video indexing (I/O error)."
+    manifest_changed=0
+else
+
 idx_ts="$FILES_ROOT/.video_index.ts"
 tmp_manifest=$(mktemp)
 
@@ -592,6 +598,8 @@ if [ "${manifest_changed:-1}" -eq 1 ]; then
 else
     log_success "Backend restart skipped (manifest unchanged)"
 fi
+
+fi # end files root accessible check
 
 
 

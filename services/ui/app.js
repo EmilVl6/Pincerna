@@ -137,6 +137,18 @@ async function loadStreamingFiles() {
         if (sentinel) STREAM_SENTINEL_OBSERVER.observe(sentinel);
       }
 
+      function tryWarmPreviews(count){
+        try{
+          const cards = Array.from(document.querySelectorAll('.stream-card'));
+          for(let i=0;i<Math.min(count,cards.length);i++){
+            const pre = cards[i].querySelector('video.preview-preload');
+            if(pre && !pre.dataset.loaded){
+              try{ pre.src = pre.dataset.src || pre.src; pre.load(); pre.muted = true; pre.play().then(()=>{ try{ pre.pause(); }catch(e){} }).catch(()=>{}); pre.dataset.loaded='1'; }catch(e){}
+            }
+          }
+        }catch(e){}
+      }
+
       function createCard(f) {
         const thumb = f.thumbnail || (window.location.origin + '/cloud/api/thumbnail?path=' + encodeURIComponent(f.path));
         const card = document.createElement('div');
@@ -268,6 +280,8 @@ async function loadStreamingFiles() {
       }
       document.addEventListener('keydown', (e) => {
         if (document.getElementById('streaming-player-modal')) return; // don't navigate while player is open
+        const cards = getAllCards();
+        // Arrow navigation
         if (['ArrowRight','ArrowLeft','ArrowDown','ArrowUp'].includes(e.key)) {
           e.preventDefault();
           if (e.key === 'ArrowRight') moveSelection(1,0);
@@ -275,9 +289,32 @@ async function loadStreamingFiles() {
           if (e.key === 'ArrowDown') moveSelection(0,1);
           if (e.key === 'ArrowUp') moveSelection(0,-1);
         }
-        if (e.key === 'Enter') {
-          const cards = getAllCards();
-          if (SELECTED_INDEX >=0 && SELECTED_INDEX < cards.length) cards[SELECTED_INDEX].click();
+        // Open selected
+        if (e.key === 'Enter' || e.code === 'Space') {
+          if (SELECTED_INDEX >=0 && SELECTED_INDEX < cards.length) {
+            e.preventDefault();
+            cards[SELECTED_INDEX].click();
+          }
+        }
+        // Home / End navigation
+        if (e.key === 'Home') {
+          e.preventDefault(); selectCard(0);
+        }
+        if (e.key === 'End') {
+          e.preventDefault(); selectCard(Math.max(0, cards.length-1));
+        }
+        // PageUp / PageDown - jump several rows
+        if (e.key === 'PageDown' || e.key === 'PageUp') {
+          try{
+            const cardEl = cards[0];
+            const cardWidth = (cardEl && cardEl.getBoundingClientRect().width) || 220;
+            const cols = Math.max(1, Math.floor((document.getElementById('stream-grid')?.clientWidth||800) / Math.max(200, cardWidth)));
+            const rows = 3;
+            const delta = cols * rows;
+            if (e.key === 'PageDown') moveSelection(0, rows);
+            else moveSelection(0, -rows);
+            e.preventDefault();
+          }catch(e){}
         }
       });
 
@@ -296,8 +333,12 @@ async function loadStreamingFiles() {
         slice.forEach(f => {
           const { card, img } = createCard(f);
           grid.appendChild(card);
+          // reveal animation
+          setTimeout(() => { try { card.classList.add('visible'); } catch(e){} }, 20);
           if (img && STREAM_THUMB_OBSERVER) STREAM_THUMB_OBSERVER.observe(img);
         });
+        // warm up the first few previews to reduce latency when opening
+        tryWarmPreviews(4);
         // if there are still items, ensure sentinel is observed
         if (STREAM_OFFSET < STREAM_FILES.length) setupSentinelObserver();
       }
@@ -335,12 +376,7 @@ async function loadStreamingFiles() {
         renderNextBatch();
       }
 
-      search.addEventListener('input', () => {
-        const q = search.value.trim().toLowerCase();
-        if (!q) return resetStreamGrid(res.files || []);
-        const filtered = (res.files || []).filter(f => (f.name || '').toLowerCase().includes(q));
-        resetStreamGrid(filtered);
-      });
+      // legacy search listener removed; debounced client-side filtering is used instead
 
       // initial render (first batch)
       renderNextBatch();
