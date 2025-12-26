@@ -17,9 +17,10 @@
 
   if (!window.logout) {
     window.logout = async function() {
-      try { if (typeof apiFetch === 'function') await apiFetch('/auth/logout', { method: 'POST' }); } catch(e){}
       try { localStorage.removeItem('pincerna_token'); localStorage.removeItem('pincerna_user'); } catch(e){}
-      try { window.location.href = 'auth.html'; } catch(e){}
+      try { localStorage.removeItem('pincerna_last_stream_files'); } catch(e){}
+      try { if (window.opener && !window.opener.closed) { try { window.opener.localStorage.removeItem('pincerna_token'); window.opener.localStorage.removeItem('pincerna_user'); } catch(e){} } } catch(e){}
+      try { const dest = (window.location && window.location.origin ? window.location.origin : '') + '/cloud/auth.html'; window.location.replace(dest); } catch(e){}
     };
   }
   

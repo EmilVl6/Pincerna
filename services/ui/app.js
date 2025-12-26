@@ -35,14 +35,11 @@ function showUserGreeting() {
 }
 
 async function logout() {
-  try {
-    await apiFetch('/auth/logout', { method: 'POST' });
-  } catch (e) {
-    // ignore network errors during logout
-  }
-  localStorage.removeItem('pincerna_token');
-  localStorage.removeItem('pincerna_user');
-  window.location.href = 'auth.html';
+  try { localStorage.removeItem('pincerna_token'); } catch(e){}
+  try { localStorage.removeItem('pincerna_user'); } catch(e){}
+  try { localStorage.removeItem('pincerna_last_stream_files'); } catch(e){}
+  try { if (window.opener && !window.opener.closed) { try { window.opener.localStorage.removeItem('pincerna_token'); window.opener.localStorage.removeItem('pincerna_user'); } catch(e){} } } catch(e){}
+  try { const dest = window.location.origin + '/cloud/auth.html'; window.location.replace(dest); } catch(e){}
 }
 
 async function loadStreamingFiles() {
