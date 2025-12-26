@@ -345,13 +345,60 @@ def oauth_callback():
 	user_js = json.dumps(json.dumps(user_info))
 	
 	# Redirect to the UI root with a cache-busting timestamp so browsers fetch updated bundles
-	html = f"""<!doctype html><html><head><meta charset="utf-8"></head><body><script>
-localStorage.setItem('pincerna_token',{token_js});
-localStorage.setItem('pincerna_user',{user_js});
-// go to UI root with timestamp to avoid stale cached assets
-location.replace('/cloud/?_=' + Date.now());
-</script></body></html>"""
-	return html
+		# More robust callback page: set localStorage, attempt redirect, and provide
+		# a visible fallback with debug info if the client fails to execute the script
+		app_url = f"/cloud/?_={int(time.time())}"
+		short_token = token[:32] + '...' if token and len(token) > 32 else token
+		html = f"""<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width,initial-scale=1">
+		<title>Signing in…</title>
+		<style>body{{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#111;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}}.card{{padding:20px;border-radius:8px;background:linear-gradient(180deg,#0b0b0b,#111);max-width:720px;width:100%}}a.button{{display:inline-block;margin-top:12px;padding:10px 14px;background:#ff8200;color:#fff;border-radius:6px;text-decoration:none}}</style>
+	</head>
+	<body>
+		<div class="card">
+			<h2>Signing you in…</h2>
+			<p id="status">Attempting to finish sign-in and open the app.</p>
+			<div style="margin-top:12px">If you are not redirected automatically, click <a id="continue-link" class="button" href="{app_url}">Continue to Pincerna</a></div>
+			<details style="margin-top:12px;color:#ddd"><summary>Debug info</summary>
+				<pre id="dbg" style="white-space:pre-wrap;color:#ddd;font-size:0.9rem;margin-top:8px">token: {short_token}\nuser: {json.dumps(user_info)}</pre>
+			</details>
+		</div>
+		<script>
+			(function(){
+				try{
+					localStorage.setItem('pincerna_token', {token_js});
+				}catch(e){
+					console.warn('failed to set token in localStorage', e);
+					document.getElementById('status').textContent = 'Signed in but failed to set localStorage token (see console).';
+				}
+				try{
+					localStorage.setItem('pincerna_user', {user_js});
+				}catch(e){
+					console.warn('failed to set user in localStorage', e);
+				}
+				// attempt to replace the current location with the app root (cache-busted)
+				try{
+					var target = '{app_url}';
+					// small delay to allow localStorage to settle for some browsers
+					setTimeout(function(){
+						try{ location.replace(target); }catch(e){ window.location = target; }
+					}, 250);
+				}catch(e){
+					console.warn('redirect failed', e);
+				}
+				// If it doesn't redirect within 3s, reveal a helpful message
+				setTimeout(function(){
+					var s = document.getElementById('status');
+					if (s) s.textContent = 'If nothing happened, click Continue to Pincerna.';
+				}, 3000);
+			})();
+		</script>
+	</body>
+</html>"""
+		return html
 
 def protected(f):
 	def wrapper(*args, **kwargs):
