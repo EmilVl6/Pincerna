@@ -373,11 +373,27 @@ def oauth_postjs():
 	def js_string(s):
 		return json.dumps(s)
 
-	js = f"localStorage.setItem('pincerna_token', {js_string(token_val)});\n"
-	js += f"localStorage.setItem('pincerna_user', {js_string(user_val)});\n"
-	js += "location.replace('/cloud/index.html');\n"
+	# JS will attempt to set storage on the opener (popup flow) and redirect it,
+	# then close the popup. Fallback to writing localStorage in the current
+	# window and redirect if no opener exists.
+	js_lines = []
+	js_lines.append("(function(){")
+	js_lines.append(f"  var _t = {js_string(token_val)};")
+	js_lines.append(f"  var _u = {js_string(user_val)};")
+	js_lines.append("  try {")
+	js_lines.append("    if (window.opener && !window.opener.closed) {")
+	js_lines.append("      try { window.opener.localStorage.setItem('pincerna_token', _t); } catch(e){}")
+	js_lines.append("      try { window.opener.localStorage.setItem('pincerna_user', _u); } catch(e){}")
+	js_lines.append("      try { window.opener.location.replace('/cloud/index.html'); } catch(e){}")
+	js_lines.append("      try { window.close(); return; } catch(e){}")
+	js_lines.append("    }")
+	js_lines.append("  } catch(e) {}")
+	js_lines.append("  try { localStorage.setItem('pincerna_token', _t); } catch(e) {}")
+	js_lines.append("  try { localStorage.setItem('pincerna_user', _u); } catch(e) {}")
+	js_lines.append("  try { location.replace('/cloud/index.html'); } catch(e) {}")
+	js_lines.append("})();")
 
-	return Response(js, mimetype='application/javascript')
+	return Response("\n".join(js_lines), mimetype='application/javascript')
 
 def protected(f):
 	def wrapper(*args, **kwargs):
