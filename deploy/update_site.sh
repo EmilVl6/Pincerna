@@ -364,6 +364,69 @@ populate_streaming() {
 bind_existing_mounts || true
 populate_streaming || true
 
+
+# Summarize detected storage devices, inclusion status, sizes and recent I/O issues
+storage_summary() {
+    log_step "3.3/7" "Storage summary"
+    echo "Detected block devices (sd*/nvme*):"
+    lsblk -plno NAME,SIZE,MODEL,TYPE,MOUNTPOINT | egrep '/dev/sd|/dev/nvme' | sed -E 's/^/  /'
+
+    echo
+    echo "Summary for devices relevant to $FILES_ROOT:"
+    while read -r dev size model type mnt; do
+        [ -z "$dev" ] && continue
+        base=$(basename "$dev")
+        # Find if this device (or its partitions) are bound under FILES_ROOT
+        included="no"
+        include_paths=""
+        while read -r p; do
+            case "$p" in
+                $FILES_ROOT*|/mnt/*|/media/*) included="yes"; include_paths="$include_paths $p" ;;
+            esac
+        done < <(lsblk -plno MOUNTPOINT "${dev}" 2>/dev/null || true)
+
+        # If not directly mounted, check partitions
+        if [ "$included" != "yes" ]; then
+            for part in $(lsblk -plno NAME "${dev}" | tail -n +2 2>/dev/null || true); do
+                for p in $(lsblk -plno MOUNTPOINT "$part" 2>/dev/null || true); do
+                    case "$p" in
+                        $FILES_ROOT*|/mnt/*|/media/*) included="yes"; include_paths="$include_paths $p" ;;
+                    esac
+                done
+            done
+        fi
+
+        # Determine usable size from mountpoint if available
+        size_info="-"
+        if [ -n "$include_paths" ]; then
+            for p in $include_paths; do
+                if [ -d "$p" ]; then
+                    si=$(df -h "$p" 2>/dev/null | awk 'NR==2{print $2" (used:"$3" avail:"$4")"}')
+                    size_info="$si"
+                    break
+                fi
+            done
+        fi
+
+        # Check dmesg for recent errors mentioning device
+        err=$(dmesg | tail -n 500 | egrep -i "($base|${dev})" | egrep -i "error|I/O|reset|over-current|fail" | tail -n 5 || true)
+        if [ -n "$err" ]; then
+            problem="YES"
+        else
+            problem="no"
+        fi
+
+        printf "- %s: size=%s included=%s paths=%s problem=%s\n" "$dev" "$size_info" "$included" "$include_paths" "$problem"
+        if [ -n "$err" ]; then
+            echo "  Recent kernel messages (truncated):"
+            echo "$err" | sed -n '1,5p' | sed -e 's/^/    /'
+        fi
+    done < <(lsblk -plno NAME,SIZE,MODEL,TYPE,MOUNTPOINT | egrep '/dev/sd|/dev/nvme' | awk '{print $1" "$2" "$3" "$4" "$5}')
+
+}
+
+storage_summary || true
+
 # If called with --list, show detected mounts and sample file listings then exit
 if [ "${1:-}" = "--list" ] || [ "${1:-}" = "list" ]; then
     echo "[LIST MODE] Files root: $FILES_ROOT"
