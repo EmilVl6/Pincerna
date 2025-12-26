@@ -114,6 +114,7 @@ async function loadStreamingFiles() {
         const card = document.createElement('div');
         card.className = 'stream-card';
         card.dataset.path = f.path;
+        card.dataset.thumb = thumb || '';
         card.dataset.name = f.name;
         card.tabIndex = 0;
 
@@ -124,11 +125,25 @@ async function loadStreamingFiles() {
         img.alt = f.name;
         img.loading = 'lazy';
         img.dataset.src = thumb;
-        // Placeholder for failed thumbnails
+        // Placeholder for failed thumbnails: replace <img> with styled placeholder
         img.addEventListener('error', () => {
-          img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE1MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5ObyBUaHVtYm5haWw8L3RleHQ+PC9zdmc+';
+          const ph = document.createElement('div');
+          ph.className = 'thumb-placeholder';
+          ph.textContent = 'No Thumbnail';
+          if (img.parentNode) img.parentNode.replaceChild(ph, img);
         });
         banner.appendChild(img);
+
+        // Hidden preview element to warm up playback on hover/focus
+        const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(f.path) + '&token=' + encodeURIComponent(localStorage.getItem('pincerna_token') || '');
+        const pre = document.createElement('video');
+        pre.className = 'preview-preload';
+        pre.preload = 'metadata';
+        pre.muted = true;
+        pre.playsInline = true;
+        pre.style.display = 'none';
+        pre.dataset.src = previewUrl;
+        banner.appendChild(pre);
         // overlay with play button
         const overlay = document.createElement('div');
         overlay.className = 'poster-overlay';
@@ -158,7 +173,8 @@ async function loadStreamingFiles() {
           if (info && !info.error) {
             showStreamingPlayerByInfo(info);
           } else {
-            showStreamingPlayer(path, card.dataset.name);
+            // prefer using the warmed preview if available
+            showStreamingPlayer(path, card.dataset.name, { preferPreloaded: true });
           }
         });
         // Pop-out button
@@ -170,6 +186,17 @@ async function loadStreamingFiles() {
             window.open(url, '_blank', 'noopener');
           });
         } catch(e){}
+        // preload when the user hovers or focuses the card (warm up first frame)
+        const startPreload = () => {
+          try {
+            if (pre.dataset.loaded) return;
+            pre.src = pre.dataset.src || previewUrl;
+            pre.load();
+            pre.dataset.loaded = '1';
+          } catch (e) {}
+        };
+        card.addEventListener('mouseenter', startPreload);
+        card.addEventListener('focus', startPreload);
         card.addEventListener('keydown', (e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
