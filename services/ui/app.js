@@ -63,8 +63,10 @@ async function loadStreamingFiles() {
     }
 
     if (res && res.files) {
-      // replace heavy background-image approach with incremental rendering + <img loading="lazy">
-      STREAM_FILES = res.files || [];
+    // replace heavy background-image approach with incremental rendering + <img loading="lazy">
+    // Ignore items that don't have a generated thumbnail (the user requested
+    // to hide items without thumbnails for a cleaner UI)
+    STREAM_FILES = (res.files || []).filter(f => f && f.thumbnail && String(f.thumbnail).trim());
       STREAM_OFFSET = 0;
 
       filesEl.innerHTML = `
@@ -113,6 +115,7 @@ async function loadStreamingFiles() {
         card.className = 'stream-card';
         card.dataset.path = f.path;
         card.dataset.name = f.name;
+        card.tabIndex = 0;
 
         const banner = document.createElement('div');
         banner.className = 'stream-card-banner';
@@ -144,7 +147,9 @@ async function loadStreamingFiles() {
         card.appendChild(title);
         card.appendChild(size);
 
-        card.addEventListener('click', async () => {
+        card.addEventListener('click', async (e) => {
+          // single-click selects and opens the player
+          selectCardByElement(card);
           const path = card.dataset.path;
           const info = await apiFetch('/streaming/video?path=' + encodeURIComponent(path));
           if (info && !info.error) {
@@ -153,9 +158,67 @@ async function loadStreamingFiles() {
             showStreamingPlayer(path, card.dataset.name);
           }
         });
+        card.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            card.click();
+          }
+        });
 
         return { card, img };
       }
+
+      // Selection handling and keyboard navigation
+      let SELECTED_INDEX = -1;
+      function getAllCards() {
+        return Array.from(grid.querySelectorAll('.stream-card'));
+      }
+      function selectCard(idx) {
+        const cards = getAllCards();
+        if (!cards.length) return;
+        if (idx < 0) idx = 0;
+        if (idx >= cards.length) idx = cards.length - 1;
+        cards.forEach(c => c.classList.remove('selected'));
+        const card = cards[idx];
+        if (!card) return;
+        card.classList.add('selected');
+        SELECTED_INDEX = idx;
+        // ensure visible
+        card.scrollIntoView({behavior: 'smooth', block: 'center', inline: 'center'});
+        try { card.focus(); } catch(e){}
+      }
+      function selectCardByElement(el) {
+        const cards = getAllCards();
+        const idx = cards.indexOf(el);
+        if (idx !== -1) selectCard(idx);
+      }
+      function moveSelection(dx, dy) {
+        const cards = getAllCards();
+        if (!cards.length) return;
+        const cardWidth = (cards[0] && cards[0].getBoundingClientRect().width) || 220;
+        const cols = Math.max(1, Math.floor(grid.clientWidth / Math.max(200, cardWidth)));
+        let idx = SELECTED_INDEX;
+        if (idx === -1) idx = 0;
+        if (dx === 1) idx = Math.min(cards.length-1, idx+1);
+        if (dx === -1) idx = Math.max(0, idx-1);
+        if (dy === 1) idx = Math.min(cards.length-1, idx+cols);
+        if (dy === -1) idx = Math.max(0, idx-cols);
+        selectCard(idx);
+      }
+      document.addEventListener('keydown', (e) => {
+        if (document.getElementById('streaming-player-modal')) return; // don't navigate while player is open
+        if (['ArrowRight','ArrowLeft','ArrowDown','ArrowUp'].includes(e.key)) {
+          e.preventDefault();
+          if (e.key === 'ArrowRight') moveSelection(1,0);
+          if (e.key === 'ArrowLeft') moveSelection(-1,0);
+          if (e.key === 'ArrowDown') moveSelection(0,1);
+          if (e.key === 'ArrowUp') moveSelection(0,-1);
+        }
+        if (e.key === 'Enter') {
+          const cards = getAllCards();
+          if (SELECTED_INDEX >=0 && SELECTED_INDEX < cards.length) cards[SELECTED_INDEX].click();
+        }
+      });
 
       function renderNextBatch() {
         if (!grid) return;
@@ -635,24 +698,37 @@ function showStreamingPlayer(path, name) {
 
   const modal = document.createElement('div');
   modal.id = 'streaming-player-modal';
-  modal.className = 'connection-modal';
+  modal.className = 'streaming-player-modal';
 
   let mediaHtml = '';
-  if (videoExts.includes(ext)) mediaHtml = `<video controls autoplay style="width:100%;height:auto;max-height:70vh"><source src="${src}"></video>`;
-  else if (audioExts.includes(ext)) mediaHtml = `<audio controls autoplay style="width:100%"><source src="${src}"></audio>`;
+  if (videoExts.includes(ext)) mediaHtml = `<video id="pincerna-player" controls autoplay playsinline style="width:100%;height:100%"><source src="${src}"></video>`;
+  else if (audioExts.includes(ext)) mediaHtml = `<audio id="pincerna-player" controls autoplay style="width:100%"><source src="${src}"></audio>`;
   else mediaHtml = `<div style="padding:12px">Cannot play this file in-browser. <a href="${src}" target="_blank">Open</a></div>`;
 
   modal.innerHTML = `
-    <div class="connection-modal-content">
-      <div class="connection-modal-header">
+    <div class="streaming-player-wrap">
+      <div class="streaming-player-header">
         <h3>${name}</h3>
-        <button class="connection-modal-close" onclick="document.getElementById('streaming-player-modal')?.remove()">✕</button>
+        <div class="streaming-player-controls">
+          <button id="streaming-close" class="btn">Close</button>
+        </div>
       </div>
-      <div class="connection-modal-body">${mediaHtml}</div>
+      <div class="streaming-player-body">${mediaHtml}</div>
     </div>
   `;
-  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+  modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+  function closeModal() {
+    try { const p = document.getElementById('pincerna-player'); if (p && !p.paused) p.pause(); } catch(e){}
+    modal.remove();
+  }
   document.body.appendChild(modal);
+  // Try to present as full viewport (visually full-screen)
+  try { document.documentElement.style.overflow = 'hidden'; } catch(e){}
+  document.getElementById('streaming-close').addEventListener('click', () => { try { document.documentElement.style.overflow = ''; } catch(e){}; closeModal(); });
+  // Close modal with Escape
+  const escHandler = (e) => { if (e.key === 'Escape') { try { document.documentElement.style.overflow = ''; } catch(e){}; closeModal(); document.removeEventListener('keydown', escHandler); } };
+  document.addEventListener('keydown', escHandler);
 }
 
 function drawGridLines(gatewayIp) {
