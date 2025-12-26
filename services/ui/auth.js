@@ -7,22 +7,19 @@
   const btn = document.getElementById('signin-btn');
   if(!btn) return;
 
-  const _origHref = btn.getAttribute('href') || '/cloud/api/oauth/start';
-  btn.removeAttribute('href');
-  btn.setAttribute('aria-disabled','true');
-  btn.setAttribute('tabindex','-1');
+  // read data-href (button) fallback to default
+  const _origHref = btn.getAttribute('data-href') || '/cloud/api/oauth/start';
+  try { btn.disabled = true; btn.setAttribute('aria-disabled','true'); } catch(e){}
 
   let verified = false;
 
   function enableSignIn(){
     if(verified) return;
     verified = true;
-    btn.classList.remove('disabled');
-    btn.removeAttribute('aria-disabled');
-    btn.removeAttribute('tabindex');
-    btn.setAttribute('href', _origHref);
-    btn.style.cursor = 'pointer';
+    try { btn.classList.remove('disabled'); btn.disabled = false; btn.removeAttribute('aria-disabled'); btn.style.cursor = 'pointer'; } catch(e){}
     document.body.classList.add('turnstile-verified');
+    // ensure clicking navigates to oauth start
+    try { btn.onclick = function(){ window.location.href = _origHref; }; } catch(e){}
   }
 
   window.onTurnstileSuccess = function(token){
@@ -42,8 +39,10 @@
   function tryRender(sitekey){
     if(!sitekey) return false;
     function renderWhenReady(attemptsLeft){
+      const container = document.getElementById('turnstile-container');
       if(window.turnstile && typeof window.turnstile.render === 'function'){
-        window.turnstile.render(document.getElementById('turnstile-container'), {
+        try { if(container) container.style.display = ''; } catch(e){}
+        window.turnstile.render(container, {
           sitekey: sitekey,
           callback: window.onTurnstileSuccess
         });

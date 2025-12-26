@@ -420,18 +420,25 @@ body::after{
 .network-device.gateway::before{content:'🌐';position:absolute;top:-8px;right:-8px;font-size:16px}
 
 /* Streaming grid and cards - refined visual style */
-.stream-grid{display:flex;flex-wrap:wrap;gap:16px;overflow-y:auto;padding:12px;max-height:66vh}
-.stream-card{min-width:200px;max-width:260px;background:rgba(255,255,255,0.02);border-radius:8px;display:flex;flex-direction:column;align-items:stretch;padding:4px;margin:8px;cursor:pointer;transition:transform 0.18s, box-shadow 0.18s,border-color 140ms}
-.stream-card:hover{transform:translateY(-6px);box-shadow:0 14px 30px rgba(0,0,0,0.18);border-color:rgba(255,255,255,0.06)}
-.stream-card-banner{position:relative;width:100%;padding-top:52%;margin-bottom:8px;border-radius:6px;overflow:hidden;background:linear-gradient(180deg,#0b0b0b 0%, #111 100%)}
-.stream-card-banner img.stream-thumb{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block}
+.stream-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:20px;overflow-y:auto;padding:18px;max-height:72vh;align-items:start}
+.stream-card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:10px;display:flex;flex-direction:column;align-items:stretch;padding:0;cursor:pointer;transition:transform 220ms cubic-bezier(.2,.9,.3,1), box-shadow 220ms, border-color 140ms;overflow:hidden}
+.stream-card:hover{transform:translateY(-8px) scale(1.01);box-shadow:0 18px 40px rgba(0,0,0,0.28);border-color:rgba(255,255,255,0.06)}
+.stream-card:focus{outline:3px solid rgba(255,255,255,0.06);outline-offset:4px}
+.stream-card-banner{position:relative;width:100%;padding-top:56%;border-radius:8px 8px 0 0;overflow:hidden;background:linear-gradient(180deg,#0b0b0b 0%, #111 100%)}
+.stream-card-banner img.stream-thumb{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;filter:contrast(1.02)}
 .poster-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,0) 40%, rgba(0,0,0,0.32) 100%);opacity:0;transition:opacity 180ms ease, transform 220ms cubic-bezier(.2,.9,.3,1);transform:translateY(6px)}
 .stream-card:hover .poster-overlay{opacity:1;pointer-events:auto;transform:translateY(0)}
-.play-btn{width:56px;height:56px;border-radius:50%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;box-shadow:0 10px 30px rgba(0,0,0,0.45);border:2px solid rgba(255,255,255,0.06);transition:transform 140ms ease, box-shadow 120ms}
+.play-btn{width:56px;height:56px;border-radius:50%;background:linear-gradient(180deg, rgba(0,0,0,0.5), rgba(0,0,0,0.35));display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;box-shadow:0 8px 28px rgba(0,0,0,0.36);border:2px solid rgba(255,255,255,0.04);transition:transform 140ms ease, box-shadow 120ms, opacity 160ms}
 .play-btn:hover{transform:scale(1.06);box-shadow:0 16px 36px rgba(0,0,0,0.42)}
 .play-btn:active{transform:scale(0.98)}
-.stream-card-title{font-weight:600;color:#fff;font-size:0.92rem;margin:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-shadow:0 1px 2px rgba(0,0,0,0.6)}
-.stream-card-size{font-size:0.78rem;color:rgba(255,255,255,0.74);margin:6px 6px 10px 6px}
+.stream-card-meta{padding:12px 14px;background:linear-gradient(180deg, rgba(0,0,0,0.02), rgba(0,0,0,0.03));}
+.stream-card-title{font-weight:700;color:#fff;font-size:1.02rem;margin:0 0 6px 0;line-height:1.2;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stream-card-size{font-size:0.86rem;color:rgba(255,255,255,0.78);margin:0}
+
+/* Title overlay on thumbnail */
+.stream-card-overlay{position:absolute;left:0;right:0;bottom:0;padding:12px;background:linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,0.6));color:#fff;pointer-events:none}
+.stream-card-overlay .overlay-title{font-weight:700;font-size:1rem;margin:0}
+.stream-card-overlay .overlay-sub{font-size:0.85rem;color:rgba(255,255,255,0.85);margin-top:6px}
 
 /* selected outline */
 .stream-card.selected{box-shadow:0 28px 56px rgba(0,0,0,0.36);transform:translateY(-8px);border-color:rgba(255,255,255,0.08)}

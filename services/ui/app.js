@@ -88,6 +88,24 @@ async function loadStreamingFiles() {
       const search = document.getElementById('stream-search');
       // ensure default gallery when opening streaming panel
       if (search) { search.value = ''; }
+      // Keep original full set for client-side filtering
+      window.ALL_STREAM_FILES = (res.files || []).slice();
+
+      // Debounced search handler
+      function debounce(fn, wait){ let t; return function(...a){ clearTimeout(t); t = setTimeout(()=>fn.apply(this,a), wait); }; }
+      function applyFilter(q){
+        try{
+          q = (q||'').toLowerCase().trim();
+          if(!q){ STREAM_FILES = window.ALL_STREAM_FILES.slice(); }
+          else { STREAM_FILES = window.ALL_STREAM_FILES.filter(f => (f.name||'').toLowerCase().indexOf(q) !== -1); }
+          STREAM_OFFSET = 0;
+          const grid = document.getElementById('stream-grid'); if(grid) grid.innerHTML = '';
+          renderNextBatch();
+        }catch(e){ console.warn('filter failed', e); }
+      }
+      if (search) {
+        search.addEventListener('input', debounce((ev) => { applyFilter(ev.target.value); }, 220));
+      }
       const grid = document.getElementById('stream-grid');
       const sentinel = document.getElementById('stream-sentinel');
 
