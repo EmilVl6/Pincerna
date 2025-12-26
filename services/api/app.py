@@ -1127,7 +1127,6 @@ def streaming_videos():
 		base = _get_files_base()
 		video_exts = {'.mp4', '.mkv', '.mov', '.avi', '.webm', '.m4v', '.mpg', '.mpeg', '.ts', '.flv'}
 		results = []
-		# Walk the files root
 		for root, dirs, files in os.walk(base):
 			# Skip system directories
 			dirs[:] = [d for d in dirs if d not in ('proc', 'sys', 'dev', 'run', 'tmp', 'var', 'etc', 'boot', 'usr', 'bin', 'sbin', 'lib', 'lib64', 'opt', 'root', 'lost+found') and not d.startswith('.')]
