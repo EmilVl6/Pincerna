@@ -72,7 +72,11 @@
         const headers = (opts.headers && typeof opts.headers === 'object') ? Object.assign({}, opts.headers) : {};
         const token = localStorage.getItem('pincerna_token');
         if (token && !headers['Authorization']) headers['Authorization'] = token;
-        const res = await fetch((window.apiBase || '') + '/api' + path, Object.assign({}, opts, { headers }));
+        // app.js defines `apiBase = "/cloud/api"`; prefer that when available,
+        // otherwise default to '/cloud/api'. Ensure we do NOT insert an extra '/api'.
+        const base = (window.apiBase !== undefined) ? window.apiBase : '/cloud/api';
+        const url = (path.startsWith('/') ? base + path : base + '/' + path);
+        const res = await fetch(url, Object.assign({}, opts, { headers }));
         const contentType = res.headers.get('content-type') || '';
         if (!res.ok) {
           if (contentType.includes('application/json')) {
