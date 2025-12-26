@@ -569,26 +569,24 @@ else
             mtime=$(date -r "$f" --iso-8601=seconds 2>/dev/null || echo "")
             rel="/$(echo "$f" | sed "s#^$FILES_ROOT/##")"
             h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
-            thumb_rel="/cloud/api/thumbnail_file?h=${h}"
-            name_esc=$(printf '%s' "$(basename "$f")" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
-            rel_esc=$(printf '%s' "$rel" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
-            mtime_esc=$(printf '%s' "$mtime" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
-            thumb_esc=$(printf '%s' "$thumb_rel" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
-            echo "$name_esc	$rel_esc	$size	$mtime	$thumb_esc" >> "$tmp_data"
+            echo "$h	$size	$mtime	$rel" >> "$tmp_data"
         done
         python3 <<EOF > "$tmp_manifest"
 import json
+import os
 files = []
 with open('$tmp_data', 'r') as f:
     for line in f:
-        parts = line.strip().split('\t', 4)
-        name, rel, size, mtime, thumb = parts
+        parts = line.strip().split('\t', 3)
+        h, size, mtime, rel = parts
+        name = os.path.basename(rel)
+        thumb = f"/cloud/api/thumbnail_file?h={h}"
         files.append({
-            'name': json.loads(name),
-            'path': json.loads(rel),
+            'name': name,
+            'path': rel,
             'size': int(size),
-            'mtime': json.loads(mtime),
-            'thumbnail': json.loads(thumb)
+            'mtime': mtime,
+            'thumbnail': thumb
         })
 print(json.dumps({'files': files}))
 EOF
