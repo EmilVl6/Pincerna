@@ -355,20 +355,21 @@ def oauth_callback():
 		user_dbg = json.dumps(user_info)
 
 		# Build minimal page that writes to localStorage and redirects
-		from flask import make_response
-		html = (
-			'<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-			'<title>Signing in…</title>'
-			'<style>body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#111;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}.card{padding:20px;border-radius:8px;background:linear-gradient(180deg,#0b0b0b,#111);max-width:720px;width:100%}a.button{display:inline-block;margin-top:12px;padding:10px 14px;background:#ff8200;color:#fff;border-radius:6px;text-decoration:none}</style>'
-			'</head><body><div class="card"><h2>Signing you in…</h2><p id="status">Attempting to finish sign-in and open the app.</p>'
-			f'<div style="margin-top:12px">If you are not redirected automatically, click <a id="continue-link" class="button" href="{app_url}">Continue to Pincerna</a></div>'
-			f'<details style="margin-top:12px;color:#ddd"><summary>Debug info</summary><pre id="dbg" style="white-space:pre-wrap;color:#ddd;font-size:0.9rem;margin-top:8px">token: {short_token}\nuser: {user_dbg}</pre></details></div>'
-			'<script>(function(){try{localStorage.setItem("pincerna_token", ' + token_js + ');}catch(e){console.warn("failed to set token",e);var s=document.getElementById("status");if(s)s.textContent="Signed in but failed to set localStorage token (see console).";}try{localStorage.setItem("pincerna_user", ' + user_js + ');}catch(e){console.warn("failed to set user",e);}try{var target="' + app_url + '";setTimeout(function(){try{location.replace(target);}catch(e){window.location=target;}},250);}catch(e){console.warn("redirect failed",e);}setTimeout(function(){var s=document.getElementById("status");if(s)s.textContent="If nothing happened, click Continue to Pincerna.";},3000);})();</script>'
-			'</body></html>'
-		)
-		resp = make_response(html)
-		resp.headers['Content-Type'] = 'text/html; charset=utf-8'
-		return resp
+		# Redirect to UI root with token and user in the fragment so the client can store them
+		try:
+			host = request.host_url.rstrip('/')
+			redirect_base = urllib.parse.urljoin(host + '/', app_url.lstrip('/'))
+			frag_token = urllib.parse.quote_plus(token)
+			frag_user = urllib.parse.quote_plus(json.dumps(user_info))
+			redirect_url = f"{redirect_base}#token={frag_token}&user={frag_user}"
+			return ('', 302, {'Location': redirect_url})
+		except Exception:
+			logging.exception('oauth_callback redirect failed')
+			from flask import make_response
+			html = '<!doctype html><html><body><h2>Signed in.</h2><p>Please return to the app.</p></body></html>'
+			resp = make_response(html)
+			resp.headers['Content-Type'] = 'text/html; charset=utf-8'
+			return resp
 	except Exception:
 		logging.exception('oauth_callback failed')
 		return _access_denied_page('Internal error during OAuth callback'), 500
