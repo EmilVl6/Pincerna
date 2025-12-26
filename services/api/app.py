@@ -344,10 +344,12 @@ def oauth_callback():
 	token_js = json.dumps(token)
 	user_js = json.dumps(json.dumps(user_info))
 	
+	# Redirect to the UI root with a cache-busting timestamp so browsers fetch updated bundles
 	html = f"""<!doctype html><html><head><meta charset="utf-8"></head><body><script>
 localStorage.setItem('pincerna_token',{token_js});
 localStorage.setItem('pincerna_user',{user_js});
-location.replace('/cloud/index.html');
+// go to UI root with timestamp to avoid stale cached assets
+location.replace('/cloud/?_=' + Date.now());
 </script></body></html>"""
 	return html
 
