@@ -364,6 +364,27 @@ populate_streaming() {
 bind_existing_mounts || true
 populate_streaming || true
 
+# If called with --list, show detected mounts and sample file listings then exit
+if [ "${1:-}" = "--list" ] || [ "${1:-}" = "list" ]; then
+    echo "[LIST MODE] Files root: $FILES_ROOT"
+    echo "Top-level entries:"; ls -la "$FILES_ROOT" || true
+    echo
+    echo "Streaming contents (sample):"; ls -la "$FILES_ROOT/Streaming" 2>/dev/null | head -n 40 || echo "(none)"
+    echo
+    echo "Thumbnails (sample):"; ls -la "$FILES_ROOT/.thumbs" 2>/dev/null | head -n 40 || echo "(none)"
+    echo
+    if [ -f "$FILES_ROOT/.video_index.json" ]; then
+        echo ".video_index.json size:" $(wc -c < "$FILES_ROOT/.video_index.json")
+        echo "First 10 lines:"; head -n 10 "$FILES_ROOT/.video_index.json"
+    else
+        echo "No .video_index.json manifest found"
+    fi
+    echo
+    echo "Find sample videos (first 40):"
+    find "$FILES_ROOT" -type f \( -iname '*.mp4' -o -iname '*.mkv' -o -iname '*.mov' -o -iname '*.avi' \) 2>/dev/null | head -n 40 || true
+    exit 0
+fi
+
 
 log_step "4/7" "Setting up Python environment"
 
