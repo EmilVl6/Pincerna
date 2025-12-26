@@ -72,10 +72,14 @@
         const headers = (opts.headers && typeof opts.headers === 'object') ? Object.assign({}, opts.headers) : {};
         const token = localStorage.getItem('pincerna_token');
         if (token && !headers['Authorization']) headers['Authorization'] = token;
-        // app.js defines `apiBase = "/cloud/api"`; prefer that when available,
-        // otherwise default to '/cloud/api'. Ensure we do NOT insert an extra '/api'.
+        // app.js defines `apiBase = "/cloud/api";` — prefer that when available,
+        // otherwise default to '/cloud/api'. Build an absolute URL using
+        // location.origin so `<base>` in the page cannot cause relative-path
+        // resolution issues (which produced requests like "api/cloud/api/...").
         const base = (window.apiBase !== undefined) ? window.apiBase : '/cloud/api';
-        const url = (path.startsWith('/') ? base + path : base + '/' + path);
+        const origin = (window.location && window.location.origin) ? window.location.origin : '';
+        const pathPart = path && path.startsWith('/') ? path : ('/' + (path || ''));
+        const url = origin + base + pathPart;
         const res = await fetch(url, Object.assign({}, opts, { headers }));
         const contentType = res.headers.get('content-type') || '';
         if (!res.ok) {
