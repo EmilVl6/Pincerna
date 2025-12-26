@@ -590,10 +590,10 @@ else
 fi
 
 # restart backend so it picks up thumbnails/index
-spinner_start "Restarting backend..."
 if [ "${manifest_changed:-1}" -eq 1 ]; then
-    spinner_start "Restarting backend..."
-    systemctl restart pincerna.service || true
+    # Use a non-blocking restart so the deploy script cannot hang
+    spinner_start "Restarting backend (non-blocking)..."
+    systemctl restart --no-block pincerna.service || true
     spinner_stop
 else
     log_success "Backend restart skipped (manifest unchanged)"
