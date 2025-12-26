@@ -346,14 +346,16 @@ def oauth_callback():
 
 	# Serve a tiny HTML that loads a same-origin JS endpoint which sets localStorage
 	# and performs the redirect. This avoids inline <script> which can be blocked by CSP.
-	js_url = f"/cloud/api/oauth/postjs?token={token_js}&user={user_js}"
-	html = f"""<!doctype html><html><head><meta charset=\"utf-8\"></head><body>
-<script src=\"{js_url}\" defer></script>
-<noscript>
-  <meta http-equiv=\"refresh\" content=\"0;url=/cloud/index.html\">
-</noscript>
-</body></html>"""
-	return html
+		js_url = f"/cloud/api/oauth/postjs?token={token_js}&user={user_js}"
+		# Also include a fragment redirect fallback so that if the external script is
+		# blocked or the opener flow doesn't work, the browser will navigate to the
+		# main site with the token in the fragment. The UI will pick up the fragment
+		# and persist the token into localStorage.
+		frag = f"pincerna_token={token_js}&pincerna_user={user_js}"
+		html = f"""<!doctype html><html><head><meta charset=\"utf-8\">"""
+		html += f"<meta http-equiv=\"refresh\" content=\"0;url=/cloud/index.html#{frag}\">"
+		html += f"</head><body>\n<script src=\"{js_url}\" defer></script>\n<noscript>\n  <meta http-equiv=\"refresh\" content=\"0;url=/cloud/index.html\">\n</noscript>\n</body></html>"
+		return html
 
 
 @app.route('/cloud/api/oauth/postjs')
