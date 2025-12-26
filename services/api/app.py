@@ -341,15 +341,43 @@ def oauth_callback():
 	
 	user_info = {'email': email, 'name': user_name, 'given_name': user_given, 'picture': user_picture}
 	
-	token_js = json.dumps(token)
-	user_js = json.dumps(json.dumps(user_info))
-	
-	html = f"""<!doctype html><html><head><meta charset="utf-8"></head><body><script>
-localStorage.setItem('pincerna_token',{token_js});
-localStorage.setItem('pincerna_user',{user_js});
-location.replace('/cloud/index.html');
-</script></body></html>"""
+	token_js = urllib.parse.quote_plus(token)
+	user_js = urllib.parse.quote_plus(json.dumps(user_info))
+
+	# Serve a tiny HTML that loads a same-origin JS endpoint which sets localStorage
+	# and performs the redirect. This avoids inline <script> which can be blocked by CSP.
+	js_url = f"/cloud/api/oauth/postjs?token={token_js}&user={user_js}"
+	html = f"""<!doctype html><html><head><meta charset=\"utf-8\"></head><body>
+<script src=\"{js_url}\" defer></script>
+<noscript>
+  <meta http-equiv=\"refresh\" content=\"0;url=/cloud/index.html\">
+</noscript>
+</body></html>"""
 	return html
+
+
+@app.route('/cloud/api/oauth/postjs')
+def oauth_postjs():
+	# Return a small JS payload that sets localStorage and redirects the user.
+	token = request.args.get('token', '')
+	user = request.args.get('user', '')
+	try:
+		# token and user are url-quoted; unquote for safety
+		token_val = urllib.parse.unquote_plus(token)
+		user_val = urllib.parse.unquote_plus(user)
+	except Exception:
+		token_val = token
+		user_val = user
+
+	# Ensure the output is safe JS string literals
+	def js_string(s):
+		return json.dumps(s)
+
+	js = f"localStorage.setItem('pincerna_token', {js_string(token_val)});\n"
+	js += f"localStorage.setItem('pincerna_user', {js_string(user_val)});\n"
+	js += "location.replace('/cloud/index.html');\n"
+
+	return Response(js, mimetype='application/javascript')
 
 def protected(f):
 	def wrapper(*args, **kwargs):
