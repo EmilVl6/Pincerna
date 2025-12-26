@@ -99,4 +99,15 @@
 
   // Kick off
   init();
+
+  // Ensure click always performs a controlled navigation that respects the disabled state.
+  if (signin) {
+    signin.addEventListener('click', function(e){
+      e.preventDefault();
+      if (signin.dataset && signin.dataset.disabled) return false;
+      const href = signin.getAttribute('href') || '/cloud/api/oauth/start';
+      try { window.location.href = href; } catch (err) { window.location = href; }
+      return false;
+    });
+  }
 })();
