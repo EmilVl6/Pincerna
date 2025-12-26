@@ -105,7 +105,7 @@ async function loadStreamingFiles() {
       }
 
       function createCard(f) {
-        const thumb = f.thumbnail || ('/cloud/api/thumbnail?path=' + encodeURIComponent(f.path));
+        const thumb = f.thumbnail || (apiBase + '/thumbnail?path=' + encodeURIComponent(f.path));
         const card = document.createElement('div');
         card.className = 'stream-card';
         card.dataset.path = f.path;
@@ -1483,7 +1483,7 @@ try {
 } catch (e) {}
 async function pollStorageStatus() {
   try {
-    const res = await apiFetch('/cloud/api/storage/status');
+    const res = await apiFetch('/storage/status');
     if (Array.isArray(res) && res.length > 0) {
       // show any new backups not seen before (deduplicate by dest)
       const now = Date.now();
