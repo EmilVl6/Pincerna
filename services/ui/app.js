@@ -22,9 +22,12 @@ function showUserGreeting() {
   const el = document.getElementById('user-greeting');
   if (!el) return;
   if (info) {
-    const name = info.name || (info.email ? info.email.split('@')[0] : null);
-    if (name) el.textContent = `Hi, ${name}`;
-    else el.textContent = '';
+    // Prefer first name only (e.g. "Emil"). Fall back to a friendly default.
+    let name = null;
+    if (info.name) name = String(info.name).split(' ')[0];
+    else if (info.email) name = String(info.email).split('@')[0];
+    if (!name) name = 'Emil';
+    el.textContent = `Hi ${name}`;
   } else {
     el.textContent = '';
   }
@@ -71,9 +74,8 @@ async function loadStreamingFiles() {
 
     if (res && res.files) {
     // replace heavy background-image approach with incremental rendering + <img loading="lazy">
-    // Ignore items that don't have a generated thumbnail (the user requested
-    // to hide items without thumbnails for a cleaner UI)
-    STREAM_FILES = (res.files || []).filter(f => f && f.thumbnail && String(f.thumbnail).trim());
+    // Include all indexed files so videos without thumbnails are still shown
+    STREAM_FILES = (res.files || []).filter(f => f);
       STREAM_OFFSET = 0;
 
       filesEl.innerHTML = `
