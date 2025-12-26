@@ -354,7 +354,7 @@ def oauth_callback():
 		user_js = json.dumps(json.dumps(user_info))
 
 		# Redirect to the UI root with a cache-busting timestamp so browsers fetch updated bundles
-		app_url = f"/cloud/?_={int(time.time())}"
+		app_url = "/cloud/"
 		short_token = token[:32] + '...' if token and len(token) > 32 else token
 		user_dbg = json.dumps(user_info)
 
