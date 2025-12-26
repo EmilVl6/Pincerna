@@ -574,8 +574,19 @@ else
 fi
 
 # restart backend so it picks up thumbnails/index
-# Removed automatic restart - run manually: sudo systemctl restart pincerna
-log_warn "Remember to restart pincerna service manually: sudo systemctl restart pincerna"
+log_step "Restarting backend service..."
+if systemctl restart pincerna.service; then
+    log_success "Backend restarted successfully"
+else
+    log_error "Failed to restart backend"
+fi
+
+log_step "Restarting nginx..."
+if systemctl restart nginx; then
+    log_success "Nginx restarted successfully"
+else
+    log_error "Failed to restart nginx"
+fi
 
 
 
