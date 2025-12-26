@@ -531,7 +531,6 @@ def list_files():
 						'mtime': datetime.datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M')
 					})
 				except (PermissionError, OSError):
-					# skip unreadable files
 					continue
 
 		items.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
