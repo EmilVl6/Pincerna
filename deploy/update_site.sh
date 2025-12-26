@@ -582,6 +582,8 @@ else
         spinner_stop
         chown -R www-data:www-data "$thumbs_dir"
         mv "$tmp_manifest" "$manifest"
+        chown www-data:www-data "$manifest"
+        chown www-data:www-data "$idx_ts"
         log_success "Video manifest written to $manifest"
         manifest_changed=1
         touch "$idx_ts"

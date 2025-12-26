@@ -1164,7 +1164,6 @@ def streaming_index():
 		if os.path.exists(manifest_path):
 			with open(manifest_path, 'r') as f:
 				data = json.load(f)
-			# Filter out videos without existing thumbnails
 			filtered_files = []
 			for f in data.get('files', []):
 				h = f.get('thumbnail', '').split('?h=')[-1]
