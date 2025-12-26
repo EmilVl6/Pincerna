@@ -280,6 +280,48 @@ detect_and_mount_drives() {
 detect_and_mount_drives || true
 
 
+# Collate video files from mounted volumes into a single Streaming directory
+populate_streaming() {
+    STREAM_DIR="$FILES_ROOT/Streaming"
+    log_step "3.2/7" "Populating Streaming directory at $STREAM_DIR"
+    # remove stale streaming links and rebuild (keeps things simple and deterministic)
+    rm -rf "$STREAM_DIR" 2>/dev/null || true
+    mkdir -p "$STREAM_DIR"
+
+    # Video extensions to search for
+    VID_EXTS_LOCAL='-iname *.mp4 -o -iname *.mkv -o -iname *.mov -o -iname *.avi -o -iname *.webm -o -iname *.m4v -o -iname *.mpg -o -iname *.mpeg -o -iname *.ts -o -iname *.flv'
+
+    # For each top-level directory in FILES_ROOT (skip dot entries and .thumbs/Streaming)
+    for d in "$FILES_ROOT"/*; do
+        [ -d "$d" ] || continue
+        base=$(basename "$d")
+        case "$base" in
+            .thumbs|Streaming) continue ;;
+            .* ) continue ;;
+        esac
+
+        # Find videos under this mount and create symlinks under Streaming/<mountname>/...
+        while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            rel_path="${f#$FILES_ROOT/}"
+            target="$STREAM_DIR/$rel_path"
+            target_dir=$(dirname "$target")
+            mkdir -p "$target_dir"
+            # Only create symlink if target doesn't exist
+            if [ ! -e "$target" ]; then
+                ln -s "$f" "$target" 2>/dev/null || cp -n "$f" "$target" 2>/dev/null || true
+            fi
+        done < <(find "$d" -type f \( $VID_EXTS_LOCAL \) 2>/dev/null || true)
+    done
+
+    # Ensure permissions for web user
+    chown -R www-data:www-data "$STREAM_DIR" || true
+    log_success "Streaming directory populated"
+}
+
+populate_streaming || true
+
+
 log_step "4/7" "Setting up Python environment"
 
 
