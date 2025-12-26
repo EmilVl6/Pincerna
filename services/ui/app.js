@@ -1,6 +1,34 @@
 const apiBase = "/cloud/api";
 const $ = sel => document.querySelector(sel);
 
+// API fetch wrapper that adds auth token
+async function apiFetch(url, options = {}) {
+  const token = localStorage.getItem('pincerna_token');
+  const headers = { ...options.headers };
+  if (token) {
+    headers['Authorization'] = token;
+  }
+  const fullUrl = url.startsWith('http') ? url : apiBase + url;
+  const response = await fetch(fullUrl, { ...options, headers });
+  if (response.status === 401) {
+    // Token invalid, redirect to auth
+    localStorage.removeItem('pincerna_token');
+    localStorage.removeItem('pincerna_user');
+    window.location.href = 'auth.html';
+    throw new Error('Unauthorized');
+  }
+  if (!response.ok) {
+    const text = await response.text();
+    try {
+      const json = JSON.parse(text);
+      throw new Error(json.error || 'API error');
+    } catch {
+      throw new Error(text || 'API error');
+    }
+  }
+  return response.json();
+}
+
 // Streaming UI globals (ensure safe defaults so older or partial bundles
 // don't cause runtime ReferenceErrors).
 var STREAM_FILES = [];

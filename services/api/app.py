@@ -319,6 +319,8 @@ def oauth_callback():
 		except Exception as e:
 			logging.exception('tokeninfo failed')
 			return _access_denied_page('Authentication failed'), 200
+		if payload.get('aud') != client_id:
+			return _access_denied_page('Invalid token audience'), 200
 		email = payload.get('email')
 		verified = payload.get('email_verified') in ('true', True, '1')
 		if not email or not verified:
@@ -1129,6 +1131,8 @@ def streaming_videos():
 		results = []
 		# Walk the files root
 		for root, dirs, files in os.walk(base):
+			# Skip system directories
+			dirs[:] = [d for d in dirs if d not in ('proc', 'sys', 'dev', 'run', 'tmp', 'var', 'etc', 'boot', 'usr', 'bin', 'sbin', 'lib', 'lib64', 'opt', 'root', 'lost+found') and not d.startswith('.')]
 			for fname in files:
 				ext = os.path.splitext(fname)[1].lower()
 				if ext in video_exts:
@@ -1262,6 +1266,8 @@ def _video_indexer_loop():
 		try:
 			new_index = {}
 			for root, dirs, files in os.walk(base):
+				# Skip system directories to avoid scanning irrelevant files
+				dirs[:] = [d for d in dirs if d not in ('proc', 'sys', 'dev', 'run', 'tmp', 'var', 'etc', 'boot', 'usr', 'bin', 'sbin', 'lib', 'lib64', 'opt', 'root', 'lost+found') and not d.startswith('.')]
 				for fname in files:
 					ext = os.path.splitext(fname)[1].lower()
 					if ext not in video_exts:
