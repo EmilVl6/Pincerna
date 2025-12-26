@@ -205,14 +205,17 @@ async function loadStreamingFiles() {
         card.addEventListener('click', async (e) => {
           // single-click selects and opens the player
           selectCardByElement(card);
-          const path = card.dataset.path;
-          const info = await apiFetch('/streaming/video?path=' + encodeURIComponent(path));
-          if (info && !info.error) {
-            showStreamingPlayerByInfo(info);
-          } else {
-            // prefer using the warmed preview if available
-            showStreamingPlayer(path, card.dataset.name, { preferPreloaded: true });
+          if (currentVideo) {
+            currentVideo.pause();
+            currentVideo.currentTime = 0;
           }
+          const video = document.getElementById('modal-video');
+          const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + encodeURIComponent(localStorage.getItem('pincerna_token') || '') + '&raw=1';
+          video.src = previewUrl;
+          video.load();
+          video.play();
+          document.getElementById('video-modal').style.display = 'flex';
+          currentVideo = video;
         });
         // Pop-out button
         try {
@@ -1620,6 +1623,23 @@ document.addEventListener('DOMContentLoaded', () => {
     if (navFiles) navFiles.addEventListener('click', (e) => { e.preventDefault(); showSection('files'); refreshFiles(); });
     if (navStreaming) navStreaming.addEventListener('click', (e) => { e.preventDefault(); showSection('streaming'); });
     if (navAbout) navAbout.addEventListener('click', (e) => { e.preventDefault(); showSection('about'); });
+
+    // Video modal globals
+    let currentVideo = null;
+
+    // Video modal close handler
+    const closeBtn = document.getElementById('close-modal');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        if (currentVideo) {
+          currentVideo.pause();
+          currentVideo.currentTime = 0;
+          currentVideo.src = '';
+          currentVideo = null;
+        }
+        document.getElementById('video-modal').style.display = 'none';
+      });
+    }
 
     const btnViewStreaming = document.getElementById('btn-view-network');
     if (btnViewStreaming) btnViewStreaming.addEventListener('click', () => showSection('streaming'));
