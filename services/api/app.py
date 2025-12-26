@@ -1159,21 +1159,25 @@ def streaming_videos():
 @app.route('/cloud/api/streaming/index')
 def streaming_index():
 	"""Return the video manifest, filtering out videos without thumbnails."""
-	manifest_path = _get_files_base() + "/.video_index.json"
-	if os.path.exists(manifest_path):
-		with open(manifest_path, 'r') as f:
-			data = json.load(f)
-		# Filter out videos without existing thumbnails
-		filtered_files = []
-		for f in data.get('files', []):
-			h = f.get('thumbnail', '').split('?h=')[-1]
-			if h:
-				thumb_path = _thumbs_dir() + "/" + h + ".jpg"
-				if os.path.exists(thumb_path):
-					filtered_files.append(f)
-		return jsonify(files=filtered_files)
-	else:
-		return jsonify(files=[])
+	try:
+		manifest_path = _get_files_base() + "/.video_index.json"
+		if os.path.exists(manifest_path):
+			with open(manifest_path, 'r') as f:
+				data = json.load(f)
+			# Filter out videos without existing thumbnails
+			filtered_files = []
+			for f in data.get('files', []):
+				h = f.get('thumbnail', '').split('?h=')[-1]
+				if h:
+					thumb_path = _thumbs_dir() + "/" + h + ".jpg"
+					if os.path.exists(thumb_path):
+						filtered_files.append(f)
+			return jsonify(files=filtered_files)
+		else:
+			return jsonify(files=[])
+	except Exception as e:
+		logging.exception(f'Error loading streaming index: {e}')
+		return jsonify(error=str(e)), 500
 
 
 @app.route('/cloud/api/streaming')
