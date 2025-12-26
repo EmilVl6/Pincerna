@@ -250,19 +250,33 @@ detect_and_mount_drives() {
         fi
 
         if [ "$fstype" = "ntfs" ] || [ "$fstype" = "ntfs3" ]; then
-            mount_cmd=(ntfs-3g "$name" "$mountpoint")
-            fstype_entry="ntfs-3g"
-            opts="defaults,uid=www-data,gid=www-data"
+            # prefer writable ntfs-3g mount with uid/gid for web user
+            if ntfs-3g "$name" "$mountpoint" -o uid=www-data,gid=www-data,umask=0027,big_writes >/dev/null 2>&1; then
+                fstype_entry="ntfs-3g"
+                opts="uid=www-data,gid=www-data,umask=0027"
+                log_success "Mounted $name -> $mountpoint (ntfs-3g)"
+                chown -R www-data:www-data "$mountpoint" || true
+            else
+                # try read-only fallback to avoid write errors on flaky disks
+                if mount -o ro "$name" "$mountpoint" >/dev/null 2>&1; then
+                    fstype_entry="$fstype"
+                    opts="ro"
+                    log_warn "Mounted $name -> $mountpoint read-only (fallback)"
+                    chown -R www-data:www-data "$mountpoint" || true
+                else
+                    log_warn "Failed to mount $name to $mountpoint"
+                fi
+            fi
         else
-            mount_cmd=(mount "$name" "$mountpoint")
-            fstype_entry="$fstype"
-            opts="defaults"
+            if mount "$name" "$mountpoint" >/dev/null 2>&1; then
+                fstype_entry="$fstype"
+                opts="defaults"
+                log_success "Mounted $name -> $mountpoint"
+                chown -R www-data:www-data "$mountpoint" || true
+            else
+                log_warn "Failed to mount $name to $mountpoint"
+            fi
         fi
-
-        if "${mount_cmd[@]}" >/dev/null 2>&1; then
-            log_success "Mounted $name -> $mountpoint"
-            # set ownership after successful mount
-            chown www-data:www-data "$mountpoint" || true
             # Add a simple fstab entry for persistence if UUID is available
             if [ -n "$uuid" ] && [ "$uuid" != "-" ]; then
                 # Check if already in fstab
@@ -272,7 +286,7 @@ detect_and_mount_drives() {
                 fi
             fi
         else
-            log_warn "Failed to mount $name to $mountpoint"
+            :
         fi
     done < <(lsblk -plno NAME,FSTYPE,UUID,LABEL,MOUNTPOINT | awk '{ if($1!="") print $0 }')
 }
