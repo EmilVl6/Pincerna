@@ -349,39 +349,41 @@ def oauth_callback():
 		# a visible fallback with debug info if the client fails to execute the script
 		app_url = f"/cloud/?_={int(time.time())}"
 		short_token = token[:32] + '...' if token and len(token) > 32 else token
-		html = f"""<!doctype html>
+		user_dbg = json.dumps(user_info)
+		# Use a plain template with % placeholders to avoid f-string brace parsing
+		html_template = """<!doctype html>
 <html>
 	<head>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width,initial-scale=1">
 		<title>Signing in…</title>
-		<style>body{{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#111;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}}.card{{padding:20px;border-radius:8px;background:linear-gradient(180deg,#0b0b0b,#111);max-width:720px;width:100%}}a.button{{display:inline-block;margin-top:12px;padding:10px 14px;background:#ff8200;color:#fff;border-radius:6px;text-decoration:none}}</style>
+		<style>body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#111;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}.card{padding:20px;border-radius:8px;background:linear-gradient(180deg,#0b0b0b,#111);max-width:720px;width:100%}a.button{display:inline-block;margin-top:12px;padding:10px 14px;background:#ff8200;color:#fff;border-radius:6px;text-decoration:none}</style>
 	</head>
 	<body>
 		<div class="card">
 			<h2>Signing you in…</h2>
 			<p id="status">Attempting to finish sign-in and open the app.</p>
-			<div style="margin-top:12px">If you are not redirected automatically, click <a id="continue-link" class="button" href="{app_url}">Continue to Pincerna</a></div>
+			<div style="margin-top:12px">If you are not redirected automatically, click <a id="continue-link" class="button" href="%s">Continue to Pincerna</a></div>
 			<details style="margin-top:12px;color:#ddd"><summary>Debug info</summary>
-				<pre id="dbg" style="white-space:pre-wrap;color:#ddd;font-size:0.9rem;margin-top:8px">token: {short_token}\nuser: {json.dumps(user_info)}</pre>
+				<pre id="dbg" style="white-space:pre-wrap;color:#ddd;font-size:0.9rem;margin-top:8px">token: %s\nuser: %s</pre>
 			</details>
 		</div>
 		<script>
 			(function(){
 				try{
-					localStorage.setItem('pincerna_token', {token_js});
+					localStorage.setItem('pincerna_token', %s);
 				}catch(e){
 					console.warn('failed to set token in localStorage', e);
-					document.getElementById('status').textContent = 'Signed in but failed to set localStorage token (see console).';
+					var s = document.getElementById('status'); if (s) s.textContent = 'Signed in but failed to set localStorage token (see console).';
 				}
 				try{
-					localStorage.setItem('pincerna_user', {user_js});
+					localStorage.setItem('pincerna_user', %s);
 				}catch(e){
 					console.warn('failed to set user in localStorage', e);
 				}
 				// attempt to replace the current location with the app root (cache-busted)
 				try{
-					var target = '{app_url}';
+					var target = '%s';
 					// small delay to allow localStorage to settle for some browsers
 					setTimeout(function(){
 						try{ location.replace(target); }catch(e){ window.location = target; }
@@ -398,6 +400,7 @@ def oauth_callback():
 		</script>
 	</body>
 </html>"""
+		html = html_template % (app_url, short_token, user_dbg, token_js, user_js, app_url)
 		return html
 
 def protected(f):
