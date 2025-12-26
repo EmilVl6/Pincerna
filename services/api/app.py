@@ -231,7 +231,7 @@ def _make_redirect_uri():
 
 @app.route('/oauth/start')
 def oauth_start():
-    
+	
 	client_id = os.environ.get('GOOGLE_CLIENT_ID')
 	if not client_id:
 		return jsonify(error='missing_client_id'), 500
@@ -341,61 +341,15 @@ def oauth_callback():
 	
 	user_info = {'email': email, 'name': user_name, 'given_name': user_given, 'picture': user_picture}
 	
-	token_js = urllib.parse.quote_plus(token)
-	user_js = urllib.parse.quote_plus(json.dumps(user_info))
-
-	# Serve a tiny HTML that loads a same-origin JS endpoint which sets localStorage
-	# and performs the redirect. This avoids inline <script> which can be blocked by CSP.
-	js_url = f"/cloud/api/oauth/postjs?token={token_js}&user={user_js}"
-	# Also include a fragment redirect fallback so that if the external script is
-	# blocked or the opener flow doesn't work, the browser will navigate to the
-	# main site with the token in the fragment. The UI will pick up the fragment
-	# and persist the token into localStorage.
-	frag = f"pincerna_token={token_js}&pincerna_user={user_js}"
-	html = f"""<!doctype html><html><head><meta charset=\"utf-8\">"""
-	html += f"<meta http-equiv=\"refresh\" content=\"0;url=/cloud/index.html#{frag}\">"
-	html += f"</head><body>\n<script src=\"{js_url}\" defer></script>\n<noscript>\n  <meta http-equiv=\"refresh\" content=\"0;url=/cloud/index.html\">\n</noscript>\n</body></html>"
+	token_js = json.dumps(token)
+	user_js = json.dumps(json.dumps(user_info))
+	
+	html = f"""<!doctype html><html><head><meta charset="utf-8"></head><body><script>
+localStorage.setItem('pincerna_token',{token_js});
+localStorage.setItem('pincerna_user',{user_js});
+location.replace('/cloud/index.html');
+</script></body></html>"""
 	return html
-
-
-@app.route('/cloud/api/oauth/postjs')
-def oauth_postjs():
-	# Return a small JS payload that sets localStorage and redirects the user.
-	token = request.args.get('token', '')
-	user = request.args.get('user', '')
-	try:
-		# token and user are url-quoted; unquote for safety
-		token_val = urllib.parse.unquote_plus(token)
-		user_val = urllib.parse.unquote_plus(user)
-	except Exception:
-		token_val = token
-		user_val = user
-
-	# Ensure the output is safe JS string literals
-	def js_string(s):
-		return json.dumps(s)
-
-	# JS will attempt to set storage on the opener (popup flow) and redirect it,
-	# then close the popup. Fallback to writing localStorage in the current
-	# window and redirect if no opener exists.
-	js_lines = []
-	js_lines.append("(function(){")
-	js_lines.append(f"  var _t = {js_string(token_val)};")
-	js_lines.append(f"  var _u = {js_string(user_val)};")
-	js_lines.append("  try {")
-	js_lines.append("    if (window.opener && !window.opener.closed) {")
-	js_lines.append("      try { window.opener.localStorage.setItem('pincerna_token', _t); } catch(e){}")
-	js_lines.append("      try { window.opener.localStorage.setItem('pincerna_user', _u); } catch(e){}")
-	js_lines.append("      try { window.opener.location.replace('/cloud/index.html'); } catch(e){}")
-	js_lines.append("      try { window.close(); return; } catch(e){}")
-	js_lines.append("    }")
-	js_lines.append("  } catch(e) {}")
-	js_lines.append("  try { localStorage.setItem('pincerna_token', _t); } catch(e) {}")
-	js_lines.append("  try { localStorage.setItem('pincerna_user', _u); } catch(e) {}")
-	js_lines.append("  try { location.replace('/cloud/index.html'); } catch(e) {}")
-	js_lines.append("})();")
-
-	return Response("\n".join(js_lines), mimetype='application/javascript')
 
 def protected(f):
 	def wrapper(*args, **kwargs):
@@ -498,19 +452,13 @@ def list_files():
 	try:
 		items = []
 		if os.path.isdir(full_path):
-			try:
-				names = os.listdir(full_path)
-			except (PermissionError, OSError) as e:
-				logging.warning(f"Failed to list directory {full_path}: {e}")
-				names = []
-
-			for name in names:
+			for name in os.listdir(full_path):
 				try:
 					item_path = os.path.join(full_path, name)
 					rel_path = os.path.join(path, name)
 					stat = os.stat(item_path)
 					size = stat.st_size if not os.path.isdir(item_path) else None
-                    
+					
 					if size is not None:
 						if size > 1024*1024*1024:
 							size_str = f"{size/(1024*1024*1024):.1f} GB"
@@ -530,12 +478,11 @@ def list_files():
 						'mtime': datetime.datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M')
 					})
 				except (PermissionError, OSError):
-					continue
-
+					pass
+		
 		items.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
 		return jsonify(files=items, path=path)
 	except Exception as e:
-		logging.exception('list_files failed')
 		return jsonify(error=str(e)), 500
 
 @app.route("/files/download")
@@ -565,37 +512,6 @@ def download_file():
 	except Exception as e:
 		logging.exception('Download failed')
 		return jsonify(error=str(e)), 500
-
-
-	@app.route('/cloud/api/storage_status')
-	def storage_status():
-		"""Return diagnostic info about the configured FILES_ROOT and top-level entries.
-		This endpoint is safe for debugging: it catches I/O errors and returns them as messages.
-		"""
-		base = _get_files_base()
-		info = {'files_root': base}
-		try:
-			exists = os.path.exists(base)
-			is_dir = os.path.isdir(base)
-			readable = os.access(base, os.R_OK)
-			info.update({'exists': exists, 'is_dir': is_dir, 'readable': readable})
-			entries = []
-			if is_dir and readable:
-				try:
-					for name in sorted(os.listdir(base)):
-						p = os.path.join(base, name)
-						try:
-							stat = os.stat(p)
-							entries.append({'name': name, 'is_dir': os.path.isdir(p), 'size': stat.st_size if not os.path.isdir(p) else None})
-						except OSError as e:
-							entries.append({'name': name, 'error': str(e)})
-				except OSError as e:
-					info['list_error'] = str(e)
-			info['entries'] = entries
-		except Exception as e:
-			logging.exception('storage_status failed')
-			return jsonify(error=str(e)), 500
-		return jsonify(info)
 
 @app.route("/files/preview")
 def preview_file():

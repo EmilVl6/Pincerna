@@ -22,12 +22,8 @@ function showUserGreeting() {
   const el = document.getElementById('user-greeting');
   if (!el) return;
   if (info) {
-    let name = info.name || (info.email ? info.email.split('@')[0] : null);
-    if (name) {
-      // prefer first name only
-      name = String(name).split(' ')[0];
-      el.textContent = `Hi, ${name}`;
-    }
+    const name = info.name || (info.email ? info.email.split('@')[0] : null);
+    if (name) el.textContent = `Hi, ${name}`;
     else el.textContent = '';
   } else {
     el.textContent = '';
@@ -35,11 +31,14 @@ function showUserGreeting() {
 }
 
 async function logout() {
-  try { localStorage.removeItem('pincerna_token'); } catch(e){}
-  try { localStorage.removeItem('pincerna_user'); } catch(e){}
-  try { localStorage.removeItem('pincerna_last_stream_files'); } catch(e){}
-  try { if (window.opener && !window.opener.closed) { try { window.opener.localStorage.removeItem('pincerna_token'); window.opener.localStorage.removeItem('pincerna_user'); } catch(e){} } } catch(e){}
-  try { const dest = window.location.origin + '/cloud/auth.html'; window.location.replace(dest); } catch(e){}
+  try {
+    await apiFetch('/auth/logout', { method: 'POST' });
+  } catch (e) {
+    // ignore network errors during logout
+  }
+  localStorage.removeItem('pincerna_token');
+  localStorage.removeItem('pincerna_user');
+  window.location.href = 'auth.html';
 }
 
 async function loadStreamingFiles() {
@@ -86,26 +85,6 @@ async function loadStreamingFiles() {
       `;
 
       const search = document.getElementById('stream-search');
-      // ensure default gallery when opening streaming panel
-      if (search) { search.value = ''; }
-      // Keep original full set for client-side filtering
-      window.ALL_STREAM_FILES = (res.files || []).slice();
-
-      // Debounced search handler
-      function debounce(fn, wait){ let t; return function(...a){ clearTimeout(t); t = setTimeout(()=>fn.apply(this,a), wait); }; }
-      function applyFilter(q){
-        try{
-          q = (q||'').toLowerCase().trim();
-          if(!q){ STREAM_FILES = window.ALL_STREAM_FILES.slice(); }
-          else { STREAM_FILES = window.ALL_STREAM_FILES.filter(f => (f.name||'').toLowerCase().indexOf(q) !== -1); }
-          STREAM_OFFSET = 0;
-          const grid = document.getElementById('stream-grid'); if(grid) grid.innerHTML = '';
-          renderNextBatch();
-        }catch(e){ console.warn('filter failed', e); }
-      }
-      if (search) {
-        search.addEventListener('input', debounce((ev) => { applyFilter(ev.target.value); }, 220));
-      }
       const grid = document.getElementById('stream-grid');
       const sentinel = document.getElementById('stream-sentinel');
 
@@ -137,18 +116,6 @@ async function loadStreamingFiles() {
         if (sentinel) STREAM_SENTINEL_OBSERVER.observe(sentinel);
       }
 
-      function tryWarmPreviews(count){
-        try{
-          const cards = Array.from(document.querySelectorAll('.stream-card'));
-          for(let i=0;i<Math.min(count,cards.length);i++){
-            const pre = cards[i].querySelector('video.preview-preload');
-            if(pre && !pre.dataset.loaded){
-              try{ pre.src = pre.dataset.src || pre.src; pre.load(); pre.muted = true; pre.play().then(()=>{ try{ pre.pause(); }catch(e){} }).catch(()=>{}); pre.dataset.loaded='1'; }catch(e){}
-            }
-          }
-        }catch(e){}
-      }
-
       function createCard(f) {
         const thumb = f.thumbnail || (window.location.origin + '/cloud/api/thumbnail?path=' + encodeURIComponent(f.path));
         const card = document.createElement('div');
@@ -178,7 +145,7 @@ async function loadStreamingFiles() {
         const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(f.path) + '&token=' + encodeURIComponent(localStorage.getItem('pincerna_token') || '');
         const pre = document.createElement('video');
         pre.className = 'preview-preload';
-        pre.preload = 'auto';
+        pre.preload = 'metadata';
         pre.muted = true;
         pre.playsInline = true;
         pre.style.display = 'none';
@@ -189,6 +156,7 @@ async function loadStreamingFiles() {
         overlay.className = 'poster-overlay';
         overlay.innerHTML = `<div style="display:flex;gap:10px;align-items:center">
           <div class=\"play-btn\" aria-hidden=\"true\">▶</div>
+          <button class=\"btn\" title=\"Open in new window\" style=\"height:36px;padding:6px 10px;border-radius:6px;margin-left:6px;font-size:0.85rem\">Pop-out</button>
         </div>`;
         banner.appendChild(overlay);
 
@@ -216,16 +184,21 @@ async function loadStreamingFiles() {
             showStreamingPlayer(path, card.dataset.name, { preferPreloaded: true });
           }
         });
-        // removed pop-out functionality to simplify UX
+        // Pop-out button
+        try {
+          const pop = banner.querySelector('button');
+          if (pop) pop.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const url = window.location.origin + '/cloud/player.html?path=' + encodeURIComponent(card.dataset.path);
+            window.open(url, '_blank', 'noopener');
+          });
+        } catch(e){}
         // preload when the user hovers or focuses the card (warm up first frame)
         const startPreload = () => {
           try {
             if (pre.dataset.loaded) return;
             pre.src = pre.dataset.src || previewUrl;
             pre.load();
-            pre.muted = true;
-            // attempt muted play to warm buffers in browsers that allow it
-            try { pre.play().then(()=>{ try{ pre.pause(); }catch(e){} }).catch(()=>{}); } catch(e){}
             pre.dataset.loaded = '1';
           } catch (e) {}
         };
@@ -280,8 +253,6 @@ async function loadStreamingFiles() {
       }
       document.addEventListener('keydown', (e) => {
         if (document.getElementById('streaming-player-modal')) return; // don't navigate while player is open
-        const cards = getAllCards();
-        // Arrow navigation
         if (['ArrowRight','ArrowLeft','ArrowDown','ArrowUp'].includes(e.key)) {
           e.preventDefault();
           if (e.key === 'ArrowRight') moveSelection(1,0);
@@ -289,32 +260,9 @@ async function loadStreamingFiles() {
           if (e.key === 'ArrowDown') moveSelection(0,1);
           if (e.key === 'ArrowUp') moveSelection(0,-1);
         }
-        // Open selected
-        if (e.key === 'Enter' || e.code === 'Space') {
-          if (SELECTED_INDEX >=0 && SELECTED_INDEX < cards.length) {
-            e.preventDefault();
-            cards[SELECTED_INDEX].click();
-          }
-        }
-        // Home / End navigation
-        if (e.key === 'Home') {
-          e.preventDefault(); selectCard(0);
-        }
-        if (e.key === 'End') {
-          e.preventDefault(); selectCard(Math.max(0, cards.length-1));
-        }
-        // PageUp / PageDown - jump several rows
-        if (e.key === 'PageDown' || e.key === 'PageUp') {
-          try{
-            const cardEl = cards[0];
-            const cardWidth = (cardEl && cardEl.getBoundingClientRect().width) || 220;
-            const cols = Math.max(1, Math.floor((document.getElementById('stream-grid')?.clientWidth||800) / Math.max(200, cardWidth)));
-            const rows = 3;
-            const delta = cols * rows;
-            if (e.key === 'PageDown') moveSelection(0, rows);
-            else moveSelection(0, -rows);
-            e.preventDefault();
-          }catch(e){}
+        if (e.key === 'Enter') {
+          const cards = getAllCards();
+          if (SELECTED_INDEX >=0 && SELECTED_INDEX < cards.length) cards[SELECTED_INDEX].click();
         }
       });
 
@@ -333,12 +281,8 @@ async function loadStreamingFiles() {
         slice.forEach(f => {
           const { card, img } = createCard(f);
           grid.appendChild(card);
-          // reveal animation
-          setTimeout(() => { try { card.classList.add('visible'); } catch(e){} }, 20);
           if (img && STREAM_THUMB_OBSERVER) STREAM_THUMB_OBSERVER.observe(img);
         });
-        // warm up the first few previews to reduce latency when opening
-        tryWarmPreviews(4);
         // if there are still items, ensure sentinel is observed
         if (STREAM_OFFSET < STREAM_FILES.length) setupSentinelObserver();
       }
@@ -376,7 +320,12 @@ async function loadStreamingFiles() {
         renderNextBatch();
       }
 
-      // legacy search listener removed; debounced client-side filtering is used instead
+      search.addEventListener('input', () => {
+        const q = search.value.trim().toLowerCase();
+        if (!q) return resetStreamGrid(res.files || []);
+        const filtered = (res.files || []).filter(f => (f.name || '').toLowerCase().includes(q));
+        resetStreamGrid(filtered);
+      });
 
       // initial render (first batch)
       renderNextBatch();
@@ -831,7 +780,7 @@ function showStreamingPlayer(path, name) {
 
   let mediaHtml = '';
   if (videoExts.includes(ext)) {
-    mediaHtml = `<video id="pincerna-player" controls playsinline autoplay muted preload="auto" style="width:100%;height:100%" poster="${poster}"><source src="${src}"></video>`;
+    mediaHtml = `<video id="pincerna-player" controls playsinline style="width:100%;height:100%" poster="${poster}"><source src="${src}"></video>`;
   } else if (audioExts.includes(ext)) {
     mediaHtml = `<audio id="pincerna-player" controls style="width:100%"><source src="${src}"></audio>`;
   } else {
@@ -840,32 +789,29 @@ function showStreamingPlayer(path, name) {
 
   modal.innerHTML = `
     <div class="streaming-player-wrap">
-      <div class="streaming-player-body">${mediaHtml}
-        <button id="streaming-close" class="streaming-player-close" aria-label="Close">✕</button>
-        <div class="streaming-player-overlay">
-          <div class="streaming-player-title">${name}</div>
-          <div class="streaming-player-bottom">
-            <div class="streaming-player-meta">
-              <div><strong>Size:</strong> ${'' /* filled below via JS if available */}</div>
-              <div style="margin-top:6px"><strong>Path:</strong> ${path}</div>
-            </div>
-          </div>
+      <div class="streaming-player-header">
+        <h1 style="margin:0;font-size:1.6rem">${name}</h1>
+        <div class="streaming-player-controls">
+          <button id="streaming-full" class="btn">Fullscreen</button>
+          <button id="streaming-close" class="btn">Close</button>
         </div>
+      </div>
+      <div class="streaming-player-body">${mediaHtml}</div>
+      <div class="streaming-player-details" style="padding:12px 16px;color:rgba(255,255,255,0.8);font-size:0.95rem">
+        <div><strong>Path:</strong> ${path}</div>
       </div>
     </div>
   `;
 
   modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
   function closeModal() {
-    try { const p = document.getElementById('pincerna-player'); if (p) { try { p.pause(); p.src = ''; } catch(e){} } } catch(e){}
-    try { document.documentElement.style.overflow = ''; } catch(e){}
-    try { modal.remove(); } catch(e){}
+    try { const p = document.getElementById('pincerna-player'); if (p && !p.paused) p.pause(); } catch(e){}
+    modal.remove();
   }
   document.body.appendChild(modal);
   // Try to present as full viewport (visually full-screen)
   try { document.documentElement.style.overflow = 'hidden'; } catch(e){}
-  const closeBtn = document.getElementById('streaming-close');
-  if (closeBtn) closeBtn.addEventListener('click', () => { closeModal(); });
+  document.getElementById('streaming-close').addEventListener('click', () => { try { document.documentElement.style.overflow = ''; } catch(e){}; closeModal(); });
   // Fullscreen button: toggle fullscreen for the wrap
   const wrap = modal.querySelector('.streaming-player-wrap');
   document.getElementById('streaming-full').addEventListener('click', async () => {
@@ -1614,7 +1560,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnAccessLocal = $('#btn-access-local');
   if (btnAccessLocal) btnAccessLocal.addEventListener('click', () => { document.getElementById('nav-files').click(); });
 
-  const btnMetrics = document.getElementById('btn-metrics');
+    const btnMetrics = document.getElementById('btn-metrics');
   if (btnMetrics) btnMetrics.addEventListener('click', loadMetrics);
 
   const btnRefreshMetrics = document.getElementById('btn-refresh-metrics');
@@ -1630,17 +1576,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnRestart) {
     btnRestart.addEventListener('click', async () => {
       if (!confirm('Are you sure you want to restart the service?')) return;
-      try {
-        btnRestart.disabled = true;
-        btnRestart.textContent = 'Restarting...';
-        const res = await apiFetch('/restart', { method: 'POST' });
-        if (res && res.error) showMessage(res.error, 'error');
-        else showMessage('Restart command sent', 'info');
-      } catch (e) {
-        showMessage('Failed to send restart command', 'error');
-      } finally {
-        setTimeout(() => { try { btnRestart.disabled = false; btnRestart.textContent = 'Restart Service'; } catch(e){} }, 5000);
-      }
+      const res = await apiFetch('/restart', { method: 'POST' });
+      if (res && res.error) showMessage(res.error, 'error');
+      else showMessage('Restart command sent', 'info');
     });
   }
 
@@ -1653,9 +1591,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (navStreaming) navStreaming.addEventListener('click', (e) => { e.preventDefault(); showSection('streaming'); });
     if (navAbout) navAbout.addEventListener('click', (e) => { e.preventDefault(); showSection('about'); });
 
-    // hero button to open Streaming panel
-    const btnHeroStream = document.getElementById('btn-stream');
-    if (btnHeroStream) btnHeroStream.addEventListener('click', () => { showSection('streaming'); });
+    const btnViewStreaming = document.getElementById('btn-view-network');
+    if (btnViewStreaming) btnViewStreaming.addEventListener('click', () => showSection('streaming'));
   
     const btnScanDevices = document.getElementById('btn-scan-devices');
     if (btnScanDevices) btnScanDevices.addEventListener('click', listStorageDevices);

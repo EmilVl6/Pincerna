@@ -241,212 +241,39 @@ detect_and_mount_drives() {
 
         mountpoint="$FILES_ROOT/$dirname"
         mkdir -p "$mountpoint"
+        chown www-data:www-data "$mountpoint" || true
 
         # Try mounting with appropriate driver
-        # skip if the device node does not exist
-        if [ ! -b "$name" ] && [ ! -c "$name" ]; then
-            log_warn "Device $name not present, skipping"
-            continue
+        if [ "$fstype" = "ntfs" ] || [ "$fstype" = "ntfs3" ]; then
+            mount_cmd=(ntfs-3g "$name" "$mountpoint")
+        else
+            mount_cmd=(mount "$name" "$mountpoint")
         fi
 
-        if [ "$fstype" = "ntfs" ] || [ "$fstype" = "ntfs3" ]; then
-            # prefer writable ntfs-3g mount with uid/gid for web user
-            if ntfs-3g "$name" "$mountpoint" -o uid=www-data,gid=www-data,umask=0027,big_writes >/dev/null 2>&1; then
-                fstype_entry="ntfs-3g"
-                opts="uid=www-data,gid=www-data,umask=0027"
-                log_success "Mounted $name -> $mountpoint (ntfs-3g)"
-                chown -R www-data:www-data "$mountpoint" || true
-            else
-                # try read-only fallback to avoid write errors on flaky disks
-                if mount -o ro "$name" "$mountpoint" >/dev/null 2>&1; then
-                    fstype_entry="$fstype"
-                    opts="ro"
-                    log_warn "Mounted $name -> $mountpoint read-only (fallback)"
-                    chown -R www-data:www-data "$mountpoint" || true
-                else
-                    log_warn "Failed to mount $name to $mountpoint"
-                fi
-            fi
-        else
-            if mount "$name" "$mountpoint" >/dev/null 2>&1; then
-                fstype_entry="$fstype"
-                opts="defaults"
-                log_success "Mounted $name -> $mountpoint"
-                chown -R www-data:www-data "$mountpoint" || true
-            else
-                log_warn "Failed to mount $name to $mountpoint"
-            fi
-        fi
+        if "${mount_cmd[@]}" >/dev/null 2>&1; then
+            log_success "Mounted $name -> $mountpoint"
             # Add a simple fstab entry for persistence if UUID is available
             if [ -n "$uuid" ] && [ "$uuid" != "-" ]; then
                 # Check if already in fstab
                 if ! grep -q "$uuid" /etc/fstab 2>/dev/null; then
+                    fstype_entry="$fstype"
+                    if [ "$fstype" = "ntfs" ] || [ "$fstype" = "ntfs3" ]; then
+                        opts="defaults,uid=www-data,gid=www-data"
+                        fstype_entry="ntfs-3g"
+                    else
+                        opts="defaults"
+                    fi
                     echo "UUID=$uuid    $mountpoint    $fstype_entry    $opts    0    2" >> /etc/fstab
                     log_success "Added fstab entry for $name"
                 fi
             fi
+        else
+            log_warn "Failed to mount $name to $mountpoint"
+        fi
     done < <(lsblk -plno NAME,FSTYPE,UUID,LABEL,MOUNTPOINT | awk '{ if($1!="") print $0 }')
 }
 
 detect_and_mount_drives || true
-
-
-# If the system auto-mounted drives (eg. /mnt/storage/...), bind them into FILES_ROOT
-bind_existing_mounts() {
-    log_step "3.2/7" "Binding existing mounts into $FILES_ROOT"
-    # look for mounts whose source is a /dev/sd* or /dev/nvme* and which are not already under FILES_ROOT
-    while read -r src mnt; do
-        [ -z "$src" ] && continue
-        case "$src" in
-            /dev/sd*|/dev/nvme*|/dev/hd*) ;;
-            *) continue ;;
-        esac
-        # skip if already under FILES_ROOT
-        case "$mnt" in
-            $FILES_ROOT/*) continue ;;
-        esac
-        name=$(basename "$mnt")
-        target="$FILES_ROOT/$name"
-        if [ -e "$target" ]; then
-            log_warn "Target $target exists, skipping bind"
-            continue
-        fi
-        mkdir -p "$target"
-        if mount --bind "$mnt" "$target" >/dev/null 2>&1; then
-            chown -R www-data:www-data "$target" || true
-            log_success "Bound $mnt -> $target"
-        else
-            log_warn "Failed to bind $mnt -> $target"
-        fi
-    done < <(mount | awk '$1 ~ "/dev/sd" || $1 ~ "/dev/nvme" {print $1, $3}')
-}
-
-
-# Collate video files from mounted volumes into a single Streaming directory
-populate_streaming() {
-    STREAM_DIR="$FILES_ROOT/Streaming"
-    log_step "3.2/7" "Populating Streaming directory at $STREAM_DIR"
-    # remove stale streaming links and rebuild (keeps things simple and deterministic)
-    rm -rf "$STREAM_DIR" 2>/dev/null || true
-    mkdir -p "$STREAM_DIR"
-
-    # Video extensions to search for
-    VID_EXTS_LOCAL='-iname *.mp4 -o -iname *.mkv -o -iname *.mov -o -iname *.avi -o -iname *.webm -o -iname *.m4v -o -iname *.mpg -o -iname *.mpeg -o -iname *.ts -o -iname *.flv'
-
-    # For each top-level directory in FILES_ROOT (skip dot entries and .thumbs/Streaming)
-    for d in "$FILES_ROOT"/*; do
-        [ -d "$d" ] || continue
-        base=$(basename "$d")
-        case "$base" in
-            .thumbs|Streaming) continue ;;
-            .* ) continue ;;
-        esac
-
-        # Find videos under this mount and create symlinks under Streaming/<mountname>/...
-        while IFS= read -r f; do
-            [ -z "$f" ] && continue
-            rel_path="${f#$FILES_ROOT/}"
-            target="$STREAM_DIR/$rel_path"
-            target_dir=$(dirname "$target")
-            mkdir -p "$target_dir"
-            # Only create symlink if target doesn't exist
-            if [ ! -e "$target" ]; then
-                ln -s "$f" "$target" 2>/dev/null || cp -n "$f" "$target" 2>/dev/null || true
-            fi
-        done < <(find "$d" -type f \( $VID_EXTS_LOCAL \) 2>/dev/null || true)
-    done
-
-    # Ensure permissions for web user
-    chown -R www-data:www-data "$STREAM_DIR" || true
-    log_success "Streaming directory populated"
-}
-
-bind_existing_mounts || true
-populate_streaming || true
-
-
-# Summarize detected storage devices, inclusion status, sizes and recent I/O issues
-storage_summary() {
-    log_step "3.3/7" "Storage summary"
-    echo "Detected block devices (sd*/nvme*):"
-    lsblk -plno NAME,SIZE,MODEL,TYPE,MOUNTPOINT | egrep '/dev/sd|/dev/nvme' | sed -E 's/^/  /'
-
-    echo
-    echo "Summary for devices relevant to $FILES_ROOT:"
-    while read -r dev size model type mnt; do
-        [ -z "$dev" ] && continue
-        base=$(basename "$dev")
-        # Find if this device (or its partitions) are bound under FILES_ROOT
-        included="no"
-        include_paths=""
-        while read -r p; do
-            case "$p" in
-                $FILES_ROOT*|/mnt/*|/media/*) included="yes"; include_paths="$include_paths $p" ;;
-            esac
-        done < <(lsblk -plno MOUNTPOINT "${dev}" 2>/dev/null || true)
-
-        # If not directly mounted, check partitions
-        if [ "$included" != "yes" ]; then
-            for part in $(lsblk -plno NAME "${dev}" | tail -n +2 2>/dev/null || true); do
-                for p in $(lsblk -plno MOUNTPOINT "$part" 2>/dev/null || true); do
-                    case "$p" in
-                        $FILES_ROOT*|/mnt/*|/media/*) included="yes"; include_paths="$include_paths $p" ;;
-                    esac
-                done
-            done
-        fi
-
-        # Determine usable size from mountpoint if available
-        size_info="-"
-        if [ -n "$include_paths" ]; then
-            for p in $include_paths; do
-                if [ -d "$p" ]; then
-                    si=$(df -h "$p" 2>/dev/null | awk 'NR==2{print $2" (used:"$3" avail:"$4")"}')
-                    size_info="$si"
-                    break
-                fi
-            done
-        fi
-
-        # Check dmesg for recent errors mentioning device
-        err=$(dmesg | tail -n 500 | egrep -i "($base|${dev})" | egrep -i "error|I/O|reset|over-current|fail" | tail -n 5 || true)
-        if [ -n "$err" ]; then
-            problem="YES"
-        else
-            problem="no"
-        fi
-
-        # Use echo to avoid printf treating leading '-' as an option in some shells
-        echo "- ${dev}: size=${size_info} included=${included} paths=${include_paths} problem=${problem}"
-        if [ -n "$err" ]; then
-            echo "  Recent kernel messages (truncated):"
-            echo "$err" | sed -n '1,5p' | sed -e 's/^/    /'
-        fi
-    done < <(lsblk -plno NAME,SIZE,MODEL,TYPE,MOUNTPOINT | egrep '/dev/sd|/dev/nvme' | awk '{print $1" "$2" "$3" "$4" "$5}')
-
-}
-
-storage_summary || true
-
-# Brief, user-friendly summary (default)
-brief_summary() {
-    echo "[STORAGE SUMMARY] Files root: $FILES_ROOT"
-    echo -n "  Top-level entries: "
-    ls -1A "$FILES_ROOT" 2>/dev/null | wc -l || echo "0"
-    echo -n "  Streaming files: "
-    find "$FILES_ROOT/Streaming" -type f 2>/dev/null | wc -l || echo "0"
-    echo -n "  Thumbnails: "
-    ls -1 "$FILES_ROOT/.thumbs" 2>/dev/null | wc -l || echo "0"
-    if [ -f "$FILES_ROOT/.video_index.json" ]; then
-        echo -n "  Manifest size: "
-        wc -c < "$FILES_ROOT/.video_index.json" 2>/dev/null | awk '{print $1 " bytes"}' || echo "unknown"
-    else
-        echo "  Manifest: (none)"
-    fi
-    echo "  Note: if counts are zero, check dmesg for I/O errors or run imaging if the disk is flaky."
-}
-
-brief_summary
 
 
 log_step "4/7" "Setting up Python environment"
@@ -482,20 +309,10 @@ if [ ! -d "$SRC_DIR" ]; then
     exit 1
 fi
 
-# Create temporary copy of UI to apply cache-busting asset version updates
-ASSET_VER="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || date +%s)"
-TMP_UI_DIR=$(mktemp -d)
-rsync -a "$SRC_DIR/" "$TMP_UI_DIR/"
-
-# Replace any ?v=... query params in html/js/css files with the computed ASSET_VER
-find "$TMP_UI_DIR" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" \) -print0 | \
-    xargs -0 sed -E -i "s/(\?v=)[0-9A-Za-z_-]+/\1${ASSET_VER}/g"
-
 mkdir -p "$(dirname "$WWW_DIR")"
-rsync -a --delete "$TMP_UI_DIR/" "$WWW_DIR/"
+rsync -a --delete "$SRC_DIR/" "$WWW_DIR/"
 chown -R www-data:www-data "$(dirname "$WWW_DIR")"
-rm -rf "$TMP_UI_DIR"
-log_success "UI deployed to $WWW_DIR (asset ver: $ASSET_VER)"
+log_success "UI deployed to $WWW_DIR"
 
 
 
@@ -600,12 +417,6 @@ VID_EXTS='-iname *.mp4 -o -iname *.mkv -o -iname *.mov -o -iname *.avi -o -iname
 thumbs_dir="$FILES_ROOT/.thumbs"
 manifest="$FILES_ROOT/.video_index.json"
 mkdir -p "$thumbs_dir"
-
-# If the files root is not accessible (I/O error, disconnected mount), skip indexing to avoid failures
-if [ ! -d "$FILES_ROOT" ] || [ ! -r "$FILES_ROOT" ]; then
-    log_warn "Files root $FILES_ROOT is not accessible, skipping video indexing (I/O error)."
-    manifest_changed=0
-else
 
 idx_ts="$FILES_ROOT/.video_index.ts"
 tmp_manifest=$(mktemp)
@@ -763,16 +574,14 @@ else
 fi
 
 # restart backend so it picks up thumbnails/index
+spinner_start "Restarting backend..."
 if [ "${manifest_changed:-1}" -eq 1 ]; then
-    # Use a non-blocking restart so the deploy script cannot hang
-    spinner_start "Restarting backend (non-blocking)..."
-    systemctl restart --no-block pincerna.service || true
+    spinner_start "Restarting backend..."
+    systemctl restart pincerna.service || true
     spinner_stop
 else
     log_success "Backend restart skipped (manifest unchanged)"
 fi
-
-fi # end files root accessible check
 
 
 

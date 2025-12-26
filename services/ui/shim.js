@@ -17,10 +17,9 @@
 
   if (!window.logout) {
     window.logout = async function() {
+      try { if (typeof apiFetch === 'function') await apiFetch('/auth/logout', { method: 'POST' }); } catch(e){}
       try { localStorage.removeItem('pincerna_token'); localStorage.removeItem('pincerna_user'); } catch(e){}
-      try { localStorage.removeItem('pincerna_last_stream_files'); } catch(e){}
-      try { if (window.opener && !window.opener.closed) { try { window.opener.localStorage.removeItem('pincerna_token'); window.opener.localStorage.removeItem('pincerna_user'); } catch(e){} } } catch(e){}
-      try { const dest = (window.location && window.location.origin ? window.location.origin : '') + '/cloud/auth.html'; window.location.replace(dest); } catch(e){}
+      try { window.location.href = 'auth.html'; } catch(e){}
     };
   }
   
@@ -136,32 +135,4 @@
       }
     };
   }
-})();
-
-// On first load, accept tokens delivered via URL fragment (e.g. /cloud/index.html#pincerna_token=...&pincerna_user=...)
-// Store into localStorage and remove the fragment to keep the URL clean.
-(function(){
-  try {
-    if (!window || !window.location || !window.location.hash) return;
-    const raw = window.location.hash.replace(/^#/, '');
-    if (!raw) return;
-    const params = raw.split('&').reduce((acc, part)=>{
-      const kv = part.split('=');
-      if (kv.length>=2) acc[decodeURIComponent(kv[0])] = decodeURIComponent(kv.slice(1).join('='));
-      return acc;
-    }, {});
-    const t = params['pincerna_token'] || params['token'] || params['t'];
-    const u = params['pincerna_user'] || params['user'] || params['u'];
-    let changed = false;
-    if (t) {
-      try { localStorage.setItem('pincerna_token', t); changed = true; } catch(e){}
-    }
-    if (u) {
-      try { localStorage.setItem('pincerna_user', u); changed = true; } catch(e){}
-    }
-    if (changed) {
-      try { if (window.history && window.history.replaceState) window.history.replaceState(null, '', window.location.pathname + window.location.search); else window.location.hash = ''; } catch(e){}
-      try { if (typeof showUserGreeting === 'function') showUserGreeting(); } catch(e){}
-    }
-  } catch(e){}
 })();
