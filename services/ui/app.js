@@ -126,11 +126,12 @@ async function loadStreamingFiles() {
         img.alt = f.name;
         img.loading = 'lazy';
         img.dataset.src = thumb;
-        // Ensure thumbnails load even if the IntersectionObserver doesn't trigger
-        // (some browsers/containers can fail to report intersection for newly
-        // appended horizontal-scrolling elements). Setting `src` guarantees
-        // the browser will request the image.
-        img.src = thumb;
+        // Only set `src` immediately when IntersectionObserver isn't available
+        // (true lazy-load behavior otherwise). This avoids eager-loading all
+        // thumbnails while still working in environments without IO support.
+        if (typeof IntersectionObserver === 'undefined') {
+          img.src = thumb;
+        }
         img.style.width = '100%';
         img.style.height = '150px';
         img.style.objectFit = 'cover';
