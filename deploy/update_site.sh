@@ -462,7 +462,7 @@ if [ -f "$manifest" ]; then
             h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
             thumb="$thumbs_dir/${h}.jpg"
             if [ ! -f "$thumb" ]; then
-                ffmpeg -y -ss 5 -i "$f" -vframes 1 -vf scale=640:-1 -q:v 8 "$thumb" >/dev/null 2>&1 || true
+                timeout 30 ffmpeg -y -ss 5 -i "$f" -vframes 1 -vf scale=640:-1 -q:v 8 "$thumb" >/dev/null 2>&1 || true
             fi
             thumb_rel="/cloud/api/thumbnail_file?h=${h}"
             # produce a JSON entry for this file
@@ -551,7 +551,7 @@ else
             h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
             thumb="$thumbs_dir/${h}.jpg"
             if [ ! -f "$thumb" ]; then
-                ffmpeg -y -ss 5 -i "$f" -vframes 1 -vf scale=640:-1 -q:v 8 "$thumb" >/dev/null 2>&1 || true
+                timeout 30 ffmpeg -y -ss 5 -i "$f" -vframes 1 -vf scale=640:-1 -q:v 8 "$thumb" >/dev/null 2>&1 || true
             fi
             pct=$((count*100/total))
             filled=$((pct/2))
