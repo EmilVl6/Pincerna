@@ -1156,7 +1156,7 @@ def streaming_videos():
 		return jsonify(error=str(e)), 500
 
 
-@app.route('/api/streaming/index')
+@app.route('/cloud/api/streaming/index')
 def streaming_index():
 	"""Return the video manifest, filtering out videos without thumbnails."""
 	manifest_path = _get_files_base() + "/.video_index.json"
