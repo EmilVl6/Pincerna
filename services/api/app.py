@@ -228,176 +228,148 @@ def _make_redirect_uri():
 
 @app.route('/oauth/start')
 def oauth_start():
-    
-	client_id = os.environ.get('GOOGLE_CLIENT_ID')
-	if not client_id:
-		# Provide a helpful HTML page instead of a bare 500 so admins see configuration guidance.
-		return _access_denied_page('OAuth is not configured on this server. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.'), 200
-	state = secrets.token_urlsafe(16)
-	code_verifier = secrets.token_urlsafe(64)
-	
-	sha = hashlib.sha256(code_verifier.encode('utf-8')).digest()
-	code_challenge = base64.urlsafe_b64encode(sha).rstrip(b'=').decode('ascii')
-	
-	OAUTH_STORE[state] = {'code_verifier': code_verifier, 'expires': int(time.time()) + 600}
-	_save_oauth_store()
-	params = {
-		'client_id': client_id,
-		'response_type': 'code',
-		'scope': 'openid email profile',
-		'redirect_uri': _make_redirect_uri(),
-		'state': state,
-		'code_challenge': code_challenge,
-		'code_challenge_method': 'S256',
-		'access_type': 'offline',
-		'prompt': 'select_account'
-	}
-	auth_url = 'https://accounts.google.com/o/oauth2/v2/auth?' + urllib.parse.urlencode(params)
-	return ('', 302, {'Location': auth_url})
+
+	try:
+		client_id = os.environ.get('GOOGLE_CLIENT_ID')
+		if not client_id:
+			# Provide a helpful HTML page instead of a bare 500 so admins see configuration guidance.
+			return _access_denied_page('OAuth is not configured on this server. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.'), 200
+		state = secrets.token_urlsafe(16)
+		code_verifier = secrets.token_urlsafe(64)
+
+		sha = hashlib.sha256(code_verifier.encode('utf-8')).digest()
+		code_challenge = base64.urlsafe_b64encode(sha).rstrip(b'=').decode('ascii')
+
+		OAUTH_STORE[state] = {'code_verifier': code_verifier, 'expires': int(time.time()) + 600}
+		_save_oauth_store()
+		params = {
+			'client_id': client_id,
+			'response_type': 'code',
+			'scope': 'openid email profile',
+			'redirect_uri': _make_redirect_uri(),
+			'state': state,
+			'code_challenge': code_challenge,
+			'code_challenge_method': 'S256',
+			'access_type': 'offline',
+			'prompt': 'select_account'
+		}
+		auth_url = 'https://accounts.google.com/o/oauth2/v2/auth?' + urllib.parse.urlencode(params)
+		return ('', 302, {'Location': auth_url})
+	except Exception as e:
+		logging.exception('oauth_start failed')
+		return _access_denied_page('Internal error during OAuth start'), 500
+
 
 
 @app.route('/oauth/callback')
 def oauth_callback():
-	
-	error = request.args.get('error')
-	error_desc = request.args.get('error_description', '')
-	if error:
-		if error == 'access_denied':
-			return _access_denied_page("Sign in was cancelled"), 200
-		return _access_denied_page(f"Authentication failed"), 200
-	
-	code = request.args.get('code')
-	state = request.args.get('state')
-	if not code or not state:
-		return _access_denied_page("Missing authentication data"), 200
-	
-	
-	_load_oauth_store()
-	stored = OAUTH_STORE.get(state)
-	if not stored or stored.get('expires',0) < int(time.time()):
-		return _access_denied_page("Session expired. Please try signing in again."), 200
-	
-	code_verifier = stored.get('code_verifier')
-	
-	token_url = 'https://oauth2.googleapis.com/token'
-	client_id = os.environ.get('GOOGLE_CLIENT_ID')
-	client_secret = os.environ.get('GOOGLE_CLIENT_SECRET')
-	redirect_uri = _make_redirect_uri()
-	post_data = {
-		'code': code,
-		'client_id': client_id,
-		'client_secret': client_secret,
-		'redirect_uri': redirect_uri,
-		'grant_type': 'authorization_code',
-		'code_verifier': code_verifier
-	}
-	data = urllib.parse.urlencode(post_data).encode('utf-8')
+
 	try:
-		req = urllib.request.Request(token_url, data=data, headers={'Content-Type':'application/x-www-form-urlencoded'})
-		with urllib.request.urlopen(req, timeout=10) as resp:
-			resp_j = json.load(resp)
-	except Exception as e:
-		logging.exception('token exchange failed')
-		return _access_denied_page('Authentication failed'), 200
-	id_token = resp_j.get('id_token')
-	if not id_token:
-		return _access_denied_page('Authentication failed'), 200
-	
-	try:
-		url = 'https://oauth2.googleapis.com/tokeninfo?' + urllib.parse.urlencode({'id_token': id_token})
-		with urllib.request.urlopen(url, timeout=8) as r:
-			payload = json.load(r)
-	except Exception as e:
-		logging.exception('tokeninfo failed')
-		return _access_denied_page('Authentication failed'), 200
-	email = payload.get('email')
-	verified = payload.get('email_verified') in ('true', True, '1')
-	if not email or not verified:
-		return _access_denied_page('Email not verified'), 200
-	
-	try:
-		base = os.path.dirname(__file__)
-		allowed_path = os.path.join(base, 'allowed_users.json')
-		with open(allowed_path, 'r', encoding='utf-8') as f:
-			allowed = json.load(f)
+		error = request.args.get('error')
+		error_desc = request.args.get('error_description', '')
+		if error:
+			if error == 'access_denied':
+				return _access_denied_page("Sign in was cancelled"), 200
+			return _access_denied_page(f"Authentication failed"), 200
+
+		code = request.args.get('code')
+		state = request.args.get('state')
+		if not code or not state:
+			return _access_denied_page("Missing authentication data"), 200
+
+		_load_oauth_store()
+		stored = OAUTH_STORE.get(state)
+		if not stored or stored.get('expires', 0) < int(time.time()):
+			return _access_denied_page("Session expired. Please try signing in again."), 200
+
+		code_verifier = stored.get('code_verifier')
+
+		token_url = 'https://oauth2.googleapis.com/token'
+		client_id = os.environ.get('GOOGLE_CLIENT_ID')
+		client_secret = os.environ.get('GOOGLE_CLIENT_SECRET')
+		redirect_uri = _make_redirect_uri()
+		post_data = {
+			'code': code,
+			'client_id': client_id,
+			'client_secret': client_secret,
+			'redirect_uri': redirect_uri,
+			'grant_type': 'authorization_code',
+			'code_verifier': code_verifier
+		}
+		data = urllib.parse.urlencode(post_data).encode('utf-8')
+		try:
+			req = urllib.request.Request(token_url, data=data, headers={'Content-Type': 'application/x-www-form-urlencoded'})
+			with urllib.request.urlopen(req, timeout=10) as resp:
+				resp_j = json.load(resp)
+		except Exception as e:
+			logging.exception('token exchange failed')
+			return _access_denied_page('Authentication failed'), 200
+		id_token = resp_j.get('id_token')
+		if not id_token:
+			return _access_denied_page('Authentication failed'), 200
+
+		try:
+			url = 'https://oauth2.googleapis.com/tokeninfo?' + urllib.parse.urlencode({'id_token': id_token})
+			with urllib.request.urlopen(url, timeout=8) as r:
+				payload = json.load(r)
+		except Exception as e:
+			logging.exception('tokeninfo failed')
+			return _access_denied_page('Authentication failed'), 200
+		email = payload.get('email')
+		verified = payload.get('email_verified') in ('true', True, '1')
+		if not email or not verified:
+			return _access_denied_page('Email not verified'), 200
+
+		try:
+			base = os.path.dirname(__file__)
+			allowed_path = os.path.join(base, 'allowed_users.json')
+			with open(allowed_path, 'r', encoding='utf-8') as f:
+				allowed = json.load(f)
+		except Exception:
+			allowed = ['emilvinod@gmail.com']
+		if email.lower() not in [e.lower() for e in allowed]:
+			return _access_denied_page(), 403
+
+		user_name = payload.get('name', '')
+		user_given = payload.get('given_name', '')
+		user_picture = payload.get('picture', '')
+
+		token = jwt.encode({'user': email, 'name': user_name, 'given_name': user_given, 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=12)}, SECRET, algorithm='HS256')
+
+		try:
+			del OAUTH_STORE[state]
+			_save_oauth_store()
+		except:
+			pass
+
+		user_info = {'email': email, 'name': user_name, 'given_name': user_given, 'picture': user_picture}
+
+		token_js = json.dumps(token)
+		user_js = json.dumps(json.dumps(user_info))
+
+		# Redirect to the UI root with a cache-busting timestamp so browsers fetch updated bundles
+		app_url = f"/cloud/?_={int(time.time())}"
+		short_token = token[:32] + '...' if token and len(token) > 32 else token
+		user_dbg = json.dumps(user_info)
+
+		# Build minimal page that writes to localStorage and redirects
+		from flask import make_response
+		html = (
+			'<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+			'<title>Signing in…</title>'
+			'<style>body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#111;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}.card{padding:20px;border-radius:8px;background:linear-gradient(180deg,#0b0b0b,#111);max-width:720px;width:100%}a.button{display:inline-block;margin-top:12px;padding:10px 14px;background:#ff8200;color:#fff;border-radius:6px;text-decoration:none}</style>'
+			'</head><body><div class="card"><h2>Signing you in…</h2><p id="status">Attempting to finish sign-in and open the app.</p>'
+			f'<div style="margin-top:12px">If you are not redirected automatically, click <a id="continue-link" class="button" href="{app_url}">Continue to Pincerna</a></div>'
+			f'<details style="margin-top:12px;color:#ddd"><summary>Debug info</summary><pre id="dbg" style="white-space:pre-wrap;color:#ddd;font-size:0.9rem;margin-top:8px">token: {short_token}\nuser: {user_dbg}</pre></details></div>'
+			'<script>(function(){try{localStorage.setItem("pincerna_token", ' + token_js + ');}catch(e){console.warn("failed to set token",e);var s=document.getElementById("status");if(s)s.textContent="Signed in but failed to set localStorage token (see console).";}try{localStorage.setItem("pincerna_user", ' + user_js + ');}catch(e){console.warn("failed to set user",e);}try{var target="' + app_url + '";setTimeout(function(){try{location.replace(target);}catch(e){window.location=target;}},250);}catch(e){console.warn("redirect failed",e);}setTimeout(function(){var s=document.getElementById("status");if(s)s.textContent="If nothing happened, click Continue to Pincerna.";},3000);})();</script>'
+			'</body></html>'
+		)
+		resp = make_response(html)
+		resp.headers['Content-Type'] = 'text/html; charset=utf-8'
+		return resp
 	except Exception:
-		allowed = ['emilvinod@gmail.com']
-	if email.lower() not in [e.lower() for e in allowed]:
-		return _access_denied_page(), 403
-	
-	user_name = payload.get('name', '')
-	user_given = payload.get('given_name', '')
-	user_picture = payload.get('picture', '')
-	
-	token = jwt.encode({'user': email, 'name': user_name, 'given_name': user_given, 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=12)}, SECRET, algorithm='HS256')
-	
-	try:
-		del OAUTH_STORE[state]
-		_save_oauth_store()
-	except:
-		pass
-	
-	user_info = {'email': email, 'name': user_name, 'given_name': user_given, 'picture': user_picture}
-	
-	token_js = json.dumps(token)
-	user_js = json.dumps(json.dumps(user_info))
-
-	# Redirect to the UI root with a cache-busting timestamp so browsers fetch updated bundles
-	app_url = f"/cloud/?_={int(time.time())}"
-	short_token = token[:32] + '...' if token and len(token) > 32 else token
-	user_dbg = json.dumps(user_info)
-
-	html_template = """<!doctype html>
-<html>
-	<head>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width,initial-scale=1">
-		<title>Signing in…</title>
-		<style>body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#111;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}.card{padding:20px;border-radius:8px;background:linear-gradient(180deg,#0b0b0b,#111);max-width:720px;width:100%}a.button{display:inline-block;margin-top:12px;padding:10px 14px;background:#ff8200;color:#fff;border-radius:6px;text-decoration:none}</style>
-	</head>
-	<body>
-		<div class="card">
-			<h2>Signing you in…</h2>
-			<p id="status">Attempting to finish sign-in and open the app.</p>
-			<div style="margin-top:12px">If you are not redirected automatically, click <a id="continue-link" class="button" href="%s">Continue to Pincerna</a></div>
-			<details style="margin-top:12px;color:#ddd"><summary>Debug info</summary>
-				<pre id="dbg" style="white-space:pre-wrap;color:#ddd;font-size:0.9rem;margin-top:8px">token: %s\nuser: %s</pre>
-			</details>
-		</div>
-		<script>
-			(function(){
-				try{
-					localStorage.setItem('pincerna_token', %s);
-				}catch(e){
-					console.warn('failed to set token in localStorage', e);
-					var s = document.getElementById('status'); if (s) s.textContent = 'Signed in but failed to set localStorage token (see console).';
-				}
-				try{
-					localStorage.setItem('pincerna_user', %s);
-				}catch(e){
-					console.warn('failed to set user in localStorage', e);
-				}
-				// attempt to replace the current location with the app root (cache-busted)
-				try{
-					var target = '%s';
-					// small delay to allow localStorage to settle for some browsers
-					setTimeout(function(){
-						try{ location.replace(target); }catch(e){ window.location = target; }
-					}, 250);
-				}catch(e){
-					console.warn('redirect failed', e);
-				}
-				// If it doesn't redirect within 3s, reveal a helpful message
-				setTimeout(function(){
-					var s = document.getElementById('status');
-					if (s) s.textContent = 'If nothing happened, click Continue to Pincerna.';
-				}, 3000);
-			})();
-		</script>
-	</body>
-</html>"""
-	html = html_template % (app_url, short_token, user_dbg, token_js, user_js, app_url)
-	return html
+		logging.exception('oauth_callback failed')
+		return _access_denied_page('Internal error during OAuth callback'), 500
 
 def protected(f):
 	def wrapper(*args, **kwargs):
