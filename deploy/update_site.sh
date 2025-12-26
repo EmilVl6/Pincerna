@@ -177,7 +177,13 @@ EOL
 else
     log_success "Credentials file exists at $ENV_FILE (not modified)"
     . "$ENV_FILE" 2>/dev/null || true
-    FILES_ROOT="/mnt"
+    FILES_ROOT="/home/pincerna/files"
+    # Update .env with new FILES_ROOT
+    if grep -q "^FILES_ROOT=" "$ENV_FILE" 2>/dev/null; then
+        sed -i "s|^FILES_ROOT=.*|FILES_ROOT=/home/pincerna/files|" "$ENV_FILE"
+    else
+        echo "FILES_ROOT=/home/pincerna/files" >> "$ENV_FILE"
+    fi
     
     if [ -z "${JWT_SECRET:-}" ]; then
         JWT_SECRET_GENERATED=$(openssl rand -hex 32)
@@ -251,7 +257,7 @@ detect_and_mount_drives() {
             mount_cmd=(mount "$name" "$mountpoint")
         fi
 
-        if "${mount_cmd[@]}" >/dev/null 2>&1; then
+        if "${mount_cmd[@]}"; then
             log_success "Mounted $name -> $mountpoint"
             # Add a simple fstab entry for persistence if UUID is available
             if [ -n "$uuid" ] && [ "$uuid" != "-" ]; then
