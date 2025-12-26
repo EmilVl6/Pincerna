@@ -232,32 +232,6 @@ def _make_redirect_uri():
 @app.route('/oauth/start')
 def oauth_start():
     
-	# Enforce Turnstile verification before starting OAuth when configured
-	turnstile_secret = os.environ.get('TURNSTILE_SECRET', '')
-	# token may be provided as a form value, query param or JSON body key 'turnstile'
-	turnstile_token = request.values.get('turnstile')
-	if not turnstile_token:
-		try:
-			body = request.get_json(silent=True) or {}
-			turnstile_token = body.get('turnstile') or body.get('cf_turnstile_response')
-		except Exception:
-			turnstile_token = None
-	if turnstile_secret:
-		if not turnstile_token:
-			return jsonify(error='turnstile_required'), 400
-		# perform server-side verification
-		post_data = urllib.parse.urlencode({'secret': turnstile_secret, 'response': turnstile_token}).encode('utf-8')
-		try:
-			req = urllib.request.Request('https://challenges.cloudflare.com/turnstile/v0/siteverify', data=post_data,
-										 headers={'Content-Type': 'application/x-www-form-urlencoded'})
-			with urllib.request.urlopen(req, timeout=6) as resp:
-				resp_j = json.load(resp)
-		except Exception as e:
-			logging.exception('turnstile verify failed')
-			return jsonify(error='verify_failed', detail=str(e)), 500
-		if not resp_j.get('success'):
-			return jsonify(error='not_human', detail=resp_j), 400
-
 	client_id = os.environ.get('GOOGLE_CLIENT_ID')
 	if not client_id:
 		return jsonify(error='missing_client_id'), 500
