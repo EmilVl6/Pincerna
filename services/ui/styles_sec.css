@@ -446,13 +446,18 @@ body::after{
 .stream-grid::-webkit-scrollbar-track{background:transparent}
 
 /* full-screen-like player modal */
-.streaming-player-modal{position:fixed;inset:0;z-index:20000;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;padding:24px}
-.streaming-player-wrap{width:100%;height:100%;max-width:1400px;max-height:100vh;background:rgba(10,10,10,0.96);border-radius:6px;display:flex;flex-direction:column;overflow:hidden;padding:0}
-.streaming-player-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid rgba(255,255,255,0.03)}
-.streaming-player-header h1{color:#fff;margin:0;font-size:2.6rem;line-height:1}
-.streaming-player-body{flex:1;display:flex;align-items:center;justify-content:center;background:#000}
-.streaming-player-body video{width:100%;height:100%;object-fit:contain;background:#000}
-.streaming-player-details{background:linear-gradient(180deg, rgba(0,0,0,0.04), transparent)}
+.streaming-player-modal{position:fixed;inset:0;z-index:20000;background:rgba(0,0,0,0.85);display:flex;align-items:stretch;justify-content:center;padding:0}
+.streaming-player-wrap{position:relative;width:100%;height:100%;display:flex;flex-direction:column;overflow:hidden}
+.streaming-player-body{position:relative;flex:1;background:#000;display:flex;align-items:center;justify-content:center}
+.streaming-player-body video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+
+.streaming-player-close{position:absolute;top:18px;right:20px;z-index:30;background:rgba(0,0,0,0.5);border:0;color:#fff;font-size:20px;padding:8px 10px;border-radius:6px;cursor:pointer}
+.streaming-player-close:hover{background:rgba(0,0,0,0.7)}
+
+.streaming-player-overlay{position:absolute;inset:0;z-index:20;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between}
+.streaming-player-title{pointer-events:auto;margin:28px 32px 0 32px;color:#fff;font-weight:700;font-size:2.8rem;text-shadow:0 6px 20px rgba(0,0,0,0.7)}
+.streaming-player-bottom{pointer-events:auto;padding:22px 28px;background:linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.6) 30%, rgba(0,0,0,0.8) 100%);}
+.streaming-player-meta{color:rgba(255,255,255,0.95);font-size:0.95rem}
 streaming-player-controls .btn{background:transparent;border:1px solid rgba(255,255,255,0.06);color:#fff}
 stream-card-title{font-weight:600;color:#fff;font-size:0.92rem;margin-bottom:4px;word-break:break-word;text-shadow:0 1px 2px rgba(0,0,0,0.6)}
 stream-card-size{font-size:0.75rem;color:rgba(255,255,255,0.72)}

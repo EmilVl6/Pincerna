@@ -786,30 +786,32 @@ function showStreamingPlayer(path, name) {
 
   modal.innerHTML = `
     <div class="streaming-player-wrap">
-      <div class="streaming-player-header">
-        <h1 style="margin:0;font-size:2.6rem">${name}</h1>
-        <div class="streaming-player-controls">
-          <button id="streaming-full" class="btn">Fullscreen</button>
-          <button id="streaming-close" class="btn">Close</button>
+      <div class="streaming-player-body">${mediaHtml}
+        <button id="streaming-close" class="streaming-player-close" aria-label="Close">✕</button>
+        <div class="streaming-player-overlay">
+          <div class="streaming-player-title">${name}</div>
+          <div class="streaming-player-bottom">
+            <div class="streaming-player-meta">
+              <div><strong>Size:</strong> ${'' /* filled below via JS if available */}</div>
+              <div style="margin-top:6px"><strong>Path:</strong> ${path}</div>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="streaming-player-body">${mediaHtml}</div>
-      <div class="streaming-player-details" style="padding:12px 16px;color:rgba(255,255,255,0.8);font-size:0.95rem">
-        <div><strong>Path:</strong> ${path}</div>
       </div>
     </div>
   `;
 
   modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
   function closeModal() {
-    try { const p = document.getElementById('pincerna-player'); if (p && !p.paused) p.pause(); } catch(e){}
+    try { const p = document.getElementById('pincerna-player'); if (p) { try { p.pause(); p.src = ''; } catch(e){} } } catch(e){}
     try { document.documentElement.style.overflow = ''; } catch(e){}
-    modal.remove();
+    try { modal.remove(); } catch(e){}
   }
   document.body.appendChild(modal);
   // Try to present as full viewport (visually full-screen)
   try { document.documentElement.style.overflow = 'hidden'; } catch(e){}
-  document.getElementById('streaming-close').addEventListener('click', () => { try { document.documentElement.style.overflow = ''; } catch(e){}; closeModal(); });
+  const closeBtn = document.getElementById('streaming-close');
+  if (closeBtn) closeBtn.addEventListener('click', () => { closeModal(); });
   // Fullscreen button: toggle fullscreen for the wrap
   const wrap = modal.querySelector('.streaming-player-wrap');
   document.getElementById('streaming-full').addEventListener('click', async () => {
