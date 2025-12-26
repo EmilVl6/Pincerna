@@ -469,7 +469,6 @@ def _safe_path(path):
 	return full_path
 
 @app.route("/files")
-@protected
 def list_files():
 	path = request.args.get('path', '/')
 	full_path = _safe_path(path)
