@@ -4,7 +4,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC_DIR="$REPO_ROOT/services/ui"
 WWW_DIR="/var/www/pincerna/cloud"
-FILES_ROOT="/home/pincerna/files"
+FILES_ROOT="/mnt"
 ENV_FILE="/etc/default/pincerna"
 SYSTEMD_UNIT="/etc/systemd/system/pincerna.service"
 NGINX_AVAILABLE="/etc/nginx/sites-available/cloud.emilvinod.com"
@@ -21,7 +21,7 @@ NC='\033[0m'
 
 
 log_step() {
-    echo -e "\n${BLUE}[$1]${NC} $2"
+    echo -e "\n${BLUE}[$1]${NC} ${2:-}"
 }
 
 log_success() {
