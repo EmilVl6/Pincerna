@@ -36,21 +36,6 @@ def _load_oauth_store():
 		logging.warning(f'Failed to load oauth state: {e}')
 		OAUTH_STORE = {}
 
-def _save_oauth_store():
-	try:
-		with open(OAUTH_STATE_FILE, 'w', encoding='utf-8') as f:
-			json.dump(OAUTH_STORE, f)
-	except Exception as e:
-		logging.exception(f'failed to save oauth state to {OAUTH_STATE_FILE}: {e}')
-
-
-_load_oauth_store()
-
-logging.basicConfig(filename="api.log", level=logging.INFO)
-
-RECENT_BACKUPS = deque(maxlen=50)
-VIDEO_INDEX = {}
-VIDEO_INDEX_LOCK = threading.Lock()
 
 def _thumbs_dir():
 	base = _get_files_base()
@@ -60,6 +45,7 @@ def _thumbs_dir():
 	except Exception:
 		pass
 	return thumbs
+
 
 def _ensure_thumbnail(full):
 	"""Ensure a thumbnail exists for `full` and return the thumbnail path on disk."""
@@ -73,7 +59,6 @@ def _ensure_thumbnail(full):
 		subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=25)
 		return thumb_path
 	except Exception:
-		# If thumbnail generation fails, ensure no partial file remains
 		try:
 			if os.path.exists(thumb_path):
 				os.remove(thumb_path)
