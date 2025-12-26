@@ -557,7 +557,39 @@ def preview_file():
 	import mimetypes
 	try:
 		mimetype = mimetypes.guess_type(full_path)[0] or 'application/octet-stream'
-		return send_file(full_path, mimetype=mimetype)
+		if mimetype.startswith('video/') and not request.args.get('raw'):
+			# Return HTML page with full-screen video player
+			html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Preview</title>
+    <style>
+        body {{
+            margin: 0;
+            padding: 0;
+            background: black;
+            overflow: hidden;
+        }}
+        video {{
+            width: 100vw;
+            height: 100vh;
+            object-fit: contain;
+            background: black;
+        }}
+    </style>
+</head>
+<body>
+    <video controls autoplay>
+        <source src="/cloud/api/files/preview?path={path}&token={token}&raw=1" type="{mimetype}">
+        Your browser does not support the video tag.
+    </video>
+</body>
+</html>'''
+			return html, 200, {'Content-Type': 'text/html'}
+		else:
+			return send_file(full_path, mimetype=mimetype)
 	except Exception as e:
 		logging.exception('Preview failed')
 		return jsonify(error=str(e)), 500
