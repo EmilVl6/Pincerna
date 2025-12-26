@@ -420,9 +420,11 @@ body::after{
 .network-device.gateway::before{content:'🌐';position:absolute;top:-8px;right:-8px;font-size:16px}
 
 .stream-grid{display:flex;flex-wrap:wrap;gap:12px;overflow-y:auto;padding:8px;max-height:65vh}
-.stream-card{min-width:200px;height:140px;background:#ffffff;border:1px solid rgba(0,0,0,0.06);display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end;padding:12px;box-shadow:0 6px 18px rgba(0,0,0,0.04);cursor:pointer}
-.stream-card-banner{height:64px;width:100%;background:linear-gradient(90deg,rgba(0,0,0,0.02),rgba(0,0,0,0.03));margin-bottom:8px}
-.stream-card-title{font-weight:600;color:#000}
+.stream-card{min-width:200px;max-width:200px;height:200px;background:#ffffff;border:1px solid rgba(0,0,0,0.06);display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end;padding:12px;box-shadow:0 6px 18px rgba(0,0,0,0.04);cursor:pointer;border-radius:8px;transition:transform 0.2s, box-shadow 0.2s}
+.stream-card:hover{transform:translateY(-4px);box-shadow:0 12px 24px rgba(0,0,0,0.1)}
+.stream-card-banner{height:120px;width:100%;background:linear-gradient(90deg,rgba(0,0,0,0.02),rgba(0,0,0,0.03));margin-bottom:8px;border-radius:4px;overflow:hidden}
+.stream-card-title{font-weight:600;color:#000;font-size:0.9rem;margin-bottom:4px;word-break:break-word}
+.stream-card-size{font-size:0.75rem;color:var(--muted)}
 
 .network-map-container{min-height:500px;position:relative}
 .network-map{position:relative;width:100%;min-height:500px;overflow:visible;padding-bottom:40px}

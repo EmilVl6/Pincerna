@@ -57,6 +57,10 @@ async function loadStreamingFiles() {
       return;
     }
     res = await res.json();
+    // Filter out duplicates based on path
+    if (res.files) {
+      res.files = res.files.filter((f, i, arr) => arr.findIndex(x => x.path === f.path) === i);
+    }
 
     if (res && res.files) {
       // replace heavy background-image approach with incremental rendering + <img loading="lazy">
@@ -117,19 +121,28 @@ async function loadStreamingFiles() {
         img.alt = f.name;
         img.loading = 'lazy';
         img.dataset.src = thumb;
-        // Fallback: set src immediately if IntersectionObserver fails or for immediate load
-        img.src = thumb;
+        // Lazy load: only set src when intersecting, to avoid loading all thumbnails
+        // img.src = thumb; // removed for true lazy loading
         img.style.width = '100%';
         img.style.height = '150px';
         img.style.objectFit = 'cover';
+        // Placeholder for failed thumbnails
+        img.addEventListener('error', () => {
+          img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE1MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5ObyBUaHVtYm5haWw8L3RleHQ+PC9zdmc+';
+        });
         banner.appendChild(img);
 
         const title = document.createElement('div');
         title.className = 'stream-card-title';
         title.textContent = f.name;
 
+        const size = document.createElement('div');
+        size.className = 'stream-card-size';
+        size.textContent = f.size ? formatBytes(f.size) : '';
+
         card.appendChild(banner);
         card.appendChild(title);
+        card.appendChild(size);
 
         card.addEventListener('click', async () => {
           const path = card.dataset.path;
