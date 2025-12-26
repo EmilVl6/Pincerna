@@ -285,7 +285,7 @@ body::after{
 
 
 .auth-card{border:1px solid rgba(11,11,11,0.03)}
-.auth-title{color:#0b0b0b}
+.auth-title{color:var(--text)}
 
 
 .toast{position:fixed;bottom:24px;right:24px;background:#222;color:#fff;padding:12px 20px;font-weight:500;z-index:10000;box-shadow:0 8px 24px rgba(0,0,0,0.3);animation:toastIn 0.2s ease}
