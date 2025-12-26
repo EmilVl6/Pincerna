@@ -7,17 +7,19 @@
   const btn = document.getElementById('signin-btn');
   if(!btn) return;
 
-  // read data-href (button) fallback to default
-  const _origHref = btn.getAttribute('data-href') || '/cloud/api/oauth/start';
+  // read data-href (button) or href (anchor) fallback to default, normalize to absolute URL
+  var _origHref = btn.getAttribute('data-href') || btn.getAttribute('href') || '/cloud/api/oauth/start';
+  try { _origHref = (new URL(_origHref, window.location.origin)).href; } catch(e){}
   // keep the button enabled so clicks work even if Turnstile is slow; use classes/aria to indicate state
-  try { btn.disabled = false; btn.removeAttribute('aria-disabled'); btn.style.cursor = 'pointer'; } catch(e){}
+  try { btn.removeAttribute('aria-disabled'); btn.style.cursor = 'pointer'; } catch(e){}
   // robust click handler: log and navigate via assign with fallback
   try {
+    // pointerdown navigates immediately on pointer interaction (helps before other handlers)
+    btn.addEventListener('pointerdown', function(){ try { window.location.assign(_origHref); } catch(e) { try { window.location.href = _origHref; } catch(e){} } });
+    // click fallback
     btn.addEventListener('click', function(ev){
       try { console.log('Sign-in clicked, navigating to', _origHref); } catch(e){}
-      // prefer location.assign (preserves history) and also ensure navigation via replace if needed
       try { window.location.assign(_origHref); } catch(e) { try { window.location.href = _origHref; } catch(e){} }
-      // final fallback: open in same tab after tiny delay
       setTimeout(function(){ try { window.location.replace(_origHref); } catch(e){} }, 250);
     });
   } catch(e){}
@@ -27,7 +29,7 @@
   function enableSignIn(){
     if(verified) return;
     verified = true;
-    try { btn.classList.remove('disabled'); btn.disabled = false; btn.removeAttribute('aria-disabled'); btn.style.cursor = 'pointer'; } catch(e){}
+    try { btn.classList.remove('disabled'); btn.removeAttribute('aria-disabled'); btn.style.cursor = 'pointer'; } catch(e){}
     document.body.classList.add('turnstile-verified');
     // ensure clicking navigates to oauth start
     try { btn.onclick = function(){ window.location.href = _origHref; }; } catch(e){}
