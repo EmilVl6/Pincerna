@@ -562,11 +562,9 @@ else
         spinner_stop
 
         # build manifest from full list
-        echo '[' > "$tmp_manifest"
-        first=1
+        tmp_data=$(mktemp)
         spinner_start "Writing manifest..."
         for f in "${videos[@]}"; do
-            if [ "$first" -eq 1 ]; then first=0; else echo ',' >> "$tmp_manifest"; fi
             size=$(stat -c%s "$f" 2>/dev/null || echo 0)
             mtime=$(date -r "$f" --iso-8601=seconds 2>/dev/null || echo "")
             rel="/$(echo "$f" | sed "s#^$FILES_ROOT/##")"
@@ -576,17 +574,33 @@ else
             rel_esc=$(printf '%s' "$rel" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
             mtime_esc=$(printf '%s' "$mtime" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
             thumb_esc=$(printf '%s' "$thumb_rel" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
-            printf '{"name":%s,"path":%s,"size":%s,"mtime":%s,"thumbnail":%s}' "$name_esc" "$rel_esc" "$size" "$mtime_esc" "$thumb_esc" >> "$tmp_manifest"
+            echo "$name_esc|$rel_esc|$size|$mtime|$thumb_esc" >> "$tmp_data"
         done
-        echo ']' >> "$tmp_manifest"
+        python3 <<EOF > "$tmp_manifest"
+import json
+files = []
+with open('$tmp_data', 'r') as f:
+    for line in f:
+        parts = line.strip().split('|', 4)
+        name, rel, size, mtime, thumb = parts
+        files.append({
+            'name': json.loads(name),
+            'path': json.loads(rel),
+            'size': int(size),
+            'mtime': json.loads(mtime),
+            'thumbnail': json.loads(thumb)
+        })
+print(json.dumps({'files': files}))
+EOF
+        rm "$tmp_data"
         spinner_stop
         chown -R www-data:www-data "$thumbs_dir"
         mv "$tmp_manifest" "$manifest"
         chown www-data:www-data "$manifest"
+        touch "$idx_ts"
         chown www-data:www-data "$idx_ts"
         log_success "Video manifest written to $manifest"
         manifest_changed=1
-        touch "$idx_ts"
     fi
 fi
 
