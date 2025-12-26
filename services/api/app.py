@@ -501,7 +501,6 @@ def list_files():
 			try:
 				names = os.listdir(full_path)
 			except (PermissionError, OSError) as e:
-				# I/O error reading directory (e.g. broken mount). Return an empty listing
 				logging.warning(f"Failed to list directory {full_path}: {e}")
 				names = []
 
