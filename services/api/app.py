@@ -1158,12 +1158,22 @@ def streaming_videos():
 
 @app.route('/api/streaming/index')
 def streaming_index():
-	"""Return the current in-memory index of video files."""
-	with VIDEO_INDEX_LOCK:
-		items = list(VIDEO_INDEX.values())
-	# sort by mtime desc
-	items.sort(key=lambda x: x.get('mtime', ''), reverse=True)
-	return jsonify(files=items)
+	"""Return the video manifest, filtering out videos without thumbnails."""
+	manifest_path = _get_files_base() + "/.video_index.json"
+	if os.path.exists(manifest_path):
+		with open(manifest_path, 'r') as f:
+			data = json.load(f)
+		# Filter out videos without existing thumbnails
+		filtered_files = []
+		for f in data.get('files', []):
+			h = f.get('thumbnail', '').split('?h=')[-1]
+			if h:
+				thumb_path = _thumbs_dir() + "/" + h + ".jpg"
+				if os.path.exists(thumb_path):
+					filtered_files.append(f)
+		return jsonify(files=filtered_files)
+	else:
+		return jsonify(files=[])
 
 
 @app.route('/cloud/api/streaming')
