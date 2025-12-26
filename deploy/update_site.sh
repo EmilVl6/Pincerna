@@ -177,7 +177,7 @@ EOL
 else
     log_success "Credentials file exists at $ENV_FILE (not modified)"
     . "$ENV_FILE" 2>/dev/null || true
-    FILES_ROOT="/home/pincerna/files"
+    FILES_ROOT="/"
     # Update .env with new FILES_ROOT
     if grep -q "^FILES_ROOT=" "$ENV_FILE" 2>/dev/null; then
         sed -i "s|^FILES_ROOT=.*|FILES_ROOT=/home/pincerna/files|" "$ENV_FILE"
@@ -246,7 +246,7 @@ detect_and_mount_drives() {
             dirname=$(basename "$name")
         fi
 
-        mountpoint="$FILES_ROOT/$dirname"
+        mountpoint="/mnt/$dirname"
         mkdir -p "$mountpoint"
         chown www-data:www-data "$mountpoint" || true
 
@@ -426,11 +426,11 @@ fi
 log_step "7.1/7" "Indexing video files and generating thumbnails"
 
 VID_EXTS='-iname *.mp4 -o -iname *.mkv -o -iname *.mov -o -iname *.avi -o -iname *.webm -o -iname *.m4v -o -iname *.mpg -o -iname *.mpeg -o -iname *.ts -o -iname *.flv'
-thumbs_dir="$FILES_ROOT/.thumbs"
-manifest="$FILES_ROOT/.video_index.json"
+thumbs_dir="/mnt/.thumbs"
+manifest="/mnt/.video_index.json"
 mkdir -p "$thumbs_dir"
 
-idx_ts="$FILES_ROOT/.video_index.ts"
+idx_ts="/mnt/.video_index.ts"
 tmp_manifest=$(mktemp)
 
 if [ -f "$manifest" ]; then

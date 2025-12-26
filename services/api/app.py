@@ -52,8 +52,7 @@ def _save_oauth_store():
 
 
 def _thumbs_dir():
-	base = _get_files_base()
-	thumbs = os.path.join(base, '.thumbs')
+	thumbs = "/mnt/.thumbs"
 	try:
 		os.makedirs(thumbs, exist_ok=True)
 	except Exception:
@@ -458,7 +457,7 @@ def restart_service():
 	return jsonify(message="Restart command received", status="ok")
 
 def _get_files_base():
-	return os.environ.get('FILES_ROOT', '/home/pincerna/files')
+	return os.environ.get('FILES_ROOT', '/')
 
 def _safe_path(path):
 	"""Ensure path stays within FILES_ROOT"""
