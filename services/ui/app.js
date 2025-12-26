@@ -121,16 +121,16 @@ async function loadStreamingFiles() {
         img.alt = f.name;
         img.loading = 'lazy';
         img.dataset.src = thumb;
-        // Lazy load: only set src when intersecting, to avoid loading all thumbnails
-        // img.src = thumb; // removed for true lazy loading
-        img.style.width = '100%';
-        img.style.height = '150px';
-        img.style.objectFit = 'cover';
         // Placeholder for failed thumbnails
         img.addEventListener('error', () => {
           img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE1MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5ObyBUaHVtYm5haWw8L3RleHQ+PC9zdmc+';
         });
         banner.appendChild(img);
+        // overlay with play button
+        const overlay = document.createElement('div');
+        overlay.className = 'poster-overlay';
+        overlay.innerHTML = `<div class="play-btn" aria-hidden="true">▶</div>`;
+        banner.appendChild(overlay);
 
         const title = document.createElement('div');
         title.className = 'stream-card-title';
