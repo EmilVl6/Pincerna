@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, jsonify, request, send_file, Response
 import jwt
 import datetime
 import logging
@@ -343,15 +343,14 @@ def oauth_callback():
 	
 	token_js = json.dumps(token)
 	user_js = json.dumps(json.dumps(user_info))
-	
+
 	# Redirect to the UI root with a cache-busting timestamp so browsers fetch updated bundles
-		# More robust callback page: set localStorage, attempt redirect, and provide
-		# a visible fallback with debug info if the client fails to execute the script
-		app_url = f"/cloud/?_={int(time.time())}"
-		short_token = token[:32] + '...' if token and len(token) > 32 else token
-		user_dbg = json.dumps(user_info)
-		# Use a plain template with % placeholders to avoid f-string brace parsing
-		html_template = """<!doctype html>
+	app_url = f"/cloud/?_={int(time.time())}"
+	short_token = token[:32] + '...' if token and len(token) > 32 else token
+	user_dbg = json.dumps(user_info)
+
+	# Use a plain template with % placeholders to avoid f-string brace parsing
+	html_template = """<!doctype html>
 <html>
 	<head>
 		<meta charset="utf-8">
@@ -400,8 +399,8 @@ def oauth_callback():
 		</script>
 	</body>
 </html>"""
-		html = html_template % (app_url, short_token, user_dbg, token_js, user_js, app_url)
-		return html
+	html = html_template % (app_url, short_token, user_dbg, token_js, user_js, app_url)
+	return html
 
 def protected(f):
 	def wrapper(*args, **kwargs):
