@@ -132,7 +132,10 @@ async function loadStreamingFiles() {
         // overlay with play button
         const overlay = document.createElement('div');
         overlay.className = 'poster-overlay';
-        overlay.innerHTML = `<div class="play-btn" aria-hidden="true">▶</div>`;
+        overlay.innerHTML = `<div style="display:flex;gap:10px;align-items:center">
+          <div class=\"play-btn\" aria-hidden=\"true\">▶</div>
+          <button class=\"btn\" title=\"Open in new window\" style=\"height:36px;padding:6px 10px;border-radius:6px;margin-left:6px;font-size:0.85rem\">Pop-out</button>
+        </div>`;
         banner.appendChild(overlay);
 
         const title = document.createElement('div');
@@ -158,6 +161,15 @@ async function loadStreamingFiles() {
             showStreamingPlayer(path, card.dataset.name);
           }
         });
+        // Pop-out button
+        try {
+          const pop = banner.querySelector('button');
+          if (pop) pop.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const url = window.location.origin + '/cloud/player.html?path=' + encodeURIComponent(card.dataset.path);
+            window.open(url, '_blank', 'noopener');
+          });
+        } catch(e){}
         card.addEventListener('keydown', (e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
