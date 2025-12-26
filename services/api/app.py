@@ -223,9 +223,12 @@ h1{{font-size:1.5rem;font-weight:500;letter-spacing:-0.02em}}
 
 
 def _make_redirect_uri():
-	
-	
-	return urllib.parse.urljoin(request.host_url, 'cloud/api/oauth/callback')
+	# Prefer X-Forwarded headers (set by reverse proxy) so the redirect_uri
+	# points to the public origin instead of the internal gunicorn host.
+	proto = request.headers.get('X-Forwarded-Proto') or request.scheme
+	host = request.headers.get('X-Forwarded-Host') or request.headers.get('Host') or request.host
+	base = f"{proto}://{host.rstrip('/')}/"
+	return urllib.parse.urljoin(base, 'cloud/api/oauth/callback')
 
 
 @app.route('/oauth/start')
