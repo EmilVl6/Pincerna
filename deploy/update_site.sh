@@ -309,10 +309,20 @@ if [ ! -d "$SRC_DIR" ]; then
     exit 1
 fi
 
+# Create temporary copy of UI to apply cache-busting asset version updates
+ASSET_VER="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || date +%s)"
+TMP_UI_DIR=$(mktemp -d)
+rsync -a "$SRC_DIR/" "$TMP_UI_DIR/"
+
+# Replace any ?v=... query params in html/js/css files with the computed ASSET_VER
+find "$TMP_UI_DIR" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" \) -print0 | \
+    xargs -0 sed -E -i "s/(\?v=)[0-9A-Za-z_-]+/\1${ASSET_VER}/g"
+
 mkdir -p "$(dirname "$WWW_DIR")"
-rsync -a --delete "$SRC_DIR/" "$WWW_DIR/"
+rsync -a --delete "$TMP_UI_DIR/" "$WWW_DIR/"
 chown -R www-data:www-data "$(dirname "$WWW_DIR")"
-log_success "UI deployed to $WWW_DIR"
+rm -rf "$TMP_UI_DIR"
+log_success "UI deployed to $WWW_DIR (asset ver: $ASSET_VER)"
 
 
 
