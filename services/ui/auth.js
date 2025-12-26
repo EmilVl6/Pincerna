@@ -35,22 +35,38 @@
     }).catch(function(){});
   };
 
-  fetch('/cloud/api/config').then(function(r){ return r.json(); }).then(function(cfg){
-    var sitekey = cfg && cfg.turnstile_sitekey;
-    if(!sitekey) {
-      console.error('No turnstile sitekey found');
-      return;
-    }
-    function renderWhenReady(){
+  // Try to fetch the Turnstile sitekey, but don't block sign-in indefinitely.
+  let rendered = false;
+  const ENABLE_FALLBACK_MS = 3000;
+
+  function tryRender(sitekey){
+    if(!sitekey) return false;
+    function renderWhenReady(attemptsLeft){
       if(window.turnstile && typeof window.turnstile.render === 'function'){
         window.turnstile.render(document.getElementById('turnstile-container'), {
           sitekey: sitekey,
           callback: window.onTurnstileSuccess
         });
+        rendered = true;
         return;
       }
-      setTimeout(renderWhenReady, 100);
+      if(attemptsLeft <= 0) return;
+      setTimeout(()=>renderWhenReady(attemptsLeft-1), 150);
     }
-    renderWhenReady();
-  }).catch(function(e){ console.error('Config fetch failed', e); });
+    renderWhenReady(20); // ~3s worth of attempts
+    return true;
+  }
+
+  // Primary: fetch sitekey from /cloud/api/config, but fallback to enabling sign-in after a short timeout
+  fetch('/cloud/api/config', { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(cfg){
+    var sitekey = cfg && cfg.turnstile_sitekey;
+    if(sitekey) {
+      tryRender(sitekey);
+    } else {
+      console.warn('No turnstile sitekey found');
+    }
+  }).catch(function(e){ console.warn('Config fetch failed', e); });
+
+  // If Turnstile doesn't render within the fallback window, enable sign-in anyway
+  setTimeout(function(){ if(!rendered) enableSignIn(); }, ENABLE_FALLBACK_MS);
 })();
