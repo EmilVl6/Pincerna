@@ -1266,7 +1266,6 @@ def _video_indexer_loop():
 		try:
 			new_index = {}
 			for root, dirs, files in os.walk(base):
-				# Skip system directories to avoid scanning irrelevant files
 				dirs[:] = [d for d in dirs if d not in ('proc', 'sys', 'dev', 'run', 'tmp', 'var', 'etc', 'boot', 'usr', 'bin', 'sbin', 'lib', 'lib64', 'opt', 'root', 'lost+found') and not d.startswith('.')]
 				for fname in files:
 					ext = os.path.splitext(fname)[1].lower()
