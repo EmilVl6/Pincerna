@@ -38,4 +38,54 @@
       try { const el = document.getElementById('preloader'); if (!el) return; el.style.display = 'block'; } catch(e){}
     };
   }
+
+  if (!window.showMessage) {
+    window.showMessage = function(msg, type='info', timeout=3000) {
+      try {
+        let container = document.getElementById('pincerna-message-container');
+        if (!container) {
+          container = document.createElement('div');
+          container.id = 'pincerna-message-container';
+          container.style.position = 'fixed';
+          container.style.top = '12px';
+          container.style.right = '12px';
+          container.style.zIndex = 99999;
+          document.body.appendChild(container);
+        }
+        const el = document.createElement('div');
+        el.textContent = msg;
+        el.style.marginTop = '8px';
+        el.style.padding = '8px 12px';
+        el.style.borderRadius = '6px';
+        el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)';
+        el.style.background = type === 'error' ? '#ffecec' : (type === 'warn' ? '#fff4e5' : '#eef9ff');
+        el.style.color = '#111';
+        container.appendChild(el);
+        setTimeout(() => { el.style.transition = 'opacity 0.3s'; el.style.opacity = '0'; setTimeout(()=>el.remove(), 300); }, timeout);
+      } catch(e) { console.warn('showMessage fallback failed', e); }
+    };
+  }
+
+  if (!window.apiFetch) {
+    window.apiFetch = async function(path, opts={}) {
+      try {
+        const headers = (opts.headers && typeof opts.headers === 'object') ? Object.assign({}, opts.headers) : {};
+        const token = localStorage.getItem('pincerna_token');
+        if (token && !headers['Authorization']) headers['Authorization'] = token;
+        const res = await fetch((window.apiBase || '') + '/api' + path, Object.assign({}, opts, { headers }));
+        const contentType = res.headers.get('content-type') || '';
+        if (!res.ok) {
+          if (contentType.includes('application/json')) {
+            const json = await res.json();
+            return json;
+          }
+          return { error: 'network_error' };
+        }
+        if (contentType.includes('application/json')) return await res.json();
+        return await res.text();
+      } catch (e) {
+        return { error: e.message };
+      }
+    };
+  }
 })();
