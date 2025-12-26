@@ -22,8 +22,12 @@ function showUserGreeting() {
   const el = document.getElementById('user-greeting');
   if (!el) return;
   if (info) {
-    const name = info.name || (info.email ? info.email.split('@')[0] : null);
-    if (name) el.textContent = `Hi, ${name}`;
+    let name = info.name || (info.email ? info.email.split('@')[0] : null);
+    if (name) {
+      // prefer first name only
+      name = String(name).split(' ')[0];
+      el.textContent = `Hi, ${name}`;
+    }
     else el.textContent = '';
   } else {
     el.textContent = '';
@@ -85,6 +89,8 @@ async function loadStreamingFiles() {
       `;
 
       const search = document.getElementById('stream-search');
+      // ensure default gallery when opening streaming panel
+      if (search) { search.value = ''; }
       const grid = document.getElementById('stream-grid');
       const sentinel = document.getElementById('stream-sentinel');
 
@@ -1560,7 +1566,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnAccessLocal = $('#btn-access-local');
   if (btnAccessLocal) btnAccessLocal.addEventListener('click', () => { document.getElementById('nav-files').click(); });
 
-    const btnMetrics = document.getElementById('btn-metrics');
+  const btnMetrics = document.getElementById('btn-metrics');
   if (btnMetrics) btnMetrics.addEventListener('click', loadMetrics);
 
   const btnRefreshMetrics = document.getElementById('btn-refresh-metrics');
@@ -1576,9 +1582,17 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnRestart) {
     btnRestart.addEventListener('click', async () => {
       if (!confirm('Are you sure you want to restart the service?')) return;
-      const res = await apiFetch('/restart', { method: 'POST' });
-      if (res && res.error) showMessage(res.error, 'error');
-      else showMessage('Restart command sent', 'info');
+      try {
+        btnRestart.disabled = true;
+        btnRestart.textContent = 'Restarting...';
+        const res = await apiFetch('/restart', { method: 'POST' });
+        if (res && res.error) showMessage(res.error, 'error');
+        else showMessage('Restart command sent', 'info');
+      } catch (e) {
+        showMessage('Failed to send restart command', 'error');
+      } finally {
+        setTimeout(() => { try { btnRestart.disabled = false; btnRestart.textContent = 'Restart Service'; } catch(e){} }, 5000);
+      }
     });
   }
 
@@ -1591,6 +1605,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (navStreaming) navStreaming.addEventListener('click', (e) => { e.preventDefault(); showSection('streaming'); });
     if (navAbout) navAbout.addEventListener('click', (e) => { e.preventDefault(); showSection('about'); });
 
+    // hero button to open Streaming panel
+    const btnHeroStream = document.getElementById('btn-stream');
+    if (btnHeroStream) btnHeroStream.addEventListener('click', () => { showSection('streaming'); });
     const btnViewStreaming = document.getElementById('btn-view-network');
     if (btnViewStreaming) btnViewStreaming.addEventListener('click', () => showSection('streaming'));
   
