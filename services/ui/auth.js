@@ -9,7 +9,10 @@
 
   // read data-href (button) fallback to default
   const _origHref = btn.getAttribute('data-href') || '/cloud/api/oauth/start';
-  try { btn.disabled = true; btn.setAttribute('aria-disabled','true'); } catch(e){}
+  // keep the button enabled so clicks work even if Turnstile is slow; use classes/aria to indicate state
+  try { btn.disabled = false; btn.setAttribute('aria-disabled','true'); btn.style.cursor = 'pointer'; } catch(e){}
+  // ensure clicking always goes to oauth start (Turnstile will verify separately when available)
+  try { btn.addEventListener('click', function(ev){ ev.preventDefault(); window.location.href = _origHref; }); } catch(e){}
 
   let verified = false;
 
