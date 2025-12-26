@@ -1,6 +1,14 @@
 const apiBase = "/cloud/api";
 const $ = sel => document.querySelector(sel);
 
+// Streaming UI globals (ensure safe defaults so older or partial bundles
+// don't cause runtime ReferenceErrors).
+var STREAM_FILES = [];
+var STREAM_OFFSET = 0;
+var STREAM_BATCH = 24; // number of items to render per batch
+var STREAM_THUMB_OBSERVER = null;
+var STREAM_SENTINEL_OBSERVER = null;
+
 function getUserInfo() {
   try {
     const raw = localStorage.getItem('pincerna_user');
