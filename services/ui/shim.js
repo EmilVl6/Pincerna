@@ -89,7 +89,25 @@
         if (pathPart.startsWith(base)) pathPart = pathPart.slice(base.length);
         if (!pathPart.startsWith('/')) pathPart = '/' + pathPart;
         const url = origin + base + pathPart;
-        const res = await fetch(url, Object.assign({}, opts, { headers }));
+        // Attempt primary fetch; if it 404s, try simple normalized fallbacks
+        const doFetch = async (u) => await fetch(u, Object.assign({}, opts, { headers }));
+        let res = await doFetch(url);
+        if (res && res.status === 404) {
+          try {
+            // Diagnostic hint for debugging cached client behavior
+            console.debug('apiFetch primary 404, trying fallbacks', { primary: url });
+          } catch(e){}
+          // Common malformed pattern observed: '/api/cloud/api/...' — fix by removing leading '/api'
+          let alt = url.replace('/api/cloud/api', '/cloud/api');
+          if (alt !== url) {
+            try { res = await doFetch(alt); if (res && res.status !== 404) return (res.headers.get('content-type') || '').includes('application/json') ? await res.json() : await res.text(); } catch(e){}
+          }
+          // Another fallback: remove any duplicated '/cloud/api' segments
+          alt = url.replace('/cloud/api/cloud/api', '/cloud/api');
+          if (alt !== url) {
+            try { res = await doFetch(alt); if (res && res.status !== 404) return (res.headers.get('content-type') || '').includes('application/json') ? await res.json() : await res.text(); } catch(e){}
+          }
+        }
         const contentType = res.headers.get('content-type') || '';
         if (!res.ok) {
           if (contentType.includes('application/json')) {
