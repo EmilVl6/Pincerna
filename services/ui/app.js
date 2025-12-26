@@ -151,7 +151,7 @@ async function loadStreamingFiles() {
         const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(f.path) + '&token=' + encodeURIComponent(localStorage.getItem('pincerna_token') || '');
         const pre = document.createElement('video');
         pre.className = 'preview-preload';
-        pre.preload = 'metadata';
+        pre.preload = 'auto';
         pre.muted = true;
         pre.playsInline = true;
         pre.style.display = 'none';
@@ -162,7 +162,6 @@ async function loadStreamingFiles() {
         overlay.className = 'poster-overlay';
         overlay.innerHTML = `<div style="display:flex;gap:10px;align-items:center">
           <div class=\"play-btn\" aria-hidden=\"true\">▶</div>
-          <button class=\"btn\" title=\"Open in new window\" style=\"height:36px;padding:6px 10px;border-radius:6px;margin-left:6px;font-size:0.85rem\">Pop-out</button>
         </div>`;
         banner.appendChild(overlay);
 
@@ -190,21 +189,16 @@ async function loadStreamingFiles() {
             showStreamingPlayer(path, card.dataset.name, { preferPreloaded: true });
           }
         });
-        // Pop-out button
-        try {
-          const pop = banner.querySelector('button');
-          if (pop) pop.addEventListener('click', (ev) => {
-            ev.stopPropagation();
-            const url = window.location.origin + '/cloud/player.html?path=' + encodeURIComponent(card.dataset.path);
-            window.open(url, '_blank', 'noopener');
-          });
-        } catch(e){}
+        // removed pop-out functionality to simplify UX
         // preload when the user hovers or focuses the card (warm up first frame)
         const startPreload = () => {
           try {
             if (pre.dataset.loaded) return;
             pre.src = pre.dataset.src || previewUrl;
             pre.load();
+            pre.muted = true;
+            // attempt muted play to warm buffers in browsers that allow it
+            try { pre.play().then(()=>{ try{ pre.pause(); }catch(e){} }).catch(()=>{}); } catch(e){}
             pre.dataset.loaded = '1';
           } catch (e) {}
         };
@@ -786,7 +780,7 @@ function showStreamingPlayer(path, name) {
 
   let mediaHtml = '';
   if (videoExts.includes(ext)) {
-    mediaHtml = `<video id="pincerna-player" controls playsinline style="width:100%;height:100%" poster="${poster}"><source src="${src}"></video>`;
+    mediaHtml = `<video id="pincerna-player" controls playsinline autoplay muted preload="auto" style="width:100%;height:100%" poster="${poster}"><source src="${src}"></video>`;
   } else if (audioExts.includes(ext)) {
     mediaHtml = `<audio id="pincerna-player" controls style="width:100%"><source src="${src}"></audio>`;
   } else {
@@ -796,7 +790,7 @@ function showStreamingPlayer(path, name) {
   modal.innerHTML = `
     <div class="streaming-player-wrap">
       <div class="streaming-player-header">
-        <h1 style="margin:0;font-size:1.6rem">${name}</h1>
+        <h1 style="margin:0;font-size:2.6rem">${name}</h1>
         <div class="streaming-player-controls">
           <button id="streaming-full" class="btn">Fullscreen</button>
           <button id="streaming-close" class="btn">Close</button>
@@ -812,6 +806,7 @@ function showStreamingPlayer(path, name) {
   modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
   function closeModal() {
     try { const p = document.getElementById('pincerna-player'); if (p && !p.paused) p.pause(); } catch(e){}
+    try { document.documentElement.style.overflow = ''; } catch(e){}
     modal.remove();
   }
   document.body.appendChild(modal);
@@ -1608,8 +1603,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // hero button to open Streaming panel
     const btnHeroStream = document.getElementById('btn-stream');
     if (btnHeroStream) btnHeroStream.addEventListener('click', () => { showSection('streaming'); });
-    const btnViewStreaming = document.getElementById('btn-view-network');
-    if (btnViewStreaming) btnViewStreaming.addEventListener('click', () => showSection('streaming'));
   
     const btnScanDevices = document.getElementById('btn-scan-devices');
     if (btnScanDevices) btnScanDevices.addEventListener('click', listStorageDevices);
