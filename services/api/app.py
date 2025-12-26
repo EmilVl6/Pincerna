@@ -458,7 +458,7 @@ def restart_service():
 	return jsonify(message="Restart command received", status="ok")
 
 def _get_files_base():
-	return os.environ.get('FILES_ROOT', '/')
+	return os.environ.get('FILES_ROOT', '/mnt')
 
 def _safe_path(path):
 	"""Ensure path stays within FILES_ROOT"""

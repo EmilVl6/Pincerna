@@ -177,6 +177,7 @@ EOL
 else
     log_success "Credentials file exists at $ENV_FILE (not modified)"
     . "$ENV_FILE" 2>/dev/null || true
+    FILES_ROOT="/mnt"
     
     if [ -z "${JWT_SECRET:-}" ]; then
         JWT_SECRET_GENERATED=$(openssl rand -hex 32)
