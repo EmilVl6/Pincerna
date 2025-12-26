@@ -574,14 +574,8 @@ else
 fi
 
 # restart backend so it picks up thumbnails/index
-spinner_start "Restarting backend..."
-if [ "${manifest_changed:-1}" -eq 1 ]; then
-    spinner_start "Restarting backend..."
-    systemctl restart pincerna.service || true
-    spinner_stop
-else
-    log_success "Backend restart skipped (manifest unchanged)"
-fi
+# Removed automatic restart - run manually: sudo systemctl restart pincerna
+log_warn "Remember to restart pincerna service manually: sudo systemctl restart pincerna"
 
 
 
