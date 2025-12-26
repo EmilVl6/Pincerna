@@ -24,6 +24,11 @@ SECRET = os.environ.get('JWT_SECRET', 'bartendershandbook-change-in-production')
 OAUTH_STORE = {}
 OAUTH_STATE_FILE = '/tmp/pincerna_oauth_state.json'
 
+# In-memory helpers
+RECENT_BACKUPS = deque(maxlen=50)
+VIDEO_INDEX = {}
+VIDEO_INDEX_LOCK = threading.Lock()
+
 def _load_oauth_store():
 	global OAUTH_STORE
 	try:
@@ -216,10 +221,11 @@ def _make_redirect_uri():
 
 @app.route('/oauth/start')
 def oauth_start():
-	
+    
 	client_id = os.environ.get('GOOGLE_CLIENT_ID')
 	if not client_id:
-		return jsonify(error='missing_client_id'), 500
+		# Provide a helpful HTML page instead of a bare 500 so admins see configuration guidance.
+		return _access_denied_page('OAuth is not configured on this server. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.'), 200
 	state = secrets.token_urlsafe(16)
 	code_verifier = secrets.token_urlsafe(64)
 	
