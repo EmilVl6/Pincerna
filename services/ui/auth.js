@@ -10,15 +10,12 @@
     signin.classList.add('disabled');
     signin.dataset.disabled = '1';
     signin.setAttribute('aria-disabled', 'true');
-    // prevent default navigation until verification
-    signin.addEventListener('click', interceptClick);
   }
   function enableSignIn() {
     if (!signin) return;
     signin.classList.remove('disabled');
     delete signin.dataset.disabled;
     signin.removeAttribute('aria-disabled');
-    signin.removeEventListener('click', interceptClick);
   }
 
   function interceptClick(e){
@@ -100,14 +97,15 @@
   // Kick off
   init();
 
-  // Ensure click always performs a controlled navigation that respects the disabled state.
+  // Ensure click only prevents navigation when disabled; otherwise allow normal behavior.
   if (signin) {
     signin.addEventListener('click', function(e){
-      e.preventDefault();
-      if (signin.dataset && signin.dataset.disabled) return false;
-      const href = signin.getAttribute('href') || '/cloud/api/oauth/start';
-      try { window.location.href = href; } catch (err) { window.location = href; }
-      return false;
+      if (signin.dataset && signin.dataset.disabled) {
+        e.preventDefault();
+        return false;
+      }
+      // Let the anchor perform a normal navigation to follow the 302 from the backend.
+      return true;
     });
   }
 })();
