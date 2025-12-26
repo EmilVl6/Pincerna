@@ -241,28 +241,32 @@ detect_and_mount_drives() {
 
         mountpoint="$FILES_ROOT/$dirname"
         mkdir -p "$mountpoint"
-        chown www-data:www-data "$mountpoint" || true
 
         # Try mounting with appropriate driver
+        # skip if the device node does not exist
+        if [ ! -b "$name" ] && [ ! -c "$name" ]; then
+            log_warn "Device $name not present, skipping"
+            continue
+        fi
+
         if [ "$fstype" = "ntfs" ] || [ "$fstype" = "ntfs3" ]; then
             mount_cmd=(ntfs-3g "$name" "$mountpoint")
+            fstype_entry="ntfs-3g"
+            opts="defaults,uid=www-data,gid=www-data"
         else
             mount_cmd=(mount "$name" "$mountpoint")
+            fstype_entry="$fstype"
+            opts="defaults"
         fi
 
         if "${mount_cmd[@]}" >/dev/null 2>&1; then
             log_success "Mounted $name -> $mountpoint"
+            # set ownership after successful mount
+            chown www-data:www-data "$mountpoint" || true
             # Add a simple fstab entry for persistence if UUID is available
             if [ -n "$uuid" ] && [ "$uuid" != "-" ]; then
                 # Check if already in fstab
                 if ! grep -q "$uuid" /etc/fstab 2>/dev/null; then
-                    fstype_entry="$fstype"
-                    if [ "$fstype" = "ntfs" ] || [ "$fstype" = "ntfs3" ]; then
-                        opts="defaults,uid=www-data,gid=www-data"
-                        fstype_entry="ntfs-3g"
-                    else
-                        opts="defaults"
-                    fi
                     echo "UUID=$uuid    $mountpoint    $fstype_entry    $opts    0    2" >> /etc/fstab
                     log_success "Added fstab entry for $name"
                 fi

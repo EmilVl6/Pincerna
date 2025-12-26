@@ -567,6 +567,37 @@ def download_file():
 		logging.exception('Download failed')
 		return jsonify(error=str(e)), 500
 
+
+	@app.route('/cloud/api/storage_status')
+	def storage_status():
+		"""Return diagnostic info about the configured FILES_ROOT and top-level entries.
+		This endpoint is safe for debugging: it catches I/O errors and returns them as messages.
+		"""
+		base = _get_files_base()
+		info = {'files_root': base}
+		try:
+			exists = os.path.exists(base)
+			is_dir = os.path.isdir(base)
+			readable = os.access(base, os.R_OK)
+			info.update({'exists': exists, 'is_dir': is_dir, 'readable': readable})
+			entries = []
+			if is_dir and readable:
+				try:
+					for name in sorted(os.listdir(base)):
+						p = os.path.join(base, name)
+						try:
+							stat = os.stat(p)
+							entries.append({'name': name, 'is_dir': os.path.isdir(p), 'size': stat.st_size if not os.path.isdir(p) else None})
+						except OSError as e:
+							entries.append({'name': name, 'error': str(e)})
+				except OSError as e:
+					info['list_error'] = str(e)
+			info['entries'] = entries
+		except Exception as e:
+			logging.exception('storage_status failed')
+			return jsonify(error=str(e)), 500
+		return jsonify(info)
+
 @app.route("/files/preview")
 def preview_file():
 	"""Preview a file inline - for images, PDFs, etc"""
