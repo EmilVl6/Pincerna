@@ -79,9 +79,8 @@
         // Always use the canonical base to avoid issues with cached or malformed apiBase
         const base = '/cloud/api';
         const origin = (window.location && window.location.origin) ? window.location.origin.replace(/\/+$/,'') : '';
-        // Normalize path: ensure it doesn't duplicate the base
-        let pathPart = path || '';
-        if (pathPart.startsWith(base)) pathPart = pathPart.slice(base.length);
+        // Normalize path: strip any leading '/cloud/api' to avoid duplication
+        let pathPart = (path || '').replace(/^\/cloud\/api/, '');
         if (!pathPart.startsWith('/')) pathPart = '/' + pathPart;
         const url = origin + base + pathPart;
         // Attempt several candidate URLs to tolerate cached or rewritten bases.
