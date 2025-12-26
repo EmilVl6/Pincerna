@@ -285,9 +285,6 @@ detect_and_mount_drives() {
                     log_success "Added fstab entry for $name"
                 fi
             fi
-        else
-            :
-        fi
     done < <(lsblk -plno NAME,FSTYPE,UUID,LABEL,MOUNTPOINT | awk '{ if($1!="") print $0 }')
 }
 
