@@ -426,11 +426,11 @@ fi
 log_step "7.1/7" "Indexing video files and generating thumbnails"
 
 VID_EXTS='-iname *.mp4 -o -iname *.mkv -o -iname *.mov -o -iname *.avi -o -iname *.webm -o -iname *.m4v -o -iname *.mpg -o -iname *.mpeg -o -iname *.ts -o -iname *.flv'
-thumbs_dir="/mnt/.thumbs"
-manifest="/mnt/.video_index.json"
+thumbs_dir="$FILES_ROOT/.thumbs"
+manifest="$FILES_ROOT/.video_index.json"
 mkdir -p "$thumbs_dir"
 
-idx_ts="/mnt/.video_index.ts"
+idx_ts="$FILES_ROOT/.video_index.ts"
 tmp_manifest=$(mktemp)
 
 if [ -f "$manifest" ]; then

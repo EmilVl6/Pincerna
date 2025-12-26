@@ -52,7 +52,7 @@ def _save_oauth_store():
 
 
 def _thumbs_dir():
-	thumbs = "/mnt/.thumbs"
+	thumbs = _get_files_base() + "/.thumbs"
 	try:
 		os.makedirs(thumbs, exist_ok=True)
 	except Exception:
