@@ -46,26 +46,17 @@ async function loadStreamingFiles() {
   if (!filesEl) return;
   try {
     // Fetch indexed video files from the background indexer
-    let res = await apiFetch('/streaming/index');
-    if (res && res.error === 'server_returned_html') {
-      // try to fetch raw HTML for debugging and log it to console
-      try {
-        const raw = await fetch(apiBase + '/streaming/index');
-        const body = await raw.text();
-        console.error('streaming/index returned HTML:', body.substring(0, 2000));
-      } catch (e) {
-        console.error('Failed to fetch raw streaming/index HTML', e);
-      }
-      // fall back to unindexed scan endpoint
-      const fallback = await apiFetch('/streaming/videos');
-      if (fallback && fallback.files) {
-        res = fallback;
-      } else {
-        showMessage('Server returned HTML for streaming index; check backend logs', 'error', 6000);
-        filesEl.innerHTML = '';
-        return;
-      }
+    const apiUrl = window.location.origin + '/cloud/api/streaming/index';
+    let res = await fetch(apiUrl);
+    if (!res.ok) {
+      console.error('Fetch failed:', res.status, res.statusText);
+      const text = await res.text();
+      console.error('Response:', text);
+      showMessage('Failed to load Streaming folder: ' + res.status, 'error');
+      filesEl.innerHTML = '';
+      return;
     }
+    res = await res.json();
 
     if (res && res.files) {
       // replace heavy background-image approach with incremental rendering + <img loading="lazy">
@@ -113,7 +104,7 @@ async function loadStreamingFiles() {
       }
 
       function createCard(f) {
-        const thumb = f.thumbnail || (apiBase + '/thumbnail?path=' + encodeURIComponent(f.path));
+        const thumb = f.thumbnail || (window.location.origin + '/cloud/api/thumbnail?path=' + encodeURIComponent(f.path));
         const card = document.createElement('div');
         card.className = 'stream-card';
         card.dataset.path = f.path;
@@ -621,7 +612,7 @@ function renderFilesStoragePanel(devices) {
 
 function showStreamingPlayer(path, name) {
   const token = localStorage.getItem('pincerna_token') || '';
-  const src = apiBase + '/files/preview?path=' + encodeURIComponent(path) + '&token=' + encodeURIComponent(token);
+  const src = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(path) + '&token=' + encodeURIComponent(token);
   const ext = (name.split('.').pop() || '').toLowerCase();
   const videoExts = ['mp4','webm','ogg','mov'];
   const audioExts = ['mp3','wav','m4a','aac','flac'];
