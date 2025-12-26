@@ -280,6 +280,37 @@ detect_and_mount_drives() {
 detect_and_mount_drives || true
 
 
+# If the system auto-mounted drives (eg. /mnt/storage/...), bind them into FILES_ROOT
+bind_existing_mounts() {
+    log_step "3.2/7" "Binding existing mounts into $FILES_ROOT"
+    # look for mounts whose source is a /dev/sd* or /dev/nvme* and which are not already under FILES_ROOT
+    while read -r src mnt; do
+        [ -z "$src" ] && continue
+        case "$src" in
+            /dev/sd*|/dev/nvme*|/dev/hd*) ;;
+            *) continue ;;
+        esac
+        # skip if already under FILES_ROOT
+        case "$mnt" in
+            $FILES_ROOT/*) continue ;;
+        esac
+        name=$(basename "$mnt")
+        target="$FILES_ROOT/$name"
+        if [ -e "$target" ]; then
+            log_warn "Target $target exists, skipping bind"
+            continue
+        fi
+        mkdir -p "$target"
+        if mount --bind "$mnt" "$target" >/dev/null 2>&1; then
+            chown -R www-data:www-data "$target" || true
+            log_success "Bound $mnt -> $target"
+        else
+            log_warn "Failed to bind $mnt -> $target"
+        fi
+    done < <(mount | awk '$1 ~ "/dev/sd" || $1 ~ "/dev/nvme" {print $1, $3}')
+}
+
+
 # Collate video files from mounted volumes into a single Streaming directory
 populate_streaming() {
     STREAM_DIR="$FILES_ROOT/Streaming"
@@ -319,6 +350,7 @@ populate_streaming() {
     log_success "Streaming directory populated"
 }
 
+bind_existing_mounts || true
 populate_streaming || true
 
 
