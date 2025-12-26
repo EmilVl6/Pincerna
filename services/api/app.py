@@ -357,11 +357,10 @@ def oauth_callback():
 		# Build minimal page that writes to localStorage and redirects
 		# Redirect to UI root with token and user in the fragment so the client can store them
 		try:
-			host = request.host_url.rstrip('/')
-			redirect_base = urllib.parse.urljoin(host + '/', app_url.lstrip('/'))
-			frag_token = urllib.parse.quote_plus(token)
-			frag_user = urllib.parse.quote_plus(json.dumps(user_info))
-			redirect_url = f"{redirect_base}#token={frag_token}&user={frag_user}"
+			# Use a relative redirect so the browser keeps the original public origin
+			frag_token = urllib.parse.quote(token, safe='')
+			frag_user = urllib.parse.quote(json.dumps(user_info), safe='')
+			redirect_url = f"{app_url}#token={frag_token}&user={frag_user}"
 			return ('', 302, {'Location': redirect_url})
 		except Exception:
 			logging.exception('oauth_callback redirect failed')
