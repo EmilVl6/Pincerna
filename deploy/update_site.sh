@@ -574,14 +574,14 @@ else
             rel_esc=$(printf '%s' "$rel" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
             mtime_esc=$(printf '%s' "$mtime" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
             thumb_esc=$(printf '%s' "$thumb_rel" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
-            echo "$name_esc|$rel_esc|$size|$mtime|$thumb_esc" >> "$tmp_data"
+            echo "$name_esc	$rel_esc	$size	$mtime	$thumb_esc" >> "$tmp_data"
         done
         python3 <<EOF > "$tmp_manifest"
 import json
 files = []
 with open('$tmp_data', 'r') as f:
     for line in f:
-        parts = line.strip().split('|', 4)
+        parts = line.strip().split('\t', 4)
         name, rel, size, mtime, thumb = parts
         files.append({
             'name': json.loads(name),
