@@ -580,6 +580,7 @@ else
         done
         echo ']' >> "$tmp_manifest"
         spinner_stop
+        chown -R www-data:www-data "$thumbs_dir"
         mv "$tmp_manifest" "$manifest"
         log_success "Video manifest written to $manifest"
         manifest_changed=1
