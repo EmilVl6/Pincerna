@@ -252,8 +252,7 @@ def oauth_start():
 			'state': state,
 			'code_challenge': code_challenge,
 			'code_challenge_method': 'S256',
-			'access_type': 'offline',
-			'prompt': 'select_account'
+			# Not requesting offline access by default; keep sign-in simple
 		}
 		auth_url = 'https://accounts.google.com/o/oauth2/v2/auth?' + urllib.parse.urlencode(params)
 		return ('', 302, {'Location': auth_url})
