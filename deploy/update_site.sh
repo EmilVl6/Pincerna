@@ -123,7 +123,7 @@ check_root
 log_step "1/7" "Installing system dependencies"
 
 
-PACKAGES="nginx python3 python3-venv python3-pip rsync curl openssl nmap ntfs-3g ffmpeg"
+PACKAGES="nginx python3 python3-venv python3-pip rsync curl openssl nmap ntfs-3g exfat-fuse exfat-utils ffmpeg"
 NEED_INSTALL=""
 for pkg in $PACKAGES; do
     if ! dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
@@ -253,7 +253,7 @@ detect_and_mount_drives() {
 
         # Try mounting with appropriate driver
         if [ "$fstype" = "ntfs" ] || [ "$fstype" = "ntfs3" ]; then
-            mount_cmd=(ntfs-3g "$name" "$mountpoint")
+            mount_cmd=(ntfs-3g -o uid=www-data,gid=www-data,force,remove_hiberfile "$name" "$mountpoint")
         elif [ "$fstype" = "exfat" ]; then
             mount_cmd=(mount -t exfat "$name" "$mountpoint")
         else
