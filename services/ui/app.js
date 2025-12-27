@@ -209,37 +209,29 @@ async function loadStreamingFiles() {
           const img = card.querySelector('.stream-thumb');
           const thumbUrl = img ? img.src : '';
           video.poster = thumbUrl;
-          video.preload = 'metadata';
           const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + encodeURIComponent(localStorage.getItem('pincerna_token') || '') + '&raw=1';
-          // Check if HLS is available
           const hlsUrl = previewUrl.replace(/\.(mp4|mkv|avi|mov|wmv|flv|webm)$/i, '.m3u8');
-          fetch(hlsUrl, { method: 'HEAD' }).then(response => {
-            if (response.ok) {
-              // Use HLS
-              if (Hls.isSupported()) {
-                const hls = new Hls();
-                hls.loadSource(hlsUrl);
-                hls.attachMedia(video);
-                hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                  video.play();
-                });
-              } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                video.src = hlsUrl;
-                video.load();
+          if (Hls.isSupported()) {
+            const hls = new Hls();
+            hls.loadSource(hlsUrl);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+              video.play();
+            });
+            hls.on(Hls.Events.ERROR, (event, data) => {
+              if (data.fatal) {
+                hls.destroy();
+                video.src = previewUrl;
                 video.play();
               }
-            } else {
-              // Fallback to direct
-              video.src = previewUrl;
-              video.load();
-              video.play();
-            }
-          }).catch(() => {
-            // Fallback
-            video.src = previewUrl;
-            video.load();
+            });
+          } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = hlsUrl;
             video.play();
-          });
+          } else {
+            video.src = previewUrl;
+            video.play();
+          }
           document.getElementById('video-modal').style.display = 'flex';
           window.currentVideo = video;
           // Buffer indication
