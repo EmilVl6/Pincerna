@@ -370,6 +370,9 @@ else
     log_success "SSL certificates already exist"
 fi
 
+if [ -f "$REPO_ROOT/nginx/nginx.conf" ]; then
+    cp "$REPO_ROOT/nginx/nginx.conf" "$NGINX_AVAILABLE"
+fi
 if [ -f "$REPO_ROOT/nginx/pincerna_auth.conf.example" ]; then
     cp "$REPO_ROOT/nginx/pincerna_auth.conf.example" "$NGINX_AVAILABLE"
     ln -sf "$NGINX_AVAILABLE" "$NGINX_ENABLED"
