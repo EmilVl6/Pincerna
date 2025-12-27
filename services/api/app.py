@@ -1301,6 +1301,15 @@ def streaming_video_detail():
 		return jsonify(error=str(e)), 500
 
 
+@app.route("/cloud/")
+def cloud_index():
+    return send_file('../ui/index.html', mimetype='text/html')
+
+@app.route('/cloud/<path:filename>')
+def serve_static(filename):
+    return send_file(f'../ui/{filename}')
+
+
 if __name__ == "__main__":
 	app.run(host="0.0.0.0", port=5002)
 
