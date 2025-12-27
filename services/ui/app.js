@@ -185,7 +185,7 @@ async function loadStreamingFiles() {
         pre.style.display = 'none';
         pre.dataset.src = previewUrl;
         banner.appendChild(pre);
-        // overlay with play button
+        // overlay with play button (pop-out removed)
         const overlay = document.createElement('div');
         overlay.className = 'poster-overlay';
         overlay.innerHTML = `<div style="display:flex;gap:10px;align-items:center">
@@ -213,17 +213,14 @@ async function loadStreamingFiles() {
             window.currentVideo.currentTime = 0;
           }
           const video = document.getElementById('modal-video');
-          const modalTitle = document.getElementById('modal-title');
-          if (modalTitle) modalTitle.textContent = card.dataset.name || card.dataset.path;
           const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + encodeURIComponent(localStorage.getItem('pincerna_token') || '') + '&raw=1';
-          // Use srcObject assignment pattern that mobile Safari accepts
-          video.removeAttribute('poster');
           video.src = previewUrl;
-          try { await video.play(); } catch(e) { /* autoplay may be blocked; user can press play */ }
+          video.load();
+          video.play();
           document.getElementById('video-modal').style.display = 'flex';
           window.currentVideo = video;
         });
-        // Pop-out removed: inline playback only
+        // Pop-out removed — no handler needed
         // preload when the user hovers or focuses the card (warm up first frame)
         const startPreload = () => {
           try {
