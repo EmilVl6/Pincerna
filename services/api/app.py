@@ -558,7 +558,6 @@ def preview_file():
 	try:
 		mimetype = mimetypes.guess_type(full_path)[0] or 'application/octet-stream'
 		if mimetype.startswith('video/') and not request.args.get('raw'):
-			# Return HTML page with full-screen video player
 			html = f'''<!DOCTYPE html>
 <html lang="en">
 <head>
