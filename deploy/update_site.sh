@@ -464,10 +464,10 @@ if [ -f "$manifest" ]; then
             if [ ! -f "$thumb" ]; then
                 timeout 30 ffmpeg -y -ss 5 -i "$f" -vframes 1 -vf scale=640:-1 -q:v 8 "$thumb" >/dev/null 2>&1 || true
             fi
-            # Compress video for better streaming
-            compressed="${f}.compressed"
-            if [ ! -f "$compressed" ]; then
-                timeout 300 ffmpeg -y -i "$f" -c:v libx264 -preset medium -crf 22 -c:a aac -b:a 128k "$compressed" >/dev/null 2>&1 && mv "$compressed" "$f" || rm -f "$compressed"
+            # Generate HLS for better streaming
+            hls_m3u8="${f%.*}.m3u8"
+            if [ ! -f "$hls_m3u8" ]; then
+                timeout 600 ffmpeg -y -i "$f" -c:v libx264 -preset fast -crf 23 -c:a aac -b:a 128k -hls_time 10 -hls_list_size 0 -hls_segment_filename "${f%.*}_%03d.ts" "$hls_m3u8" >/dev/null 2>&1 || rm -f "$hls_m3u8" "${f%.*}_"*.ts
             fi
             thumb_rel="/cloud/api/thumbnail_file?h=${h}"
             # produce a JSON entry for this file
