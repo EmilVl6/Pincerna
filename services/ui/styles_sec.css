@@ -469,6 +469,7 @@ body::after{
 streaming-player-controls .btn{background:transparent;border:1px solid rgba(255,255,255,0.06);color:#fff}
 stream-card-title{font-weight:600;color:#fff;font-size:0.92rem;margin-bottom:4px;word-break:break-word;text-shadow:0 1px 2px rgba(0,0,0,0.6)}
 stream-card-size{font-size:0.75rem;color:rgba(255,255,255,0.72)}
+#buffer-info{color:#fff;font-size:0.9rem;margin-top:10px;text-align:center}
 
 .network-map-container{min-height:500px;position:relative}
 .network-map{position:relative;width:100%;min-height:500px;overflow:visible;padding-bottom:40px}

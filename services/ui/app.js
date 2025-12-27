@@ -216,6 +216,20 @@ async function loadStreamingFiles() {
           video.play();
           document.getElementById('video-modal').style.display = 'flex';
           window.currentVideo = video;
+          // Buffer indication
+          const bufferInfo = document.getElementById('buffer-info');
+          bufferInfo.textContent = 'Loading...';
+          video.addEventListener('progress', () => {
+            const buffered = video.buffered;
+            if (buffered.length > 0 && video.duration) {
+              const bufferedEnd = buffered.end(buffered.length - 1);
+              const percent = (bufferedEnd / video.duration) * 100;
+              bufferInfo.textContent = `Buffered: ${percent.toFixed(1)}%`;
+            }
+          });
+          video.addEventListener('canplay', () => {
+            bufferInfo.textContent = 'Ready to play';
+          });
         });
         // Pop-out removed — no handler needed
         // preload when the user hovers or focuses the card (warm up first frame)
@@ -821,7 +835,7 @@ function showStreamingPlayer(path, name) {
           <button id="streaming-close" class="btn">Close</button>
         </div>
       </div>
-      <div class="streaming-player-body">${mediaHtml}</div>
+      <div class="streaming-player-body">${mediaHtml}<div id="buffer-info"></div></div>
       <div class="streaming-player-details" style="padding:12px 16px;color:rgba(255,255,255,0.8);font-size:0.95rem">
         <div><strong>Path:</strong> ${path}</div>
       </div>
