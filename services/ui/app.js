@@ -1,8 +1,9 @@
 const apiBase = "/cloud/api";
 const $ = sel => document.querySelector(sel);
 
-// Video modal global
-let currentVideo = null;
+// Video modal global (exposed on window to avoid ReferenceErrors from
+// different bundle scopes or stale cached scripts)
+window.currentVideo = null;
 
 // API fetch wrapper that adds auth token
 async function apiFetch(url, options = {}) {
