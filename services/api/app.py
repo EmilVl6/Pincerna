@@ -611,7 +611,7 @@ def preview_file():
 				with open(full_path, 'rb') as f:
 					f.seek(start)
 					remaining = length
-					chunk_size = 1024 * 1024
+					chunk_size = 4 * 1024 * 1024
 					while remaining > 0:
 						read_len = min(chunk_size, remaining)
 						data = f.read(read_len)
@@ -1302,7 +1302,7 @@ def streaming_video_detail():
 
 
 if __name__ == "__main__":
-	app.run(host="0.0.0.0", port=5002)
+	app.run(host="0.0.0.0", port=5002, threaded=True)
 
 
 known_mounts = set()
