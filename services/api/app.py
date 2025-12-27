@@ -591,14 +591,6 @@ def preview_file():
 			return html, 200, {'Content-Type': 'text/html'}
 		# If raw requested and it's a video, serve with Range support for streaming
 		if mimetype.startswith('video/') and request.args.get('raw'):
-			# Check if HLS exists
-			base, ext = os.path.splitext(full_path)
-			m3u8_path = base + '.m3u8'
-			if os.path.exists(m3u8_path):
-				return send_file(m3u8_path, mimetype='application/vnd.apple.mpegurl')
-			# Check if it's a .ts segment
-			if full_path.endswith('.ts'):
-				return send_file(full_path, mimetype='video/MP2T')
 			# Support HTTP Range requests so mobile browsers and players can seek/stream
 			file_size = os.path.getsize(full_path)
 			range_header = request.headers.get('Range', None)

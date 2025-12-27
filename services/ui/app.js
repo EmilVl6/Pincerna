@@ -211,35 +211,9 @@ async function loadStreamingFiles() {
           video.poster = thumbUrl;
           video.preload = 'metadata';
           const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + encodeURIComponent(localStorage.getItem('pincerna_token') || '') + '&raw=1';
-          // Check if HLS is available
-          const hlsUrl = previewUrl.replace(/\.(mp4|mkv|avi|mov|wmv|flv|webm)$/i, '.m3u8');
-          fetch(hlsUrl, { method: 'HEAD' }).then(response => {
-            if (response.ok) {
-              // Use HLS
-              if (Hls.isSupported()) {
-                const hls = new Hls();
-                hls.loadSource(hlsUrl);
-                hls.attachMedia(video);
-                hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                  video.play();
-                });
-              } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                video.src = hlsUrl;
-                video.load();
-                video.play();
-              }
-            } else {
-              // Fallback to direct
-              video.src = previewUrl;
-              video.load();
-              video.play();
-            }
-          }).catch(() => {
-            // Fallback
-            video.src = previewUrl;
-            video.load();
-            video.play();
-          });
+          video.src = previewUrl;
+          video.load();
+          video.play();
           document.getElementById('video-modal').style.display = 'flex';
           window.currentVideo = video;
           // Buffer indication
