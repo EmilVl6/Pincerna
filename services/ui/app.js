@@ -1,6 +1,9 @@
 const apiBase = "/cloud/api";
 const $ = sel => document.querySelector(sel);
 
+// Video modal global
+let currentVideo = null;
+
 // API fetch wrapper that adds auth token
 async function apiFetch(url, options = {}) {
   const token = localStorage.getItem('pincerna_token');
@@ -1623,9 +1626,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (navFiles) navFiles.addEventListener('click', (e) => { e.preventDefault(); showSection('files'); refreshFiles(); });
     if (navStreaming) navStreaming.addEventListener('click', (e) => { e.preventDefault(); showSection('streaming'); });
     if (navAbout) navAbout.addEventListener('click', (e) => { e.preventDefault(); showSection('about'); });
-
-    // Video modal globals
-    let currentVideo = null;
 
     // Video modal close handler
     const closeBtn = document.getElementById('close-modal');
