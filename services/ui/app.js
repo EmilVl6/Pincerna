@@ -168,13 +168,6 @@ async function loadStreamingFiles() {
         img.dataset.src = thumb;
         // Placeholder for failed thumbnails: replace <img> with styled placeholder
         img.addEventListener('error', () => {
-          try {
-            if (!img.dataset.fallback) {
-              img.dataset.fallback = '1';
-              img.src = window.location.origin + '/cloud/api/thumbnail?path=' + encodeURIComponent(f.path);
-              return;
-            }
-          } catch (e) {}
           const ph = document.createElement('div');
           ph.className = 'thumb-placeholder';
           ph.textContent = 'No Thumbnail';
@@ -216,43 +209,37 @@ async function loadStreamingFiles() {
           const img = card.querySelector('.stream-thumb');
           const thumbUrl = img ? img.src : '';
           video.poster = thumbUrl;
+          video.preload = 'metadata';
           const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + encodeURIComponent(localStorage.getItem('pincerna_token') || '') + '&raw=1';
+          // Check if HLS is available
           const hlsUrl = previewUrl.replace(/\.(mp4|mkv|avi|mov|wmv|flv|webm)$/i, '.m3u8');
-          // Guard access to Hls in case the library fails to load due to CSP
-          // or network restrictions. Prefer Hls when available, otherwise
-          // fall back to native HLS support or direct MP4 preview URL.
-          if (window.Hls && typeof Hls !== 'undefined' && Hls.isSupported && Hls.isSupported()) {
-            try {
-              const hls = new Hls();
-              hls.loadSource(hlsUrl);
-              hls.attachMedia(video);
-              hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                video.play();
-              });
-              hls.on(Hls.Events.ERROR, (event, data) => {
-                if (data && data.fatal) {
-                  try { hls.destroy(); } catch(e) {}
-                  video.src = previewUrl;
+          fetch(hlsUrl, { method: 'HEAD' }).then(response => {
+            if (response.ok) {
+              // Use HLS
+              if (Hls.isSupported()) {
+                const hls = new Hls();
+                hls.loadSource(hlsUrl);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
                   video.play();
-                }
-              });
-            } catch (e) {
-              // If constructing Hls failed, gracefully fall back
-              if (video.canPlayType && video.canPlayType('application/vnd.apple.mpegurl')) {
+                });
+              } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                 video.src = hlsUrl;
-                video.play();
-              } else {
-                video.src = previewUrl;
+                video.load();
                 video.play();
               }
+            } else {
+              // Fallback to direct
+              video.src = previewUrl;
+              video.load();
+              video.play();
             }
-          } else if (video.canPlayType && video.canPlayType('application/vnd.apple.mpegurl')) {
-            video.src = hlsUrl;
-            video.play();
-          } else {
+          }).catch(() => {
+            // Fallback
             video.src = previewUrl;
+            video.load();
             video.play();
-          }
+          });
           document.getElementById('video-modal').style.display = 'flex';
           window.currentVideo = video;
           // Buffer indication
