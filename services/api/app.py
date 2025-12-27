@@ -12,6 +12,7 @@ import secrets
 import hashlib
 import base64
 import threading
+import re
 import shutil
 import subprocess
 import tempfile
@@ -557,6 +558,7 @@ def preview_file():
 	import mimetypes
 	try:
 		mimetype = mimetypes.guess_type(full_path)[0] or 'application/octet-stream'
+		# If this is a video preview request (non-raw), return a small HTML player.
 		if mimetype.startswith('video/') and not request.args.get('raw'):
 			html = f'''<!DOCTYPE html>
 <html lang="en">
@@ -587,6 +589,42 @@ def preview_file():
 </body>
 </html>'''
 			return html, 200, {'Content-Type': 'text/html'}
+		# If raw requested and it's a video, serve with Range support for streaming
+		if mimetype.startswith('video/') and request.args.get('raw'):
+			# Support HTTP Range requests so mobile browsers and players can seek/stream
+			file_size = os.path.getsize(full_path)
+			range_header = request.headers.get('Range', None)
+			if not range_header:
+				# No Range header: return whole file (flask send_file will stream efficiently)
+				return send_file(full_path, mimetype=mimetype)
+			# Parse range header
+			m = re.match(r'bytes=(\d+)-(\d*)', range_header)
+			if not m:
+				# Malformed Range; return full
+				return send_file(full_path, mimetype=mimetype)
+			start = int(m.group(1))
+			end = int(m.group(2)) if m.group(2) else file_size - 1
+			if end >= file_size:
+				end = file_size - 1
+			length = end - start + 1
+			def generate():
+				with open(full_path, 'rb') as f:
+					f.seek(start)
+					remaining = length
+					chunk_size = 1024 * 1024
+					while remaining > 0:
+						read_len = min(chunk_size, remaining)
+						data = f.read(read_len)
+						if not data:
+							break
+						yield data
+						remaining -= len(data)
+					return
+			resp = Response(generate(), status=206, mimetype=mimetype)
+			resp.headers.add('Content-Range', f'bytes {start}-{end}/{file_size}')
+			resp.headers.add('Accept-Ranges', 'bytes')
+			resp.headers.add('Content-Length', str(length))
+			return resp
 		else:
 			return send_file(full_path, mimetype=mimetype)
 	except Exception as e:
