@@ -1178,7 +1178,6 @@ def streaming_videos():
 					except Exception:
 						pass
 		results.sort(key=lambda x: x.get('mtime', ''), reverse=True)
-		# limit to 1000 results to avoid huge responses
 		return jsonify(files=results[:1000])
 	except Exception as e:
 		logging.exception('streaming videos scan failed')
