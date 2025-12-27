@@ -611,7 +611,7 @@ def preview_file():
 				with open(full_path, 'rb') as f:
 					f.seek(start)
 					remaining = length
-					chunk_size = 1024 * 1024
+					chunk_size = 8 * 1024 * 1024  # larger chunks for fewer syscalls
 					while remaining > 0:
 						read_len = min(chunk_size, remaining)
 						data = f.read(read_len)
@@ -619,11 +619,12 @@ def preview_file():
 							break
 						yield data
 						remaining -= len(data)
-					return
-			resp = Response(generate(), status=206, mimetype=mimetype)
+			resp = Response(generate(), status=206, mimetype=mimetype, direct_passthrough=True)
 			resp.headers.add('Content-Range', f'bytes {start}-{end}/{file_size}')
 			resp.headers.add('Accept-Ranges', 'bytes')
 			resp.headers.add('Content-Length', str(length))
+			# Hint to proxies (nginx) not to buffer the response
+			resp.headers.add('X-Accel-Buffering', 'no')
 			return resp
 		else:
 			return send_file(full_path, mimetype=mimetype)
