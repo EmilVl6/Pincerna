@@ -168,6 +168,13 @@ async function loadStreamingFiles() {
         img.dataset.src = thumb;
         // Placeholder for failed thumbnails: replace <img> with styled placeholder
         img.addEventListener('error', () => {
+          try {
+            if (!img.dataset.fallback) {
+              img.dataset.fallback = '1';
+              img.src = window.location.origin + '/cloud/api/thumbnail?path=' + encodeURIComponent(f.path);
+              return;
+            }
+          } catch (e) {}
           const ph = document.createElement('div');
           ph.className = 'thumb-placeholder';
           ph.textContent = 'No Thumbnail';
