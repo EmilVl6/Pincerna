@@ -185,25 +185,18 @@ async function loadStreamingFiles() {
         pre.style.display = 'none';
         pre.dataset.src = previewUrl;
         banner.appendChild(pre);
-        // overlay with play button (pop-out removed)
+        // overlay with title (play button removed)
         const overlay = document.createElement('div');
         overlay.className = 'poster-overlay';
-        overlay.innerHTML = `<div style="display:flex;gap:10px;align-items:center">
-          <div class=\"play-btn\" aria-hidden=\"true\">▶</div>
-        </div>`;
         banner.appendChild(overlay);
 
         const title = document.createElement('div');
-        title.className = 'stream-card-title';
+        title.className = 'overlay-title';
         title.textContent = f.name;
 
-        const size = document.createElement('div');
-        size.className = 'stream-card-size';
-        size.textContent = f.size ? formatBytes(f.size) : '';
+        overlay.appendChild(title);
 
         card.appendChild(banner);
-        card.appendChild(title);
-        card.appendChild(size);
 
         card.addEventListener('click', async (e) => {
           // single-click selects and opens the player
