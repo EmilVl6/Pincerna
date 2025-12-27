@@ -123,7 +123,7 @@ check_root
 log_step "1/7" "Installing system dependencies"
 
 
-PACKAGES="nginx python3 python3-venv python3-pip rsync curl openssl nmap ntfs-3g exfat-fuse exfat-utils ffmpeg"
+PACKAGES="nginx python3 python3-venv python3-pip rsync curl openssl nmap ntfs-3g ffmpeg"
 NEED_INSTALL=""
 for pkg in $PACKAGES; do
     if ! dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
