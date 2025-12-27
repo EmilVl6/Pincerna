@@ -453,9 +453,9 @@ body::after{
 .stream-card:hover{transform:translateY(-4px);box-shadow:0 12px 24px rgba(0,0,0,0.3);border-color:rgba(255,255,255,0.06)}
 .stream-card-banner{position:relative;width:100%;padding-top:56.25%;margin-bottom:8px;border-radius:6px;overflow:hidden;background:linear-gradient(180deg,#0b0b0b 0%, #111 100%)}
 .stream-card-banner img.stream-thumb{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block}
-.poster-overlay{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;padding:12px;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,0) 40%, rgba(0,0,0,0.32) 100%);opacity:0;transition:opacity 180ms ease, transform 220ms cubic-bezier(.2,.9,.3,1);transform:translateY(6px)}
+.poster-overlay{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;padding:12px;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,0) 40%, rgba(0,0,0,0.32) 100%);opacity:0;transition:opacity 180ms ease, transform 220ms cubic-bezier(.2,.9,.3,1);transform:translateY(6px);align-items:center}
 .stream-card:hover .poster-overlay{opacity:1;pointer-events:auto;transform:translateY(0)}
-.overlay-title{color:#fff;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,0.8);font-size:0.9rem;text-align:center;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.overlay-title{color:#fff;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,0.8);font-size:0.9rem;text-align:center;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:100%}
 /* selected outline */
 .stream-card.selected{box-shadow:0 8px 16px rgba(0,0,0,0.2);transform:translateY(-2px);border-color:rgba(255,255,255,0.8)}
 .stream-card.selected .poster-overlay{opacity:1;transform:translateY(0)}
