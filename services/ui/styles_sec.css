@@ -414,16 +414,14 @@ body::after{
 .thumb-placeholder{display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#1f1f1f,#151515);color:#bdbdbd;font-weight:600;font-size:0.95rem;height:100%;width:100%}
 
 @media (max-width:1000px){
-  .stream-grid{grid-template-columns:repeat(auto-fill,200px);gap:0}
+  .stream-grid{justify-content:center;gap:0}
   .stream-card{min-width:200px;max-width:200px}
   .stream-card-banner{padding-top:56.25%}
 }
 @media (max-width:720px){
-  .stream-grid{grid-template-columns:repeat(auto-fill,160px);gap:0;padding:14px}
+  .stream-grid{justify-content:center;gap:0;padding:14px}
   .stream-card{min-width:160px;max-width:160px}
   .stream-card-banner{padding-top:56.25%}
-  .play-btn{width:56px;height:56px;font-size:24px}
-  .stream-card-title{font-size:0.9rem}
 }
 .quick-action:active{transform:translateY(0);opacity:0.9}
 .quick-action.ssh{border-color:#22c55e;background:linear-gradient(135deg, #14532d 0%, #052e16 100%)}
@@ -448,26 +446,17 @@ body::after{
 .network-device.gateway::before{content:'🌐';position:absolute;top:-8px;right:-8px;font-size:16px}
 
 /* Streaming grid and cards - refined visual style */
-.stream-grid{display:grid;grid-template-columns:repeat(auto-fill,280px);gap:0;padding:18px;max-height:66vh;overflow-y:auto}
+.stream-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:0;padding:18px}
 .stream-card{min-width:280px;max-width:280px;background:none;border-radius:8px;display:flex;flex-direction:column;align-items:stretch;padding:0;margin:0;cursor:pointer;transition:transform 0.18s, box-shadow 0.18s,border-color 140ms;border:2px solid transparent}
 .stream-card:hover{transform:translateY(-4px);box-shadow:0 12px 24px rgba(0,0,0,0.3);border-color:rgba(255,255,255,0.06)}
 .stream-card-banner{position:relative;width:100%;padding-top:56.25%;margin-bottom:8px;border-radius:6px;overflow:hidden;background:linear-gradient(180deg,#0b0b0b 0%, #111 100%)}
 .stream-card-banner img.stream-thumb{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block}
-.poster-overlay{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;padding:12px;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,0) 40%, rgba(0,0,0,0.32) 100%);opacity:0;transition:opacity 180ms ease, transform 220ms cubic-bezier(.2,.9,.3,1);transform:translateY(6px);align-items:center}
+.poster-overlay{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;padding:12px;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,0) 40%, rgba(0,0,0,0.32) 100%);opacity:0;transition:opacity 180ms ease, transform 220ms cubic-bezier(.2,.9,.3,1);transform:translateY(6px)}
 .stream-card:hover .poster-overlay{opacity:1;pointer-events:auto;transform:translateY(0)}
-.overlay-title{color:#fff;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,0.8);font-size:0.9rem;text-align:center;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:100%}
+.overlay-title{color:#fff;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,0.8);font-size:0.9rem;text-align:center;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 /* selected outline */
 .stream-card.selected{box-shadow:0 8px 16px rgba(0,0,0,0.2);transform:translateY(-2px);border-color:rgba(255,255,255,0.8)}
 .stream-card.selected .poster-overlay{opacity:1;transform:translateY(0)}
-
-/* placeholder when no thumbnail exists */
-.thumb-placeholder{display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#2b2b2b,#232323);color:#bdbdbd;font-weight:600;font-size:0.95rem;height:100%;width:100%}
-
-/* subtle, thin scrollbar for the streaming grid */
-.stream-grid{scrollbar-width:thin;-ms-overflow-style:auto}
-.stream-grid::-webkit-scrollbar{height:10px;width:10px}
-.stream-grid::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.35);border-radius:8px}
-.stream-grid::-webkit-scrollbar-track{background:transparent}
 
 /* full-screen-like player modal */
 .streaming-player-modal{position:fixed;inset:0;z-index:20000;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;padding:24px}
