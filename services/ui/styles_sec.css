@@ -399,22 +399,28 @@ body::after{
 .quick-action{display:inline-flex;align-items:center;gap:4px;font-size:0.75rem;padding:8px 12px;background:linear-gradient(135deg, #1e3a5f 0%, #0f2847 100%);color:#fff;border:1px solid #2563eb;text-decoration:none;transition:all 0.2s;min-height:38px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .quick-action:hover{background:linear-gradient(135deg, #2563eb 0%, #1e40af 100%);transform:translateY(-1px)}
 
-/* Streaming grid and card improvements */
-.stream-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:20px;align-items:start}
-.stream-card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));border:1px solid var(--glass);border-radius:12px;padding:12px;overflow:hidden;cursor:pointer;transition:transform 180ms ease, box-shadow 180ms ease}
-.stream-card:hover{transform:translateY(-6px);box-shadow:0 18px 40px rgba(0,0,0,0.36)}
-.stream-card .stream-card-banner{position:relative;border-radius:8px;overflow:hidden;background:#000;display:block}
-.stream-thumb{width:100%;height:140px;object-fit:cover;display:block;border-radius:6px}
-.thumb-placeholder{width:100%;height:140px;background:linear-gradient(90deg,#222,#111);color:var(--muted);display:flex;align-items:center;justify-content:center;border-radius:6px}
-.poster-overlay{position:absolute;inset:auto 0 0 0;padding:10px;display:flex;align-items:center;justify-content:flex-start;gap:10px;background:linear-gradient(180deg,rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 60%)}
-.poster-overlay .play-btn{background:rgba(0,0,0,0.45);color:#fff;padding:8px 10px;border-radius:8px;font-weight:700}
-.stream-card-title{font-size:1rem;font-weight:700;margin-top:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.stream-card-size{color:var(--muted);font-size:0.9rem;margin-top:6px}
+.stream-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:22px;padding:18px;align-items:start}
+.stream-card{background:transparent;border-radius:8px;overflow:visible;cursor:pointer;transition:transform .22s ease, box-shadow .22s ease}
+.stream-card-banner{position:relative;border-radius:10px;overflow:hidden;padding-top:56.25%;background:#000;box-shadow:0 8px 28px rgba(0,0,0,0.6)}
+.stream-card-banner img.stream-thumb{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block}
+.stream-info{padding:12px 8px;display:flex;flex-direction:column}
+.stream-card-title{font-size:1.05rem;font-weight:700;color:#fff;margin:6px 0 4px;line-height:1.12;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.stream-card-size{font-size:0.85rem;color:rgba(255,255,255,0.78)}
+.poster-overlay{position:absolute;inset:0;background:linear-gradient(180deg, transparent 45%, rgba(0,0,0,0.64));display:flex;align-items:flex-end;justify-content:center;padding:14px;opacity:0;transition:opacity .18s ease}
+.stream-card:hover .poster-overlay{opacity:1}
+.play-btn{width:64px;height:64px;border-radius:50%;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.45));display:flex;align-items:center;justify-content:center;color:#fff;font-size:28px;box-shadow:0 14px 40px rgba(0,0,0,0.6);border:2px solid rgba(255,255,255,0.06);transition:transform 140ms ease}
+.stream-card:hover{transform:translateY(-8px);box-shadow:0 24px 68px rgba(0,0,0,0.65)}
+.stream-card.selected{box-shadow:0 30px 80px rgba(0,0,0,0.7);transform:translateY(-10px)}
+.thumb-placeholder{display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#1f1f1f,#151515);color:#bdbdbd;font-weight:600;font-size:0.95rem;height:100%;width:100%}
 
+@media (max-width:1000px){
+  .stream-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
+  .stream-card-banner{padding-top:56.25%}
+}
 @media (max-width:720px){
-  .stream-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
-  .stream-thumb,.thumb-placeholder{height:110px}
-  .stream-card{padding:10px}
+  .stream-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;padding:12px}
+  .stream-card-banner{padding-top:56.25%}
+  .play-btn{width:52px;height:52px;font-size:22px}
   .stream-card-title{font-size:0.95rem}
 }
 .quick-action:active{transform:translateY(0);opacity:0.9}
