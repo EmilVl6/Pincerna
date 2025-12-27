@@ -209,9 +209,9 @@ async function loadStreamingFiles() {
         card.addEventListener('click', async (e) => {
           // single-click selects and opens the player
           selectCardByElement(card);
-          if (currentVideo) {
-            currentVideo.pause();
-            currentVideo.currentTime = 0;
+          if (window.currentVideo) {
+            window.currentVideo.pause();
+            window.currentVideo.currentTime = 0;
           }
           const video = document.getElementById('modal-video');
           const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + encodeURIComponent(localStorage.getItem('pincerna_token') || '') + '&raw=1';
@@ -219,7 +219,7 @@ async function loadStreamingFiles() {
           video.load();
           video.play();
           document.getElementById('video-modal').style.display = 'flex';
-          currentVideo = video;
+          window.currentVideo = video;
         });
         // Pop-out button
         try {
@@ -1632,11 +1632,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeBtn = document.getElementById('close-modal');
     if (closeBtn) {
       closeBtn.addEventListener('click', () => {
-        if (currentVideo) {
-          currentVideo.pause();
-          currentVideo.currentTime = 0;
-          currentVideo.src = '';
-          currentVideo = null;
+        if (window.currentVideo) {
+          window.currentVideo.pause();
+          window.currentVideo.currentTime = 0;
+          window.currentVideo.src = '';
+          window.currentVideo = null;
         }
         document.getElementById('video-modal').style.display = 'none';
       });
