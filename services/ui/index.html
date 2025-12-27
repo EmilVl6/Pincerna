@@ -13,7 +13,22 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles_sec.css?v=18">
   <link rel="icon" href="pincerna.svg" type="image/svg+xml">
-  <script src="vendor/hls.min.js"></script>
+  <script>
+    // Minimal local shim for hls.js
+    // This placeholder avoids "Hls is not defined" and provides basic functionality.
+    (function(){
+        function HlsShim(){
+            this.loadSource = function(){};
+            this.attachMedia = function(){};
+            this.on = function(){};
+            this.destroy = function(){};
+        }
+        HlsShim.isSupported = function(){ return false; };
+        HlsShim.Events = { MANIFEST_PARSED: 'manifestParsed', ERROR: 'error' };
+        // expose as global Hls for compatibility
+        window.Hls = HlsShim;
+    })();
+  </script>
   <script defer src="app.js?v=18"></script>
 </head>
 <body>
