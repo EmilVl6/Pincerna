@@ -190,7 +190,6 @@ async function loadStreamingFiles() {
         overlay.className = 'poster-overlay';
         overlay.innerHTML = `<div style="display:flex;gap:10px;align-items:center">
           <div class=\"play-btn\" aria-hidden=\"true\">▶</div>
-          <button class=\"btn\" title=\"Open in new window\" style=\"height:36px;padding:6px 10px;border-radius:6px;margin-left:6px;font-size:0.85rem\">Pop-out</button>
         </div>`;
         banner.appendChild(overlay);
 
@@ -214,22 +213,17 @@ async function loadStreamingFiles() {
             window.currentVideo.currentTime = 0;
           }
           const video = document.getElementById('modal-video');
+          const modalTitle = document.getElementById('modal-title');
+          if (modalTitle) modalTitle.textContent = card.dataset.name || card.dataset.path;
           const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + encodeURIComponent(localStorage.getItem('pincerna_token') || '') + '&raw=1';
+          // Use srcObject assignment pattern that mobile Safari accepts
+          video.removeAttribute('poster');
           video.src = previewUrl;
-          video.load();
-          video.play();
+          try { await video.play(); } catch(e) { /* autoplay may be blocked; user can press play */ }
           document.getElementById('video-modal').style.display = 'flex';
           window.currentVideo = video;
         });
-        // Pop-out button
-        try {
-          const pop = banner.querySelector('button');
-          if (pop) pop.addEventListener('click', (ev) => {
-            ev.stopPropagation();
-            const url = window.location.origin + '/cloud/player.html?path=' + encodeURIComponent(card.dataset.path);
-            window.open(url, '_blank', 'noopener');
-          });
-        } catch(e){}
+        // Pop-out removed: inline playback only
         // preload when the user hovers or focuses the card (warm up first frame)
         const startPreload = () => {
           try {
