@@ -211,21 +211,35 @@ async function loadStreamingFiles() {
           video.poster = thumbUrl;
           const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + encodeURIComponent(localStorage.getItem('pincerna_token') || '') + '&raw=1';
           const hlsUrl = previewUrl.replace(/\.(mp4|mkv|avi|mov|wmv|flv|webm)$/i, '.m3u8');
-          if (Hls.isSupported()) {
-            const hls = new Hls();
-            hls.loadSource(hlsUrl);
-            hls.attachMedia(video);
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
-              video.play();
-            });
-            hls.on(Hls.Events.ERROR, (event, data) => {
-              if (data.fatal) {
-                hls.destroy();
+          // Guard access to Hls in case the library fails to load due to CSP
+          // or network restrictions. Prefer Hls when available, otherwise
+          // fall back to native HLS support or direct MP4 preview URL.
+          if (window.Hls && typeof Hls !== 'undefined' && Hls.isSupported && Hls.isSupported()) {
+            try {
+              const hls = new Hls();
+              hls.loadSource(hlsUrl);
+              hls.attachMedia(video);
+              hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                video.play();
+              });
+              hls.on(Hls.Events.ERROR, (event, data) => {
+                if (data && data.fatal) {
+                  try { hls.destroy(); } catch(e) {}
+                  video.src = previewUrl;
+                  video.play();
+                }
+              });
+            } catch (e) {
+              // If constructing Hls failed, gracefully fall back
+              if (video.canPlayType && video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = hlsUrl;
+                video.play();
+              } else {
                 video.src = previewUrl;
                 video.play();
               }
-            });
-          } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            }
+          } else if (video.canPlayType && video.canPlayType('application/vnd.apple.mpegurl')) {
             video.src = hlsUrl;
             video.play();
           } else {
