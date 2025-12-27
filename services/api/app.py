@@ -626,7 +626,10 @@ def preview_file():
 			resp.headers.add('Content-Length', str(length))
 			return resp
 		else:
-			return send_file(full_path, mimetype=mimetype)
+			resp = send_file(full_path, mimetype=mimetype)
+			if 'thumb' in request.args:
+				resp.headers['Cache-Control'] = 'public, max-age=3600'
+			return resp
 	except Exception as e:
 		logging.exception('Preview failed')
 		return jsonify(error=str(e)), 500
