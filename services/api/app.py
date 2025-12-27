@@ -1177,7 +1177,6 @@ def streaming_videos():
 						})
 					except Exception:
 						pass
-		# sort by mtime desc
 		results.sort(key=lambda x: x.get('mtime', ''), reverse=True)
 		# limit to 1000 results to avoid huge responses
 		return jsonify(files=results[:1000])
