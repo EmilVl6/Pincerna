@@ -253,8 +253,7 @@ detect_and_mount_drives() {
 
         # Try mounting with appropriate driver
         if [ "$fstype" = "ntfs" ] || [ "$fstype" = "ntfs3" ]; then
-            ntfsfix "$name" >/dev/null 2>&1 || true
-            mount_cmd=(ntfs-3g -o uid=www-data,gid=www-data,force,remove_hiberfile "$name" "$mountpoint")
+            mount_cmd=(ntfs-3g "$name" "$mountpoint")
         elif [ "$fstype" = "exfat" ]; then
             mount_cmd=(mount -t exfat "$name" "$mountpoint")
         else
