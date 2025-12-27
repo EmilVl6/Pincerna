@@ -834,6 +834,10 @@ function showStreamingPlayer(path, name) {
   modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
   function closeModal() {
     try { const p = document.getElementById('pincerna-player'); if (p && !p.paused) p.pause(); } catch(e){}
+    // Deselect all stream cards
+    const cards = document.querySelectorAll('.stream-card');
+    cards.forEach(c => c.classList.remove('selected'));
+    SELECTED_INDEX = -1;
     modal.remove();
   }
   document.body.appendChild(modal);

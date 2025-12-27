@@ -414,14 +414,14 @@ body::after{
 .thumb-placeholder{display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#1f1f1f,#151515);color:#bdbdbd;font-weight:600;font-size:0.95rem;height:100%;width:100%}
 
 @media (max-width:1000px){
-  .stream-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
+  .stream-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:18px}
   .stream-card-banner{padding-top:56.25%}
 }
 @media (max-width:720px){
-  .stream-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;padding:12px}
+  .stream-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;padding:14px}
   .stream-card-banner{padding-top:56.25%}
-  .play-btn{width:52px;height:52px;font-size:22px}
-  .stream-card-title{font-size:0.95rem}
+  .play-btn{width:56px;height:56px;font-size:24px}
+  .stream-card-title{font-size:0.9rem}
 }
 .quick-action:active{transform:translateY(0);opacity:0.9}
 .quick-action.ssh{border-color:#22c55e;background:linear-gradient(135deg, #14532d 0%, #052e16 100%)}
@@ -446,14 +446,14 @@ body::after{
 .network-device.gateway::before{content:'🌐';position:absolute;top:-8px;right:-8px;font-size:16px}
 
 /* Streaming grid and cards - refined visual style */
-.stream-grid{display:flex;flex-wrap:wrap;gap:16px;overflow-y:auto;padding:12px;max-height:66vh}
-.stream-card{min-width:200px;max-width:260px;background:rgba(255,255,255,0.02);border-radius:8px;display:flex;flex-direction:column;align-items:stretch;padding:4px;margin:8px;cursor:pointer;transition:transform 0.18s, box-shadow 0.18s,border-color 140ms}
-.stream-card:hover{transform:translateY(-6px);box-shadow:0 14px 30px rgba(0,0,0,0.18);border-color:rgba(255,255,255,0.06)}
-.stream-card-banner{position:relative;width:100%;padding-top:52%;margin-bottom:8px;border-radius:6px;overflow:hidden;background:linear-gradient(180deg,#0b0b0b 0%, #111 100%)}
+.stream-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:24px;padding:18px;max-height:66vh;overflow-y:auto}
+.stream-card{min-width:280px;max-width:320px;background:rgba(255,255,255,0.02);border-radius:12px;display:flex;flex-direction:column;align-items:stretch;padding:4px;margin:8px;cursor:pointer;transition:transform 0.18s, box-shadow 0.18s,border-color 140ms}
+.stream-card:hover{transform:translateY(-12px);box-shadow:0 32px 80px rgba(0,0,0,0.8);border-color:rgba(255,255,255,0.06)}
+.stream-card-banner{position:relative;width:100%;padding-top:56.25%;margin-bottom:8px;border-radius:12px;overflow:hidden;background:linear-gradient(180deg,#0b0b0b 0%, #111 100%)}
 .stream-card-banner img.stream-thumb{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block}
 .poster-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,0) 40%, rgba(0,0,0,0.32) 100%);opacity:0;transition:opacity 180ms ease, transform 220ms cubic-bezier(.2,.9,.3,1);transform:translateY(6px)}
 .stream-card:hover .poster-overlay{opacity:1;pointer-events:auto;transform:translateY(0)}
-.play-btn{width:56px;height:56px;border-radius:50%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;box-shadow:0 10px 30px rgba(0,0,0,0.45);border:2px solid rgba(255,255,255,0.06);transition:transform 140ms ease, box-shadow 120ms}
+.play-btn{width:72px;height:72px;border-radius:50%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:32px;color:#fff;box-shadow:0 10px 30px rgba(0,0,0,0.45);border:2px solid rgba(255,255,255,0.06);transition:transform 140ms ease, box-shadow 120ms}
 .play-btn:hover{transform:scale(1.06);box-shadow:0 16px 36px rgba(0,0,0,0.42)}
 .play-btn:active{transform:scale(0.98)}
 .stream-card-title{font-weight:600;color:#fff;font-size:0.92rem;margin:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-shadow:0 1px 2px rgba(0,0,0,0.6)}
@@ -461,6 +461,7 @@ body::after{
 
 /* selected outline */
 .stream-card.selected{box-shadow:0 28px 56px rgba(0,0,0,0.36);transform:translateY(-8px);border-color:rgba(255,255,255,0.08)}
+.stream-card.selected .poster-overlay{opacity:0}
 
 /* placeholder when no thumbnail exists */
 .thumb-placeholder{display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#2b2b2b,#232323);color:#bdbdbd;font-weight:600;font-size:0.95rem;height:100%;width:100%}
