@@ -1303,11 +1303,17 @@ def streaming_video_detail():
 
 @app.route("/cloud/")
 def cloud_index():
-    return send_file('../ui/index.html', mimetype='text/html')
+    with open('../ui/index.html', 'r', encoding='utf-8') as f:
+        content = f.read()
+    return Response(content, mimetype='text/html')
 
 @app.route('/cloud/<path:filename>')
 def serve_static(filename):
-    return send_file(f'../ui/{filename}')
+    import mimetypes
+    with open(f'../ui/{filename}', 'rb') as f:
+        content = f.read()
+    mimetype = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+    return Response(content, mimetype=mimetype)
 
 
 if __name__ == "__main__":
