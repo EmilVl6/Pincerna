@@ -1301,6 +1301,7 @@ def streaming_video_detail():
 		return jsonify(error=str(e)), 500
 
 
+@app.route("/cloud")
 @app.route("/cloud/")
 def cloud_index():
     with open('../ui/index.html', 'r', encoding='utf-8') as f:
