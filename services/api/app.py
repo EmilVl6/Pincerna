@@ -1301,20 +1301,6 @@ def streaming_video_detail():
 		return jsonify(error=str(e)), 500
 
 
-@app.route("/cloud")
-@app.route("/cloud/")
-def cloud_index():
-    return send_file('../ui/index.html', mimetype='text/html')
-
-@app.route('/cloud/<path:filename>')
-def serve_static(filename):
-    import mimetypes
-    mimetype = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
-    if mimetype.startswith('text/'):
-        mimetype += '; charset=utf-8'
-    return send_file(f'../ui/{filename}', mimetype=mimetype)
-
-
 if __name__ == "__main__":
 	app.run(host="0.0.0.0", port=5002)
 

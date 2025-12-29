@@ -464,6 +464,11 @@ if [ -f "$manifest" ]; then
             if [ ! -f "$thumb" ]; then
                 timeout 30 ffmpeg -y -ss 5 -i "$f" -vframes 1 -vf scale=640:-1 -q:v 8 "$thumb" >/dev/null 2>&1 || true
             fi
+            # Compress video for better streaming
+            compressed="${f}.compressed"
+            if [ ! -f "$compressed" ]; then
+                timeout 300 ffmpeg -y -i "$f" -c:v libx264 -preset medium -crf 22 -c:a aac -b:a 128k "$compressed" >/dev/null 2>&1 && mv "$compressed" "$f" || rm -f "$compressed"
+            fi
             thumb_rel="/cloud/api/thumbnail_file?h=${h}"
             # produce a JSON entry for this file
             python3 - <<PY >> "$tmp_new_entries"
