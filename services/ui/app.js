@@ -1,6 +1,25 @@
 const apiBase = "/cloud/api";
 const $ = sel => document.querySelector(sel);
 
+// Polyfill: map deprecated `unload` listeners to `pagehide` so external
+// scripts using `unload` still run their handlers without triggering the
+// deprecation warning. This is intentionally minimal and only remaps the
+// event; it does not change listener semantics otherwise.
+(function(){
+  try {
+    const _add = EventTarget.prototype.addEventListener;
+    EventTarget.prototype.addEventListener = function(type, listener, options){
+      if (type === 'unload') {
+        // use pagehide which is the recommended alternative
+        return _add.call(this, 'pagehide', listener, options && typeof options === 'object' ? Object.assign({}, options, {passive:true}) : options);
+      }
+      return _add.call(this, type, listener, options);
+    };
+  } catch (e) {
+    // if anything goes wrong, fail silently — do not break the page
+  }
+})();
+
 // Video modal global (exposed on window to avoid ReferenceErrors from
 // different bundle scopes or stale cached scripts)
 window.currentVideo = null;
