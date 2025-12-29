@@ -206,27 +206,31 @@ async function loadStreamingFiles() {
             window.currentVideo.currentTime = 0;
           }
           const video = document.getElementById('modal-video');
+          if (!video) return; // modal not present on this page
           video.preload = 'none';
           const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + encodeURIComponent(localStorage.getItem('pincerna_token') || '') + '&raw=1';
           video.src = previewUrl;
-          video.load();
+          try { video.load(); } catch (e) {}
           video.playsInline = true;
-          video.play();
-          document.getElementById('video-modal').style.display = 'flex';
+          try { video.play().catch(()=>{}); } catch(e) {}
+          const videoModal = document.getElementById('video-modal');
+          if (videoModal) videoModal.style.display = 'flex';
           window.currentVideo = video;
           // Buffer indication
           const bufferInfo = document.getElementById('buffer-info');
-          bufferInfo.textContent = 'Loading...';
+          if (bufferInfo) bufferInfo.textContent = 'Loading...';
           video.addEventListener('progress', () => {
-            const buffered = video.buffered;
-            if (buffered.length > 0 && video.duration) {
-              const bufferedEnd = buffered.end(buffered.length - 1);
-              const percent = (bufferedEnd / video.duration) * 100;
-              bufferInfo.textContent = `Buffered: ${percent.toFixed(1)}%`;
-            }
+            try {
+              const buffered = video.buffered;
+              if (buffered.length > 0 && video.duration) {
+                const bufferedEnd = buffered.end(buffered.length - 1);
+                const percent = (bufferedEnd / video.duration) * 100;
+                if (bufferInfo) bufferInfo.textContent = `Buffered: ${percent.toFixed(1)}%`;
+              }
+            } catch (e) {}
           });
           video.addEventListener('canplay', () => {
-            bufferInfo.textContent = 'Ready to play';
+            if (bufferInfo) bufferInfo.textContent = 'Ready to play';
           });
         });
         // Pop-out removed — no handler needed
