@@ -1387,7 +1387,6 @@ def _video_indexer_loop():
 						thumb_url = None
 						rel = '/' + os.path.relpath(full, base).replace('\\', '/')
 						if thumb_path:
-							# compute hash and provide a stable thumbnail-file URL
 							h = hashlib.md5(full.encode('utf-8')).hexdigest()
 							thumb_url = '/cloud/api/thumbnail_file?h=' + h
 						item = {
