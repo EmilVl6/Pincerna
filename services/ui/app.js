@@ -206,10 +206,7 @@ async function loadStreamingFiles() {
             window.currentVideo.currentTime = 0;
           }
           const video = document.getElementById('modal-video');
-          const img = card.querySelector('.stream-thumb');
-          const thumbUrl = img ? img.src : '';
-          video.poster = thumbUrl;
-          video.preload = 'metadata';
+          video.preload = 'none';
           const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + encodeURIComponent(localStorage.getItem('pincerna_token') || '') + '&raw=1';
           video.src = previewUrl;
           video.load();
