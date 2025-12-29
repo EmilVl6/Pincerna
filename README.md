@@ -1,6 +1,6 @@
 # Pincerna - Pi Server
 
-<img width="250" height="250" alt="ASCII Art" src="https://github.com/user-attachments/assets/5b590f43-e507-43db-9c3f-20f07d3cf03d" />
+<img width="250" height="250" alt="ASCII Art" src="https://github.com/user-attachments/assets/5d0176d7-ee33-413b-89f1-21cbb55ad048" />
 
 &emsp;&emsp;&emsp;&emsp;Pincern v1.0-beta
 
