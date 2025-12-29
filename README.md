@@ -9,8 +9,8 @@ A Pi Server Framework ~ "Emil's Bartender (A SERVER WITH RSA [Not the cryptograp
 ## Version
 
 v.1.0-beta
+- Personal Drive Catalogue Streaming
 - Locally Stored Drive
-- Network Browser
 
 ## Availability
 
