@@ -1382,7 +1382,6 @@ def _video_indexer_loop():
 							# reuse existing
 							new_index[full] = existing
 							continue
-						# generate thumbnail (best-effort)
 						thumb_path = _ensure_thumbnail(full)
 						thumb_url = None
 						rel = '/' + os.path.relpath(full, base).replace('\\', '/')
