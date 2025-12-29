@@ -1401,7 +1401,6 @@ def _video_indexer_loop():
 						new_index[full] = item
 					except Exception:
 						pass
-			# swap indexes
 			with VIDEO_INDEX_LOCK:
 				VIDEO_INDEX.clear()
 				VIDEO_INDEX.update(new_index)
