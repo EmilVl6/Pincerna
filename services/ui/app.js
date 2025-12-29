@@ -213,6 +213,7 @@ async function loadStreamingFiles() {
           const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + encodeURIComponent(localStorage.getItem('pincerna_token') || '') + '&raw=1';
           video.src = previewUrl;
           video.load();
+          video.playsInline = true;
           video.play();
           document.getElementById('video-modal').style.display = 'flex';
           window.currentVideo = video;

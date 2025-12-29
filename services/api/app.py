@@ -627,6 +627,7 @@ def preview_file():
 			return resp
 		else:
 			resp = send_file(full_path, mimetype=mimetype)
+			resp.headers['Content-Disposition'] = 'inline'
 			if 'thumb' in request.args:
 				resp.headers['Cache-Control'] = 'public, max-age=3600'
 			return resp
