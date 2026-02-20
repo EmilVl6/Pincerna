@@ -120,7 +120,7 @@ check_root
 
 
 
-log_step "1/7" "Installing system dependencies"
+log_step "1/8" "Installing system dependencies"
 
 
 PACKAGES="nginx python3 python3-venv python3-pip rsync curl openssl nmap ntfs-3g ffmpeg"
@@ -145,7 +145,7 @@ fi
 
 
 
-log_step "2/7" "Checking credentials"
+log_step "2/8" "Checking credentials"
 
 if [ ! -f "$ENV_FILE" ]; then
     echo "Creating new credentials file at $ENV_FILE"
@@ -209,7 +209,7 @@ fi
 
 
 
-log_step "3/7" "Setting up file storage"
+log_step "3/8" "Setting up file storage"
 
 mkdir -p "$FILES_ROOT"
 if [ "$FILES_ROOT" != "/" ]; then
@@ -221,7 +221,7 @@ log_success "File storage ready at $FILES_ROOT"
 
 # Attempt to auto-detect removable/unmounted partitions and mount them under FILES_ROOT
 detect_and_mount_drives() {
-    log_step "3.1/7" "Auto-detecting unmounted drives and mounting under $FILES_ROOT"
+    log_step "3.1/8" "Auto-detecting unmounted drives and mounting under $FILES_ROOT"
 
     # List block partitions (no loop devices), show NAME,FSTYPE,UUID,LABEL,MOUNTPOINT
     while IFS= read -r line; do
@@ -289,7 +289,7 @@ detect_and_mount_drives() {
 detect_and_mount_drives || true
 
 
-log_step "4/7" "Setting up Python environment"
+log_step "4/8" "Setting up Python environment"
 
 
 if [ ! -d "$VENV_PATH" ]; then
@@ -315,7 +315,7 @@ chown www-data:www-data "$REPO_ROOT/api.log" 2>/dev/null || true
 
 
 
-log_step "5/7" "Deploying UI files"
+log_step "5/8" "Deploying UI files"
 
 if [ ! -d "$SRC_DIR" ]; then
     log_error "Source directory not found: $SRC_DIR"
@@ -330,7 +330,7 @@ log_success "UI deployed to $WWW_DIR"
 
 
 
-log_step "6/7" "Configuring services"
+log_step "6/8" "Configuring services"
 
 
 cat > "$SYSTEMD_UNIT" <<EOF
@@ -396,7 +396,7 @@ log_success "Services configured"
 
 
 
-log_step "7/7" "Starting all services"
+log_step "7/8" "Starting all services"
 
 
 systemctl daemon-reload
@@ -425,13 +425,16 @@ else
 fi
 
 
-log_step "7.1/7" "Indexing video files and generating thumbnails"
+log_step "7.1/8" "Indexing video files and generating thumbnails"
 
 VID_EXTS='-iname *.mp4 -o -iname *.mkv -o -iname *.mov -o -iname *.avi -o -iname *.webm -o -iname *.m4v -o -iname *.mpg -o -iname *.mpeg -o -iname *.ts -o -iname *.flv'
 thumbs_dir="$FILES_ROOT/.thumbs"
+previews_dir="$FILES_ROOT/.previews"
 manifest="$FILES_ROOT/.video_index.json"
 mkdir -p "$thumbs_dir"
+mkdir -p "$previews_dir"
 chown www-data:www-data "$thumbs_dir"
+chown www-data:www-data "$previews_dir"
 
 idx_ts="$FILES_ROOT/.video_index.ts"
 tmp_manifest=$(mktemp)
@@ -466,29 +469,49 @@ if [ -f "$manifest" ]; then
             mtime_cur=$(date -r "$f" --iso-8601=seconds 2>/dev/null || echo "")
             h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
             thumb="$thumbs_dir/${h}.jpg"
+            preview="$previews_dir/${h}.mp4"
+            
+            # Just verify ffprobe can read it - we transcode incompatible codecs on-the-fly
+            if ! ffprobe -v quiet -select_streams v:0 -show_entries stream=codec_name "$f" >/dev/null 2>&1; then
+                # Completely broken file, skip it
+                continue
+            fi
+            
+            # Generate thumbnail if missing
             if [ ! -f "$thumb" ]; then
-                # Just verify ffprobe can read it - we transcode incompatible codecs on-the-fly
-                if ! ffprobe -v quiet -select_streams v:0 -show_entries stream=codec_name "$f" >/dev/null 2>&1; then
-                    # Completely broken file, skip it
-                    continue
-                fi
-                
-                # Generate thumbnail - faster settings
                 timeout 20 ffmpeg -y -ss 3 -i "$f" -vframes 1 -vf scale=320:-1 -q:v 5 "$thumb" >/dev/null 2>&1 || continue
                 # Verify thumbnail was created successfully
                 if [ ! -f "$thumb" ] || [ ! -s "$thumb" ]; then
                     continue
                 fi
             fi
+            
+            # Generate 10-second H.264 preview clip if missing (for instant playback)
+            if [ ! -f "$preview" ]; then
+                # Extract first 10 seconds, encode to H.264 for universal browser support
+                timeout 60 ffmpeg -y -i "$f" -t 10 \
+                    -c:v libx264 -preset veryfast -crf 23 \
+                    -vf "scale='min(1280,iw):-2'" \
+                    -c:a aac -b:a 96k -ac 2 \
+                    -movflags +faststart \
+                    "$preview" >/dev/null 2>&1 || true
+                # If preview generation failed, that's OK - will fall back to direct streaming
+            fi
+            
             thumb_rel="/cloud/api/thumbnail_file?h=${h}"
-            python3 - "$base" "$rel" "$size" "$mtime_cur" "$thumb_rel" <<PY >> "$tmp_new_entries"
+            preview_rel=""
+            if [ -f "$preview" ] && [ -s "$preview" ]; then
+                preview_rel="/cloud/api/preview_file?h=${h}"
+            fi
+            python3 - "$base" "$rel" "$size" "$mtime_cur" "$thumb_rel" "$preview_rel" <<PY >> "$tmp_new_entries"
 import json,sys
 entry={
   "name": sys.argv[1],
   "path": sys.argv[2],
   "size": int(sys.argv[3]),
   "mtime": sys.argv[4],
-  "thumbnail": sys.argv[5]
+  "thumbnail": sys.argv[5],
+  "preview": sys.argv[6] if sys.argv[6] else None
 }
 print(json.dumps(entry))
 PY
@@ -570,19 +593,31 @@ else
             fi
             h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
             thumb="$thumbs_dir/${h}.jpg"
+            preview="$previews_dir/${h}.mp4"
+            
+            # Just verify ffprobe can read it
+            if ! ffprobe -v quiet -select_streams v:0 -show_entries stream=codec_name "$f" >/dev/null 2>&1; then
+                # Completely broken file, skip it
+                continue
+            fi
+            
+            # Generate thumbnail if missing
             if [ ! -f "$thumb" ]; then
-                # Just verify ffprobe can read it - we transcode incompatible codecs on-the-fly
-                if ! ffprobe -v quiet -select_streams v:0 -show_entries stream=codec_name "$f" >/dev/null 2>&1; then
-                    # Completely broken file, skip it
-                    continue
-                fi
-                
-                # Generate thumbnail - faster settings
                 timeout 20 ffmpeg -y -ss 3 -i "$f" -vframes 1 -vf scale=320:-1 -q:v 5 "$thumb" >/dev/null 2>&1 || continue
                 # Verify thumbnail was created successfully
                 if [ ! -f "$thumb" ] || [ ! -s "$thumb" ]; then
                     continue
                 fi
+            fi
+            
+            # Generate 10-second H.264 preview clip if missing
+            if [ ! -f "$preview" ]; then
+                timeout 60 ffmpeg -y -i "$f" -t 10 \
+                    -c:v libx264 -preset veryfast -crf 23 \
+                    -vf "scale='min(1280,iw):-2'" \
+                    -c:a aac -b:a 96k -ac 2 \
+                    -movflags +faststart \
+                    "$preview" >/dev/null 2>&1 || true
             fi
             pct=$((count*100/total))
             filled=$((pct/2))
@@ -598,9 +633,13 @@ else
         for f in "${videos[@]}"; do
             size=$(stat -c%s "$f" 2>/dev/null || echo 0)
             mtime=$(date -r "$f" --iso-8601=seconds 2>/dev/null || echo "")
-            rel="/$(echo "$f" | sed "s#^$FILES_ROOT/##")"
+            rel="/$(echo "$f" | sed "s#^$FILES_ROOT/##")"            preview="$previews_dir/$(printf '%s' "$f" | md5sum | awk '{print $1}').mp4"
+            preview_exists="false"
+            if [ -f "$preview" ] && [ -s "$preview" ]; then
+                preview_exists="true"
+            fi
             h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
-            echo "$h	$size	$mtime	$rel" >> "$tmp_data"
+            echo "$h	$size	$mtime	$rel	$preview_exists" >> "$tmp_data"
         done
         python3 <<EOF > "$tmp_manifest"
 import json
@@ -608,22 +647,25 @@ import os
 files = []
 with open('$tmp_data', 'r') as f:
     for line in f:
-        parts = line.strip().split('\t', 3)
-        h, size, mtime, rel = parts
+        parts = line.strip().split('\t', 4)
+        h, size, mtime, rel, preview_exists = parts
         name = os.path.basename(rel)
         thumb = f"/cloud/api/thumbnail_file?h={h}"
+        preview = f"/cloud/api/preview_file?h={h}" if preview_exists == "true" else None
         files.append({
             'name': name,
             'path': rel,
             'size': int(size),
             'mtime': mtime,
-            'thumbnail': thumb
+            'thumbnail': thumb,
+            'preview': preview
         })
 print(json.dumps({'files': files}))
 EOF
         rm "$tmp_data"
         spinner_stop
         chown -R www-data:www-data "$thumbs_dir"
+        chown -R www-data:www-data "$previews_dir"
         mv "$tmp_manifest" "$manifest"
         chown www-data:www-data "$manifest"
         touch "$idx_ts"
@@ -636,7 +678,7 @@ fi
 
 
 
-log_step "8/7" "Restarting services"
+log_step "8/8" "Restarting services"
 if systemctl restart pincerna.service; then
     log_success "Pincerna backend restarted"
 else

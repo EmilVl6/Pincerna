@@ -12,10 +12,11 @@ echo "1. Stopping pincerna service..."
 systemctl stop pincerna
 
 # Clear all cached/indexed data
-echo "2. Clearing video index and thumbnails..."
+echo "2. Clearing video index, thumbnails, and preview clips..."
 rm -f /mnt/.video_index.json
 rm -f /mnt/.video_index.ts
 rm -rf /mnt/.thumbs/*
+rm -rf /mnt/.previews/*
 
 # Clear Python cache
 echo "3. Clearing Python cache..."

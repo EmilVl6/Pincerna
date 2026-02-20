@@ -60,6 +60,14 @@ def _thumbs_dir():
 		pass
 	return thumbs
 
+def _previews_dir():
+	previews = _get_files_base() + "/.previews"
+	try:
+		os.makedirs(previews, exist_ok=True)
+	except Exception:
+		pass
+	return previews
+
 
 def _needs_transcoding(full):
 	"""Check if video needs on-the-fly transcoding to H.264.
@@ -177,6 +185,22 @@ def thumbnail_file():
 		return send_file(thumb_path, mimetype='image/jpeg')
 	except Exception as e:
 		logging.exception('thumbnail_file send failed')
+		return jsonify(error=str(e)), 500
+
+@app.route('/preview_file')
+def preview_file_route():
+	"""Serve a pre-generated 10-second H.264 preview clip by hash."""
+	h = request.args.get('h')
+	if not h:
+		return jsonify(error='missing_hash'), 400
+	previews = _previews_dir()
+	preview_path = os.path.join(previews, f"{h}.mp4")
+	if not os.path.exists(preview_path):
+		return jsonify(error='preview_not_found'), 404
+	try:
+		return send_file(preview_path, mimetype='video/mp4')
+	except Exception as e:
+		logging.exception('preview_file send failed')
 		return jsonify(error=str(e)), 500
 
 

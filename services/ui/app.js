@@ -247,28 +247,81 @@ async function loadStreamingFiles() {
           video.playsInline = true;
           window.currentVideo = video;
           
-          // Create source element with proper MIME type
-          const source = document.createElement('source');
-          const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + encodeURIComponent(localStorage.getItem('pincerna_token') || '') + '&raw=1';
-          source.src = previewUrl;
-          
-          // Detect MIME type from filename
+          // Check if there's a preview clip available
+          const hasPreview = f.preview && f.preview.length > 0;
+          const token = encodeURIComponent(localStorage.getItem('pincerna_token') || '');
           const filename = f.name.toLowerCase();
-          if (filename.endsWith('.mp4') || filename.endsWith('.m4v')) {
-            source.type = 'video/mp4';
-          } else if (filename.endsWith('.webm')) {
-            source.type = 'video/webm';
-          } else if (filename.endsWith('.mkv')) {
-            source.type = 'video/x-matroska';
-          } else if (filename.endsWith('.avi')) {
-            source.type = 'video/x-msvideo';
-          } else if (filename.endsWith('.mov')) {
-            source.type = 'video/quicktime';
+          
+          if (hasPreview) {
+            // Start with the 10-second H.264 preview for instant playback
+            const previewUrl = window.location.origin + f.preview + '&token=' + token;
+            const fullUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + token + '&raw=1';
+            
+            const source = document.createElement('source');
+            source.src = previewUrl;
+            source.type = 'video/mp4'; // Preview is always H.264 MP4
+            video.appendChild(source);
+            
+            // When preview ends or user seeks past 9 seconds, switch to full video
+            let switchedToFull = false;
+            const switchToFullVideo = () => {
+              if (switchedToFull) return;
+              switchedToFull = true;
+              
+              const currentTime = video.currentTime;
+              video.pause();
+              
+              // Clear preview source
+              while (video.firstChild) {
+                video.removeChild(video.firstChild);
+              }
+              
+              // Set full video source
+              const fullSource = document.createElement('source');
+              fullSource.src = fullUrl;
+              fullSource.type = getMimeType(filename);
+              
+              video.appendChild(fullSource);
+              video.load();
+              
+              // Resume from where preview left off
+              video.addEventListener('loadedmetadata', () => {
+                video.currentTime = currentTime;
+                video.play().catch(console.error);
+              }, { once: true });
+              
+              if (bufferInfo) bufferInfo.textContent = 'Loading full video...';
+            };
+            
+            // Switch to full video when preview ends
+            video.addEventListener('ended', switchToFullVideo, { once: true });
+            
+            // Switch if user seeks past 9 seconds
+            video.addEventListener('seeking', () => {
+              if (!switchedToFull && video.currentTime > 9) {
+                switchToFullVideo();
+              }
+            });
+            
+            if (bufferInfo) bufferInfo.textContent = 'Loading preview...';
           } else {
-            source.type = 'video/mp4'; // default fallback
+            // No preview - load full video directly
+            const source = document.createElement('source');
+            const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + token + '&raw=1';
+            source.src = previewUrl;
+            source.type = getMimeType(filename);
+            video.appendChild(source);
           }
           
-          video.appendChild(source);
+          // Helper function to get MIME type
+          function getMimeType(filename) {
+            if (filename.endsWith('.mp4') || filename.endsWith('.m4v')) return 'video/mp4';
+            if (filename.endsWith('.webm')) return 'video/webm';
+            if (filename.endsWith('.mkv')) return 'video/x-matroska';
+            if (filename.endsWith('.avi')) return 'video/x-msvideo';
+            if (filename.endsWith('.mov')) return 'video/quicktime';
+            return 'video/mp4'; // default fallback
+          }
           
           // Error handling
           const handleError = (e) => {
@@ -284,7 +337,6 @@ async function loadStreamingFiles() {
             }
           };
           video.addEventListener('error', handleError, { once: true });
-          source.addEventListener('error', handleError, { once: true });
           
           video.load();
           video.play().catch((err) => {
