@@ -594,14 +594,39 @@ def preview_file():
 			# Support HTTP Range requests so mobile browsers and players can seek/stream
 			file_size = os.path.getsize(full_path)
 			range_header = request.headers.get('Range', None)
+			
 			if not range_header:
-				# No Range header: return whole file (flask send_file will stream efficiently)
-				return send_file(full_path, mimetype=mimetype)
+				# No Range header: stream entire file in chunks with status 200
+				def generate():
+					with open(full_path, 'rb') as f:
+						chunk_size = 1024 * 1024  # 1MB chunks
+						while True:
+							data = f.read(chunk_size)
+							if not data:
+								break
+							yield data
+				resp = Response(generate(), status=200, mimetype=mimetype)
+				resp.headers.add('Accept-Ranges', 'bytes')
+				resp.headers.add('Content-Length', str(file_size))
+				return resp
+			
 			# Parse range header
 			m = re.match(r'bytes=(\d+)-(\d*)', range_header)
 			if not m:
-				# Malformed Range; return full
-				return send_file(full_path, mimetype=mimetype)
+				# Malformed Range; stream full file in chunks
+				def generate():
+					with open(full_path, 'rb') as f:
+						chunk_size = 1024 * 1024  # 1MB chunks
+						while True:
+							data = f.read(chunk_size)
+							if not data:
+								break
+							yield data
+				resp = Response(generate(), status=200, mimetype=mimetype)
+				resp.headers.add('Accept-Ranges', 'bytes')
+				resp.headers.add('Content-Length', str(file_size))
+				return resp
+			
 			start = int(m.group(1))
 			end = int(m.group(2)) if m.group(2) else file_size - 1
 			if end >= file_size:
@@ -611,7 +636,7 @@ def preview_file():
 				with open(full_path, 'rb') as f:
 					f.seek(start)
 					remaining = length
-					chunk_size = 4 * 1024 * 1024
+					chunk_size = 1024 * 1024  # 1MB chunks
 					while remaining > 0:
 						read_len = min(chunk_size, remaining)
 						data = f.read(read_len)
