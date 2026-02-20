@@ -33,6 +33,11 @@ document.addEventListener('DOMContentLoaded', function() {
   // Open modal and set up video
   window.openModal = function(videoUrl, duration) {
     modal.style.display = 'flex';
+    // Reset video element
+    modalVideo.pause();
+    modalVideo.removeAttribute('src');
+    modalVideo.load();
+    // Set new source
     modalVideo.src = videoUrl;
     modalVideo.currentTime = 0;
     setCurrentUI(0);
@@ -41,8 +46,12 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
       setDurationUI(0);
     }
-    modalVideo.play();
+    // Try to play, fallback to user interaction
+    setTimeout(() => {
+      modalVideo.play().catch(() => {});
+    }, 100);
     if (cvcPlayIcon) cvcPlayIcon.textContent = '⏸';
+    if (cvcControls) cvcControls.style.opacity = 1;
     document.body.style.overflow = 'hidden';
   };
 

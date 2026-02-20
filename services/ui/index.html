@@ -62,18 +62,20 @@
     <div id="video-modal" class="modal" style="display:none">
       <div class="modal-content video-modal-content custom-modal-center">
         <button id="close-modal" class="cvc-btn cvc-close" aria-label="Close">✕</button>
-        <video id="modal-video" preload="metadata" tabindex="0"></video>
-        <div id="custom-video-controls" class="custom-video-controls">
-          <button class="cvc-btn cvc-play" id="cvc-play" aria-label="Play/Pause"><span id="cvc-play-icon">▶</span></button>
-          <div class="cvc-timeline-wrap">
-            <input type="range" id="cvc-timeline" class="cvc-timeline" min="0" max="100" value="0" step="0.01">
-            <div class="cvc-time-labels">
-              <span id="cvc-current">0:00</span> / <span id="cvc-duration">0:00</span>
+        <div style="width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+          <video id="modal-video" preload="auto" tabindex="0" playsinline style="background:#111;display:block;width:100%;max-width:900px;max-height:70vh;border-radius:0.7rem;box-shadow:0 2px 16px 0 rgba(0,0,0,0.18);"></video>
+          <div id="custom-video-controls" class="custom-video-controls">
+            <button class="cvc-btn cvc-play" id="cvc-play" aria-label="Play/Pause"><span id="cvc-play-icon">▶</span></button>
+            <div class="cvc-timeline-wrap">
+              <input type="range" id="cvc-timeline" class="cvc-timeline" min="0" max="100" value="0" step="0.01">
+              <div class="cvc-time-labels">
+                <span id="cvc-current">0:00</span> / <span id="cvc-duration">0:00</span>
+              </div>
             </div>
+            <button class="cvc-btn cvc-mute" id="cvc-mute" aria-label="Mute/Unmute"><span id="cvc-mute-icon">🔊</span></button>
+            <input type="range" id="cvc-volume" class="cvc-volume" min="0" max="1" step="0.01" value="1">
+            <button class="cvc-btn cvc-fullscreen" id="cvc-fullscreen" aria-label="Fullscreen"><span id="cvc-fullscreen-icon">⛶</span></button>
           </div>
-          <button class="cvc-btn cvc-mute" id="cvc-mute" aria-label="Mute/Unmute"><span id="cvc-mute-icon">🔊</span></button>
-          <input type="range" id="cvc-volume" class="cvc-volume" min="0" max="1" step="0.01" value="1">
-          <button class="cvc-btn cvc-fullscreen" id="cvc-fullscreen" aria-label="Fullscreen"><span id="cvc-fullscreen-icon">⛶</span></button>
         </div>
       </div>
     </div>
