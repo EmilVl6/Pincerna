@@ -68,6 +68,14 @@ def _previews_dir():
 		pass
 	return previews
 
+def _remuxed_dir():
+	remuxed = _get_files_base() + "/.remuxed"
+	try:
+		os.makedirs(remuxed, exist_ok=True)
+	except Exception:
+		pass
+	return remuxed
+
 
 def _needs_transcoding(full):
 	"""Check if video needs on-the-fly transcoding to H.264.
@@ -679,66 +687,74 @@ def preview_file():
 			return html, 200, {'Content-Type': 'text/html'}
 		# If raw requested and it's a video, serve with Range support for streaming
 		if mimetype.startswith('video/') and request.args.get('raw'):
-			# Check if video needs on-the-fly transcoding
+			# Determine the actual file to serve (original or pre-remuxed)
 			needs_transcode, video_codec, format_name = _needs_transcoding(full_path)
+			serve_path = full_path
+			serve_mimetype = mimetype
 			
-			if needs_transcode and request.args.get('transcode') == '1':
-				# User explicitly requested transcoding
-				# For 4K videos, downscale to 1080p for reasonable performance
-				file_size = os.path.getsize(full_path)
+			if needs_transcode:
+				# Check for pre-remuxed/transcoded file on disk (created by update_site.sh)
+				h = hashlib.md5(path.encode('utf-8')).hexdigest()
+				remuxed_path = os.path.join(_remuxed_dir(), f"{h}.mp4")
 				
-				# Determine if it's likely 4K (big file or check resolution)
-				scale_filter = 'scale=-2:1080' if file_size > 2 * 1024 * 1024 * 1024 else 'scale=-2:720'
-				
-				logging.info(f'Transcoding {video_codec} in {format_name} to H.264 ({scale_filter}): {full_path}')
-				
-				# Aggressive transcoding for real-time playback on Pi
-				cmd = [
-					'ffmpeg',
-					'-i', full_path,
-					'-c:v', 'libx264',               # H.264 video codec
-					'-preset', 'veryfast',           # Fast but better quality than ultrafast
-					'-tune', 'zerolatency',          # Low latency for streaming
-					'-vf', scale_filter,             # Downscale if needed
-					'-crf', '28',                    # Lower quality for speed
-					'-maxrate', '2M',                # Limit bitrate
-					'-bufsize', '4M',                # Buffer size
-					'-c:a', 'aac',                   # AAC audio
-					'-b:a', '96k',                   # Lower audio bitrate
-					'-ac', '2',                      # Stereo only
-					'-movflags', 'frag_keyframe+empty_moov+default_base_moof',  # Streaming MP4
-					'-f', 'mp4',                     # Output format
-					'pipe:1'                         # Write to stdout
-				]
-				
-				def generate_transcode():
-					proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=256*1024)
-					try:
-						while True:
-							chunk = proc.stdout.read(128 * 1024)  # 128KB chunks for responsiveness
-							if not chunk:
-								break
-							yield chunk
-					finally:
-						proc.kill()
-						proc.wait()
-				
-				resp = Response(generate_transcode(), status=200, mimetype='video/mp4')
-				resp.headers.add('Cache-Control', 'no-cache')
-				resp.headers.add('X-Content-Type-Options', 'nosniff')
-				resp.headers.add('X-Transcoded', 'true')
-				return resp
+				if os.path.exists(remuxed_path) and os.path.getsize(remuxed_path) > 0:
+					# Serve pre-remuxed file (fast, supports Range/seeking)
+					logging.info(f'Serving pre-remuxed: {remuxed_path}')
+					serve_path = remuxed_path
+					serve_mimetype = 'video/mp4'
+				else:
+					# No pre-remuxed file - remux/transcode on-the-fly
+					if video_codec in ('hevc', 'h265'):
+						# HEVC in MKV: just remux to MP4 (copy streams, very fast)
+						logging.info(f'On-the-fly remux {format_name}->MP4: {full_path}')
+						cmd = [
+							'ffmpeg', '-i', full_path,
+							'-c:v', 'copy',
+							'-c:a', 'aac', '-b:a', '128k', '-ac', '2',
+							'-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+							'-f', 'mp4', 'pipe:1'
+						]
+					else:
+						# Other incompatible codec: full H.264 transcode
+						file_size = os.path.getsize(full_path)
+						scale_filter = 'scale=-2:1080' if file_size > 2*1024*1024*1024 else 'scale=-2:720'
+						logging.info(f'On-the-fly transcode {video_codec}->{scale_filter}: {full_path}')
+						cmd = [
+							'ffmpeg', '-i', full_path,
+							'-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency',
+							'-vf', scale_filter, '-crf', '28', '-maxrate', '2M', '-bufsize', '4M',
+							'-c:a', 'aac', '-b:a', '96k', '-ac', '2',
+							'-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+							'-f', 'mp4', 'pipe:1'
+						]
+					
+					def generate_remux():
+						proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=256*1024)
+						try:
+							while True:
+								chunk = proc.stdout.read(128 * 1024)
+								if not chunk:
+									break
+								yield chunk
+						finally:
+							proc.kill()
+							proc.wait()
+					
+					resp = Response(generate_remux(), status=200, mimetype='video/mp4')
+					resp.headers.add('Cache-Control', 'no-cache')
+					resp.headers.add('X-Content-Type-Options', 'nosniff')
+					resp.headers.add('Accept-Ranges', 'none')
+					return resp
 			
-			# Direct streaming (native codec) - might not work in all browsers
-			# Support HTTP Range requests so mobile browsers and players can seek/stream
-			file_size = os.path.getsize(full_path)
+			# Serve file directly (original or pre-remuxed) with Range support
+			file_size = os.path.getsize(serve_path)
 			range_header = request.headers.get('Range', None)
 			
 			if not range_header:
 				# No Range header: Progressive chunk sizes for instant start like YouTube
 				# Start with small chunks, increase as buffer grows
 				def generate():
-					with open(full_path, 'rb') as f:
+					with open(serve_path, 'rb') as f:
 						bytes_sent = 0
 						while True:
 							# Progressive chunk sizing
@@ -756,7 +772,7 @@ def preview_file():
 								break
 							bytes_sent += len(data)
 							yield data
-				resp = Response(generate(), status=200, mimetype=mimetype)
+				resp = Response(generate(), status=200, mimetype=serve_mimetype)
 				resp.headers.add('Accept-Ranges', 'bytes')
 				resp.headers.add('Content-Length', str(file_size))
 				resp.headers.add('Cache-Control', 'public, max-age=7200')
@@ -768,7 +784,7 @@ def preview_file():
 			if not m:
 				# Malformed Range; use progressive chunks
 				def generate():
-					with open(full_path, 'rb') as f:
+					with open(serve_path, 'rb') as f:
 						bytes_sent = 0
 						while True:
 							if bytes_sent < 2 * 1024 * 1024:
@@ -783,7 +799,7 @@ def preview_file():
 								break
 							bytes_sent += len(data)
 							yield data
-				resp = Response(generate(), status=200, mimetype=mimetype)
+				resp = Response(generate(), status=200, mimetype=serve_mimetype)
 				resp.headers.add('Accept-Ranges', 'bytes')
 				resp.headers.add('Content-Length', str(file_size))
 				resp.headers.add('Cache-Control', 'public, max-age=7200')
@@ -799,7 +815,7 @@ def preview_file():
 			chunk_size = 256 * 1024  # 256KB for instant response
 			
 			def generate():
-				with open(full_path, 'rb') as f:
+				with open(serve_path, 'rb') as f:
 					f.seek(start)
 					remaining = length
 					while remaining > 0:
@@ -810,7 +826,7 @@ def preview_file():
 						yield data
 						remaining -= len(data)
 					return
-			resp = Response(generate(), status=206, mimetype=mimetype)
+			resp = Response(generate(), status=206, mimetype=serve_mimetype)
 			resp.headers.add('Content-Range', f'bytes {start}-{end}/{file_size}')
 			resp.headers.add('Accept-Ranges', 'bytes')
 			resp.headers.add('Content-Length', str(length))

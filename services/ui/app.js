@@ -221,11 +221,9 @@ async function loadStreamingFiles() {
         card.appendChild(banner);
 
         card.addEventListener('click', async (e) => {
-          // single-click selects and opens the player
           selectCardByElement(card);
           if (window.currentVideo) {
             window.currentVideo.pause();
-            window.currentVideo.currentTime = 0;
             window.currentVideo.removeAttribute('src');
             window.currentVideo.load();
           }
@@ -234,148 +232,69 @@ async function loadStreamingFiles() {
           
           // Clear previous source and error state
           video.removeAttribute('src');
-          while (video.firstChild) {
-            video.removeChild(video.firstChild);
-          }
+          while (video.firstChild) video.removeChild(video.firstChild);
           
           const videoModal = document.getElementById('video-modal');
           if (videoModal) videoModal.style.display = 'flex';
           const bufferInfo = document.getElementById('buffer-info');
-          if (bufferInfo) bufferInfo.textContent = 'Loading...';
+          if (bufferInfo) { bufferInfo.textContent = 'Loading...'; bufferInfo.style.color = ''; bufferInfo.style.opacity = '1'; }
           
-          video.preload = 'metadata';
+          video.preload = 'auto';
           video.playsInline = true;
           window.currentVideo = video;
           
-          // Check if there's a preview clip available
-          const hasPreview = f.preview && f.preview.length > 0;
           const token = encodeURIComponent(localStorage.getItem('pincerna_token') || '');
-          const filename = f.name.toLowerCase();
+          // Single source URL - server auto-remuxes incompatible formats (MKV→MP4)
+          const videoUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + token + '&raw=1';
           
-          if (hasPreview) {
-            // Start with the 10-second H.264 preview for instant playback
-            const previewUrl = window.location.origin + f.preview + '&token=' + token;
-            const fullUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + token + '&raw=1';
-            
-            const source = document.createElement('source');
-            source.src = previewUrl;
-            source.type = 'video/mp4'; // Preview is always H.264 MP4
-            video.appendChild(source);
-            
-            // When preview ends or user seeks past 9 seconds, switch to full video
-            let switchedToFull = false;
-            const switchToFullVideo = () => {
-              if (switchedToFull) return;
-              switchedToFull = true;
-              
-              const currentTime = video.currentTime;
-              video.pause();
-              
-              // Clear preview source
-              while (video.firstChild) {
-                video.removeChild(video.firstChild);
-              }
-              
-              // Set full video source
-              const fullSource = document.createElement('source');
-              fullSource.src = fullUrl;
-              fullSource.type = getMimeType(filename);
-              
-              video.appendChild(fullSource);
-              video.load();
-              
-              // Resume from where preview left off
-              video.addEventListener('loadedmetadata', () => {
-                video.currentTime = currentTime;
-                video.play().catch(console.error);
-              }, { once: true });
-              
-              if (bufferInfo) bufferInfo.textContent = 'Loading full video...';
-            };
-            
-            // Switch to full video when preview ends
-            video.addEventListener('ended', switchToFullVideo, { once: true });
-            
-            // Switch if user seeks past 9 seconds
-            video.addEventListener('seeking', () => {
-              if (!switchedToFull && video.currentTime > 9) {
-                switchToFullVideo();
-              }
-            });
-            
-            if (bufferInfo) bufferInfo.textContent = 'Loading preview...';
-          } else {
-            // No preview - load full video directly
-            const source = document.createElement('source');
-            const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + token + '&raw=1';
-            source.src = previewUrl;
-            source.type = getMimeType(filename);
-            video.appendChild(source);
-          }
-          
-          // Helper function to get MIME type
-          function getMimeType(filename) {
-            if (filename.endsWith('.mp4') || filename.endsWith('.m4v')) return 'video/mp4';
-            if (filename.endsWith('.webm')) return 'video/webm';
-            if (filename.endsWith('.mkv')) return 'video/x-matroska';
-            if (filename.endsWith('.avi')) return 'video/x-msvideo';
-            if (filename.endsWith('.mov')) return 'video/quicktime';
-            return 'video/mp4'; // default fallback
-          }
+          const source = document.createElement('source');
+          source.src = videoUrl;
+          source.type = 'video/mp4'; // Server always delivers MP4-compatible stream
+          video.appendChild(source);
           
           // Error handling
-          const handleError = (e) => {
-            console.error('Video playback error:', e);
+          video.addEventListener('error', () => {
             if (bufferInfo) {
-              const errorCode = video.error ? video.error.code : 0;
-              let errorMsg = 'Cannot play video';
-              if (errorCode === 4) errorMsg = 'Video format not supported';
-              else if (errorCode === 3) errorMsg = 'Video codec not supported';
-              else if (errorCode === 2) errorMsg = 'Network error';
-              bufferInfo.textContent = errorMsg;
+              const code = video.error ? video.error.code : 0;
+              let msg = 'Cannot play video';
+              if (code === 4) msg = 'Format not supported';
+              else if (code === 3) msg = 'Decoding error';
+              else if (code === 2) msg = 'Network error';
+              bufferInfo.textContent = msg;
               bufferInfo.style.color = '#ff4444';
-            }
-          };
-          video.addEventListener('error', handleError, { once: true });
-          
-          video.load();
-          video.play().catch((err) => {
-            console.error('Play error:', err);
-            if (bufferInfo) {
-              bufferInfo.textContent = 'Cannot play - ' + (err.message || 'Unknown error');
-              bufferInfo.style.color = '#ff4444';
+              bufferInfo.style.opacity = '1';
             }
           });
           
-          const updateBuffer = () => {
+          video.load();
+          
+          try {
+            await video.play();
+          } catch (err) {
+            // AbortError is normal (user interaction before play resolves)
+            if (err.name !== 'AbortError' && bufferInfo) {
+              bufferInfo.textContent = 'Tap to play';
+              bufferInfo.style.color = '#ff4444';
+            }
+          }
+          
+          // Buffer status UI
+          video.addEventListener('progress', () => {
             try {
-              const buffered = video.buffered;
-              if (buffered.length > 0 && video.duration) {
-                const bufferedEnd = buffered.end(buffered.length - 1);
-                const percent = (bufferedEnd / video.duration) * 100;
-                if (bufferInfo) {
-                  bufferInfo.textContent = `Buffered: ${percent.toFixed(0)}%`;
-                  bufferInfo.style.color = '';
-                }
+              if (video.buffered.length > 0 && video.duration) {
+                const pct = (video.buffered.end(video.buffered.length - 1) / video.duration * 100).toFixed(0);
+                if (bufferInfo) { bufferInfo.textContent = 'Buffered: ' + pct + '%'; bufferInfo.style.color = ''; }
               }
             } catch (e) {}
-          };
-          video.addEventListener('progress', updateBuffer);
+          });
           video.addEventListener('loadedmetadata', () => {
-            if (bufferInfo) {
-              bufferInfo.textContent = 'Ready';
-              bufferInfo.style.color = '';
-            }
-            updateBuffer();
+            if (bufferInfo) { bufferInfo.textContent = 'Ready'; bufferInfo.style.color = ''; }
           });
           video.addEventListener('canplay', () => {
             if (bufferInfo) bufferInfo.style.opacity = '0.5';
           });
           video.addEventListener('waiting', () => {
-            if (bufferInfo) {
-              bufferInfo.textContent = 'Buffering...';
-              bufferInfo.style.opacity = '1';
-            }
+            if (bufferInfo) { bufferInfo.textContent = 'Buffering...'; bufferInfo.style.opacity = '1'; }
           });
           video.addEventListener('playing', () => {
             if (bufferInfo) bufferInfo.style.opacity = '0';
