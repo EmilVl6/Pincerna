@@ -81,7 +81,7 @@ def _ensure_thumbnail(full):
 		return None
 
 
-@app.route('/cloud/api/thumbnail_file')
+@app.route('/thumbnail_file')
 def thumbnail_file():
 	"""Serve a previously-generated thumbnail by hash (no regeneration)."""
 	h = request.args.get('h')
@@ -105,19 +105,6 @@ def login():
 		"exp": datetime.datetime.utcnow() + datetime.timedelta(minutes=30)
 	}, SECRET, algorithm="HS256")
 	return jsonify(token=token)
-
-
-@app.route('/cloud/api/verify_google', methods=['POST'])
-def verify_google_alias():
-	return verify_google()
-
-@app.route('/cloud/api/oauth/start')
-def oauth_start_alias():
-	return oauth_start()
-
-@app.route('/cloud/api/oauth/callback')
-def oauth_callback_alias():
-	return oauth_callback()
 
 
 @app.route('/verify_turnstile', methods=['POST'])
@@ -153,11 +140,6 @@ def config():
 	
 	sitekey = os.environ.get('TURNSTILE_SITEKEY', '')
 	return jsonify(turnstile_sitekey=sitekey)
-
-
-@app.route('/cloud/api/config')
-def config_alias():
-	return config()
 
 
 @app.route('/verify_google', methods=['POST'])
@@ -1219,7 +1201,7 @@ def thumbnail_alias():
 		return jsonify(error=str(e)), 500
 
 
-@app.route('/cloud/api/streaming/videos')
+@app.route('/streaming/videos')
 def streaming_videos():
 	"""Return a list of video files found under FILES_ROOT (search recursive).
 	Paths are returned relative to FILES_ROOT (leading slash), suitable for /files/preview calls.
@@ -1254,7 +1236,7 @@ def streaming_videos():
 		return jsonify(error=str(e)), 500
 
 
-@app.route('/cloud/api/streaming/index')
+@app.route('/streaming/index')
 def streaming_index():
 	"""Return the video manifest, filtering out videos without thumbnails."""
 	try:
@@ -1277,7 +1259,7 @@ def streaming_index():
 		return jsonify(error=str(e)), 500
 
 
-@app.route('/cloud/api/streaming')
+@app.route('/streaming')
 def streaming():
 	"""Return the video manifest, filtering out videos without thumbnails."""
 	manifest_path = _get_files_base() + "/.video_index.json"
@@ -1296,7 +1278,7 @@ def streaming():
 		return jsonify(files=[])
 
 
-@app.route('/cloud/api/streaming/video')
+@app.route('/streaming/video')
 def streaming_video_detail():
 	path = request.args.get('path', '')
 	if not path:
