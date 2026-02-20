@@ -474,13 +474,17 @@ if [ -f "$manifest" ]; then
             h=$(printf '%s' "$rel" | md5sum | awk '{print $1}')
             thumb="$thumbs_dir/${h}.jpg"
             preview="$previews_dir/${h}.mp4"
-            
+
+            # Extract duration using ffprobe (in seconds, float)
+            duration=$(ffprobe -v error -select_streams v:0 -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$f" 2>/dev/null | awk '{print int($1+0.5)}')
+            [ -z "$duration" ] && duration=0
+
             # Just verify ffprobe can read it - we transcode incompatible codecs on-the-fly
             if ! ffprobe -v quiet -select_streams v:0 -show_entries stream=codec_name "$f" >/dev/null 2>&1; then
                 # Completely broken file, skip it
                 continue
             fi
-            
+
             # Generate thumbnail if missing
             if [ ! -f "$thumb" ]; then
                 timeout 20 ffmpeg -y -ss 3 -i "$f" -vframes 1 -vf scale=320:-1 -q:v 5 "$thumb" >/dev/null 2>&1 || continue
@@ -489,7 +493,7 @@ if [ -f "$manifest" ]; then
                     continue
                 fi
             fi
-            
+
             # Generate 10-second H.264 preview clip if missing (for instant playback)
             if [ ! -f "$preview" ]; then
                 # Extract first 10 seconds, encode to H.264 for universal browser support
@@ -501,13 +505,13 @@ if [ -f "$manifest" ]; then
                     "$preview" >/dev/null 2>&1 || true
                 # If preview generation failed, that's OK - will fall back to direct streaming
             fi
-            
+
             thumb_rel="/cloud/api/thumbnail_file?h=${h}"
             preview_rel=""
             if [ -f "$preview" ] && [ -s "$preview" ]; then
                 preview_rel="/cloud/api/preview_file?h=${h}"
             fi
-            python3 - "$base" "$rel" "$size" "$mtime_cur" "$thumb_rel" "$preview_rel" <<PY >> "$tmp_new_entries"
+            python3 - "$base" "$rel" "$size" "$mtime_cur" "$thumb_rel" "$preview_rel" "$duration" <<PY >> "$tmp_new_entries"
 import json,sys
 entry={
   "name": sys.argv[1],
@@ -515,7 +519,8 @@ entry={
   "size": int(sys.argv[3]),
   "mtime": sys.argv[4],
   "thumbnail": sys.argv[5],
-  "preview": sys.argv[6] if sys.argv[6] else None
+  "preview": sys.argv[6] if sys.argv[6] else None,
+  "duration": int(sys.argv[7]) if sys.argv[7].isdigit() else None
 }
 print(json.dumps(entry))
 PY
