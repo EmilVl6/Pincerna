@@ -115,15 +115,8 @@ document.addEventListener('DOMContentLoaded', function() {
       modalVideo.currentTime = Math.min(modalVideo.duration, modalVideo.currentTime + 5);
     }
   });
-  // Touch: show controls on tap
-  let controlsTimeout;
-  if (modalVideo) modalVideo.addEventListener('touchstart', () => {
-    cvcControls.style.opacity = 1;
-    clearTimeout(controlsTimeout);
-    controlsTimeout = setTimeout(() => {
-      cvcControls.style.opacity = 0.7;
-    }, 2500);
-  });
+  // Always show controls at full opacity for now
+  if (cvcControls) cvcControls.style.opacity = 1;
 });
 const apiBase = "/cloud/api";
 const $ = sel => document.querySelector(sel);
