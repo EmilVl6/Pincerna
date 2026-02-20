@@ -40,9 +40,17 @@
       title.textContent = 'No path specified';
     } else {
       const token = localStorage.getItem('pincerna_token') || '';
-      const src = location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(path) + '&token=' + encodeURIComponent(token);
+      const src = location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(path) + '&raw=1&token=' + encodeURIComponent(token);
+      player.preload = 'metadata';
       player.src = src;
-      title.textContent = decodeURIComponent(path);
+      title.textContent = decodeURIComponent(path.split('/').pop());
+      player.addEventListener('loadedmetadata', () => {
+        player.play().catch(() => {});
+      });
+      player.addEventListener('error', (e) => {
+        console.error('Video error:', e);
+        title.textContent = 'Error loading video';
+      });
     }
     document.getElementById('openLocal').addEventListener('click', () => {
       window.open(location.href, '_blank');

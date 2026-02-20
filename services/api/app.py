@@ -599,7 +599,7 @@ def preview_file():
 				# No Range header: stream entire file in chunks with status 200
 				def generate():
 					with open(full_path, 'rb') as f:
-						chunk_size = 1024 * 1024  # 1MB chunks
+						chunk_size = 8 * 1024 * 1024  # 8MB chunks for faster streaming
 						while True:
 							data = f.read(chunk_size)
 							if not data:
@@ -608,6 +608,7 @@ def preview_file():
 				resp = Response(generate(), status=200, mimetype=mimetype)
 				resp.headers.add('Accept-Ranges', 'bytes')
 				resp.headers.add('Content-Length', str(file_size))
+				resp.headers.add('Cache-Control', 'public, max-age=3600')
 				return resp
 			
 			# Parse range header
@@ -616,7 +617,7 @@ def preview_file():
 				# Malformed Range; stream full file in chunks
 				def generate():
 					with open(full_path, 'rb') as f:
-						chunk_size = 1024 * 1024  # 1MB chunks
+						chunk_size = 8 * 1024 * 1024  # 8MB chunks for faster streaming
 						while True:
 							data = f.read(chunk_size)
 							if not data:
@@ -625,6 +626,7 @@ def preview_file():
 				resp = Response(generate(), status=200, mimetype=mimetype)
 				resp.headers.add('Accept-Ranges', 'bytes')
 				resp.headers.add('Content-Length', str(file_size))
+				resp.headers.add('Cache-Control', 'public, max-age=3600')
 				return resp
 			
 			start = int(m.group(1))
@@ -636,7 +638,7 @@ def preview_file():
 				with open(full_path, 'rb') as f:
 					f.seek(start)
 					remaining = length
-					chunk_size = 1024 * 1024  # 1MB chunks
+					chunk_size = 2 * 1024 * 1024  # 2MB chunks for range requests (faster seeking)
 					while remaining > 0:
 						read_len = min(chunk_size, remaining)
 						data = f.read(read_len)
@@ -649,6 +651,7 @@ def preview_file():
 			resp.headers.add('Content-Range', f'bytes {start}-{end}/{file_size}')
 			resp.headers.add('Accept-Ranges', 'bytes')
 			resp.headers.add('Content-Length', str(length))
+			resp.headers.add('Cache-Control', 'public, max-age=3600')
 			return resp
 		else:
 			resp = send_file(full_path, mimetype=mimetype)

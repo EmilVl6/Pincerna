@@ -226,30 +226,43 @@ async function loadStreamingFiles() {
           }
           const video = document.getElementById('modal-video');
           if (!video) return; // modal not present on this page
-          video.preload = 'none';
+          video.preload = 'metadata';
           const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + encodeURIComponent(localStorage.getItem('pincerna_token') || '') + '&raw=1';
           video.src = previewUrl;
-          try { video.load(); } catch (e) {}
           video.playsInline = true;
-          try { video.play().catch(()=>{}); } catch(e) {}
+          window.currentVideo = video;
           const videoModal = document.getElementById('video-modal');
           if (videoModal) videoModal.style.display = 'flex';
-          window.currentVideo = video;
-          // Buffer indication
           const bufferInfo = document.getElementById('buffer-info');
           if (bufferInfo) bufferInfo.textContent = 'Loading...';
-          video.addEventListener('progress', () => {
+          video.load();
+          video.play().catch(()=>{});
+          const updateBuffer = () => {
             try {
               const buffered = video.buffered;
               if (buffered.length > 0 && video.duration) {
                 const bufferedEnd = buffered.end(buffered.length - 1);
                 const percent = (bufferedEnd / video.duration) * 100;
-                if (bufferInfo) bufferInfo.textContent = `Buffered: ${percent.toFixed(1)}%`;
+                if (bufferInfo) bufferInfo.textContent = `Buffered: ${percent.toFixed(0)}%`;
               }
             } catch (e) {}
+          };
+          video.addEventListener('progress', updateBuffer);
+          video.addEventListener('loadedmetadata', () => {
+            if (bufferInfo) bufferInfo.textContent = 'Ready';
+            updateBuffer();
           });
           video.addEventListener('canplay', () => {
-            if (bufferInfo) bufferInfo.textContent = 'Ready to play';
+            if (bufferInfo) bufferInfo.style.opacity = '0.5';
+          });
+          video.addEventListener('waiting', () => {
+            if (bufferInfo) {
+              bufferInfo.textContent = 'Buffering...';
+              bufferInfo.style.opacity = '1';
+            }
+          });
+          video.addEventListener('playing', () => {
+            if (bufferInfo) bufferInfo.style.opacity = '0';
           });
         });
         // Pop-out removed — no handler needed

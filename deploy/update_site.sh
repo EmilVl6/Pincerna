@@ -344,7 +344,7 @@ User=www-data
 WorkingDirectory=${REPO_ROOT}
 Environment=FLASK_ENV=production
 EnvironmentFile=${ENV_FILE}
-ExecStart=${VENV_PATH}/bin/gunicorn -b 127.0.0.1:5002 services.api.app:app --workers 2 --chdir ${REPO_ROOT}
+ExecStart=${VENV_PATH}/bin/gunicorn -b 127.0.0.1:5002 services.api.app:app --workers 2 --worker-class sync --timeout 300 --keep-alive 5 --chdir ${REPO_ROOT}
 Restart=on-failure
 RestartSec=5
 
