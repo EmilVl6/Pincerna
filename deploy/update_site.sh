@@ -467,7 +467,8 @@ if [ -f "$manifest" ]; then
                 continue
             fi
             mtime_cur=$(date -r "$f" --iso-8601=seconds 2>/dev/null || echo "")
-            h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
+            # Calculate hash from the MANIFEST path (not full filesystem path) for consistency
+            h=$(printf '%s' "$rel" | md5sum | awk '{print $1}')
             thumb="$thumbs_dir/${h}.jpg"
             preview="$previews_dir/${h}.mp4"
             
@@ -591,7 +592,9 @@ else
             if [ "$size" -gt 53687091200 ]; then
                 continue
             fi
-            h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
+            rel="/$(echo "$f" | sed "s#^$FILES_ROOT/##")"
+            # Calculate hash from the MANIFEST path (not full filesystem path) for consistency
+            h=$(printf '%s' "$rel" | md5sum | awk '{print $1}')
             thumb="$thumbs_dir/${h}.jpg"
             preview="$previews_dir/${h}.mp4"
             
@@ -632,13 +635,19 @@ else
         spinner_start "Writing manifest..."
         for f in "${videos[@]}"; do
             size=$(stat -c%s "$f" 2>/dev/null || echo 0)
+            # Skip files >50GB
+            if [ "$size" -gt 53687091200 ]; then
+                continue
+            fi
             mtime=$(date -r "$f" --iso-8601=seconds 2>/dev/null || echo "")
-            rel="/$(echo "$f" | sed "s#^$FILES_ROOT/##")"            preview="$previews_dir/$(printf '%s' "$f" | md5sum | awk '{print $1}').mp4"
+            rel="/$(echo "$f" | sed "s#^$FILES_ROOT/##")"
+            # Calculate hash from manifest path for consistency
+            h=$(printf '%s' "$rel" | md5sum | awk '{print $1}')
+            preview="$previews_dir/${h}.mp4"
             preview_exists="false"
             if [ -f "$preview" ] && [ -s "$preview" ]; then
                 preview_exists="true"
             fi
-            h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
             echo "$h	$size	$mtime	$rel	$preview_exists" >> "$tmp_data"
         done
         python3 <<EOF > "$tmp_manifest"
