@@ -1,3 +1,136 @@
+// --- Custom Video Player Logic for Modal ---
+document.addEventListener('DOMContentLoaded', function() {
+  const modal = document.getElementById('video-modal');
+  const modalVideo = document.getElementById('modal-video');
+  const closeModalBtn = document.getElementById('close-modal');
+  const cvcControls = document.getElementById('custom-video-controls');
+  const cvcPlay = document.getElementById('cvc-play');
+  const cvcPlayIcon = document.getElementById('cvc-play-icon');
+  const cvcTimeline = document.getElementById('cvc-timeline');
+  const cvcCurrent = document.getElementById('cvc-current');
+  const cvcDuration = document.getElementById('cvc-duration');
+  const cvcMute = document.getElementById('cvc-mute');
+  const cvcMuteIcon = document.getElementById('cvc-mute-icon');
+  const cvcVolume = document.getElementById('cvc-volume');
+  const cvcFullscreen = document.getElementById('cvc-fullscreen');
+  // Hide default controls
+  if (modalVideo) modalVideo.controls = false;
+
+  function formatTime(t) {
+    if (isNaN(t) || t === Infinity) return '0:00';
+    const m = Math.floor(t / 60);
+    const s = Math.floor(t % 60);
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+  function setDurationUI(duration) {
+    cvcTimeline.max = duration;
+    cvcDuration.textContent = formatTime(duration);
+  }
+  function setCurrentUI(current) {
+    cvcTimeline.value = current;
+    cvcCurrent.textContent = formatTime(current);
+  }
+
+  // Open modal and set up video
+  window.openModal = function(videoUrl, duration) {
+    modal.style.display = 'block';
+    modalVideo.src = videoUrl;
+    modalVideo.currentTime = 0;
+    setCurrentUI(0);
+    if (duration) {
+      setDurationUI(duration);
+    } else {
+      setDurationUI(0);
+    }
+    modalVideo.play();
+    cvcPlayIcon.textContent = '⏸';
+  };
+
+  if (closeModalBtn) closeModalBtn.onclick = function() {
+    modal.style.display = 'none';
+    modalVideo.pause();
+    modalVideo.src = '';
+  };
+
+  window.onclick = function(event) {
+    if (event.target == modal) {
+      modal.style.display = 'none';
+      modalVideo.pause();
+      modalVideo.src = '';
+    }
+  };
+
+  // Custom controls logic
+  if (cvcPlay) cvcPlay.onclick = function() {
+    if (modalVideo.paused) {
+      modalVideo.play();
+      cvcPlayIcon.textContent = '⏸';
+    } else {
+      modalVideo.pause();
+      cvcPlayIcon.textContent = '▶';
+    }
+  };
+
+  if (modalVideo) {
+    modalVideo.addEventListener('play', () => { cvcPlayIcon.textContent = '⏸'; });
+    modalVideo.addEventListener('pause', () => { cvcPlayIcon.textContent = '▶'; });
+    modalVideo.addEventListener('timeupdate', () => { setCurrentUI(modalVideo.currentTime); });
+    modalVideo.addEventListener('loadedmetadata', () => {
+      if (!cvcDuration.textContent || cvcDuration.textContent === '0:00') {
+        setDurationUI(modalVideo.duration);
+      }
+    });
+    modalVideo.addEventListener('volumechange', () => {
+      cvcVolume.value = modalVideo.volume;
+      cvcMuteIcon.textContent = modalVideo.muted ? '🔇' : '🔊';
+    });
+  }
+
+  if (cvcTimeline) {
+    cvcTimeline.addEventListener('input', (e) => { setCurrentUI(e.target.value); });
+    cvcTimeline.addEventListener('change', (e) => { modalVideo.currentTime = e.target.value; });
+  }
+
+  if (cvcMute) cvcMute.onclick = function() {
+    modalVideo.muted = !modalVideo.muted;
+    cvcMuteIcon.textContent = modalVideo.muted ? '🔇' : '🔊';
+  };
+  if (cvcVolume) cvcVolume.addEventListener('input', (e) => {
+    modalVideo.volume = e.target.value;
+    modalVideo.muted = e.target.value == 0;
+    cvcMuteIcon.textContent = modalVideo.muted ? '🔇' : '🔊';
+  });
+
+  if (cvcFullscreen) cvcFullscreen.onclick = function() {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      modalVideo.requestFullscreen();
+    }
+  };
+
+  // Keyboard shortcuts for accessibility
+  if (modalVideo) modalVideo.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+      cvcPlay.click();
+      e.preventDefault();
+    } else if (e.code === 'ArrowLeft') {
+      modalVideo.currentTime = Math.max(0, modalVideo.currentTime - 5);
+    } else if (e.code === 'ArrowRight') {
+      modalVideo.currentTime = Math.min(modalVideo.duration, modalVideo.currentTime + 5);
+    }
+  });
+
+  // Touch: show controls on tap
+  let controlsTimeout;
+  if (modalVideo) modalVideo.addEventListener('touchstart', () => {
+    cvcControls.style.opacity = 1;
+    clearTimeout(controlsTimeout);
+    controlsTimeout = setTimeout(() => {
+      cvcControls.style.opacity = 0.7;
+    }, 2500);
+  });
+});
 const apiBase = "/cloud/api";
 const $ = sel => document.querySelector(sel);
 
@@ -227,87 +360,11 @@ async function loadStreamingFiles() {
             window.currentVideo.removeAttribute('src');
             window.currentVideo.load();
           }
-          const video = document.getElementById('modal-video');
-          if (!video) return;
-
-          // Clear previous source and error state
-          video.removeAttribute('src');
-          while (video.firstChild) video.removeChild(video.firstChild);
-
-          const videoModal = document.getElementById('video-modal');
-          if (videoModal) videoModal.style.display = 'flex';
-          const bufferInfo = document.getElementById('buffer-info');
-          if (bufferInfo) { bufferInfo.textContent = 'Loading...'; bufferInfo.style.color = ''; bufferInfo.style.opacity = '1'; }
-
-          video.preload = 'auto';
-          video.playsInline = true;
-          window.currentVideo = video;
-
-          // Set the timeline and duration immediately if available
-          if (typeof f.duration === 'number' && !isNaN(f.duration) && f.duration > 0) {
-            try {
-              Object.defineProperty(video, 'duration', { value: f.duration, writable: false });
-              // If you have a custom timeline UI, update it here
-              if (bufferInfo) bufferInfo.textContent = 'Duration: ' + Math.floor(f.duration/60) + 'm ' + Math.round(f.duration%60) + 's';
-            } catch (e) {}
-          }
-
           const token = encodeURIComponent(localStorage.getItem('pincerna_token') || '');
-          // Single source URL - server auto-remuxes incompatible formats (MKV→MP4)
           const videoUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + token + '&raw=1';
-
-          const source = document.createElement('source');
-          source.src = videoUrl;
-          source.type = 'video/mp4'; // Server always delivers MP4-compatible stream
-          video.appendChild(source);
-
-          // Error handling
-          video.addEventListener('error', () => {
-            if (bufferInfo) {
-              const code = video.error ? video.error.code : 0;
-              let msg = 'Cannot play video';
-              if (code === 4) msg = 'Format not supported';
-              else if (code === 3) msg = 'Decoding error';
-              else if (code === 2) msg = 'Network error';
-              bufferInfo.textContent = msg;
-              bufferInfo.style.color = '#ff4444';
-              bufferInfo.style.opacity = '1';
-            }
-          });
-
-          video.load();
-
-          try {
-            await video.play();
-          } catch (err) {
-            // AbortError is normal (user interaction before play resolves)
-            if (err.name !== 'AbortError' && bufferInfo) {
-              bufferInfo.textContent = 'Tap to play';
-              bufferInfo.style.color = '#ff4444';
-            }
-          }
-
-          // Buffer status UI
-          video.addEventListener('progress', () => {
-            try {
-              if (video.buffered.length > 0 && video.duration) {
-                const pct = (video.buffered.end(video.buffered.length - 1) / video.duration * 100).toFixed(0);
-                if (bufferInfo) { bufferInfo.textContent = 'Buffered: ' + pct + '%'; bufferInfo.style.color = ''; }
-              }
-            } catch (e) {}
-          });
-          video.addEventListener('loadedmetadata', () => {
-            if (bufferInfo) { bufferInfo.textContent = 'Ready'; bufferInfo.style.color = ''; }
-          });
-          video.addEventListener('canplay', () => {
-            if (bufferInfo) bufferInfo.style.opacity = '0.5';
-          });
-          video.addEventListener('waiting', () => {
-            if (bufferInfo) { bufferInfo.textContent = 'Buffering...'; bufferInfo.style.opacity = '1'; }
-          });
-          video.addEventListener('playing', () => {
-            if (bufferInfo) bufferInfo.style.opacity = '0';
-          });
+          // Use manifest duration if available
+          let duration = (typeof f.duration === 'number' && !isNaN(f.duration) && f.duration > 0) ? f.duration : undefined;
+          window.openModal(videoUrl, duration);
         });
         
         // Keyboard navigation
