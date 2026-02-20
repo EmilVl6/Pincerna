@@ -436,6 +436,9 @@ mkdir -p "$previews_dir"
 chown www-data:www-data "$thumbs_dir"
 chown www-data:www-data "$previews_dir"
 
+# Remove all old preview videos before generating new ones
+find "$previews_dir" -type f -name '*.mp4' -delete
+
 idx_ts="$FILES_ROOT/.video_index.ts"
 tmp_manifest=$(mktemp)
 

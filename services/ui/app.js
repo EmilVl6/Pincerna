@@ -229,29 +229,38 @@ async function loadStreamingFiles() {
           }
           const video = document.getElementById('modal-video');
           if (!video) return;
-          
+
           // Clear previous source and error state
           video.removeAttribute('src');
           while (video.firstChild) video.removeChild(video.firstChild);
-          
+
           const videoModal = document.getElementById('video-modal');
           if (videoModal) videoModal.style.display = 'flex';
           const bufferInfo = document.getElementById('buffer-info');
           if (bufferInfo) { bufferInfo.textContent = 'Loading...'; bufferInfo.style.color = ''; bufferInfo.style.opacity = '1'; }
-          
+
           video.preload = 'auto';
           video.playsInline = true;
           window.currentVideo = video;
-          
+
+          // Set the timeline and duration immediately if available
+          if (typeof f.duration === 'number' && !isNaN(f.duration) && f.duration > 0) {
+            try {
+              Object.defineProperty(video, 'duration', { value: f.duration, writable: false });
+              // If you have a custom timeline UI, update it here
+              if (bufferInfo) bufferInfo.textContent = 'Duration: ' + Math.floor(f.duration/60) + 'm ' + Math.round(f.duration%60) + 's';
+            } catch (e) {}
+          }
+
           const token = encodeURIComponent(localStorage.getItem('pincerna_token') || '');
           // Single source URL - server auto-remuxes incompatible formats (MKV→MP4)
           const videoUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + token + '&raw=1';
-          
+
           const source = document.createElement('source');
           source.src = videoUrl;
           source.type = 'video/mp4'; // Server always delivers MP4-compatible stream
           video.appendChild(source);
-          
+
           // Error handling
           video.addEventListener('error', () => {
             if (bufferInfo) {
@@ -265,9 +274,9 @@ async function loadStreamingFiles() {
               bufferInfo.style.opacity = '1';
             }
           });
-          
+
           video.load();
-          
+
           try {
             await video.play();
           } catch (err) {
@@ -277,7 +286,7 @@ async function loadStreamingFiles() {
               bufferInfo.style.color = '#ff4444';
             }
           }
-          
+
           // Buffer status UI
           video.addEventListener('progress', () => {
             try {
