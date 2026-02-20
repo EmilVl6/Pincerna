@@ -226,33 +226,94 @@ async function loadStreamingFiles() {
           if (window.currentVideo) {
             window.currentVideo.pause();
             window.currentVideo.currentTime = 0;
+            window.currentVideo.removeAttribute('src');
+            window.currentVideo.load();
           }
           const video = document.getElementById('modal-video');
-          if (!video) return; // modal not present on this page
-          video.preload = 'metadata';
-          const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + encodeURIComponent(localStorage.getItem('pincerna_token') || '') + '&raw=1';
-          video.src = previewUrl;
-          video.playsInline = true;
-          window.currentVideo = video;
+          if (!video) return;
+          
+          // Clear previous source and error state
+          video.removeAttribute('src');
+          while (video.firstChild) {
+            video.removeChild(video.firstChild);
+          }
+          
           const videoModal = document.getElementById('video-modal');
           if (videoModal) videoModal.style.display = 'flex';
           const bufferInfo = document.getElementById('buffer-info');
           if (bufferInfo) bufferInfo.textContent = 'Loading...';
+          
+          video.preload = 'metadata';
+          video.playsInline = true;
+          window.currentVideo = video;
+          
+          // Create source element with proper MIME type
+          const source = document.createElement('source');
+          const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(card.dataset.path) + '&token=' + encodeURIComponent(localStorage.getItem('pincerna_token') || '') + '&raw=1';
+          source.src = previewUrl;
+          
+          // Detect MIME type from filename
+          const filename = f.name.toLowerCase();
+          if (filename.endsWith('.mp4') || filename.endsWith('.m4v')) {
+            source.type = 'video/mp4';
+          } else if (filename.endsWith('.webm')) {
+            source.type = 'video/webm';
+          } else if (filename.endsWith('.mkv')) {
+            source.type = 'video/x-matroska';
+          } else if (filename.endsWith('.avi')) {
+            source.type = 'video/x-msvideo';
+          } else if (filename.endsWith('.mov')) {
+            source.type = 'video/quicktime';
+          } else {
+            source.type = 'video/mp4'; // default fallback
+          }
+          
+          video.appendChild(source);
+          
+          // Error handling
+          const handleError = (e) => {
+            console.error('Video playback error:', e);
+            if (bufferInfo) {
+              const errorCode = video.error ? video.error.code : 0;
+              let errorMsg = 'Cannot play video';
+              if (errorCode === 4) errorMsg = 'Video format not supported';
+              else if (errorCode === 3) errorMsg = 'Video codec not supported';
+              else if (errorCode === 2) errorMsg = 'Network error';
+              bufferInfo.textContent = errorMsg;
+              bufferInfo.style.color = '#ff4444';
+            }
+          };
+          video.addEventListener('error', handleError, { once: true });
+          source.addEventListener('error', handleError, { once: true });
+          
           video.load();
-          video.play().catch(()=>{});
+          video.play().catch((err) => {
+            console.error('Play error:', err);
+            if (bufferInfo) {
+              bufferInfo.textContent = 'Cannot play - ' + (err.message || 'Unknown error');
+              bufferInfo.style.color = '#ff4444';
+            }
+          });
+          
           const updateBuffer = () => {
             try {
               const buffered = video.buffered;
               if (buffered.length > 0 && video.duration) {
                 const bufferedEnd = buffered.end(buffered.length - 1);
                 const percent = (bufferedEnd / video.duration) * 100;
-                if (bufferInfo) bufferInfo.textContent = `Buffered: ${percent.toFixed(0)}%`;
+                if (bufferInfo) {
+                  bufferInfo.textContent = `Buffered: ${percent.toFixed(0)}%`;
+                  bufferInfo.style.color = '';
+                }
               }
             } catch (e) {}
           };
           video.addEventListener('progress', updateBuffer);
           video.addEventListener('loadedmetadata', () => {
-            if (bufferInfo) bufferInfo.textContent = 'Ready';
+            if (bufferInfo) {
+              bufferInfo.textContent = 'Ready';
+              bufferInfo.style.color = '';
+            }
             updateBuffer();
           });
           video.addEventListener('canplay', () => {

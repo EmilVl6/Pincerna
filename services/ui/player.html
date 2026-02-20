@@ -41,15 +41,51 @@
     } else {
       const token = localStorage.getItem('pincerna_token') || '';
       const src = location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(path) + '&raw=1&token=' + encodeURIComponent(token);
+      
+      // Clear any existing sources
+      while (player.firstChild) {
+        player.removeChild(player.firstChild);
+      }
+      
+      // Create source element with proper MIME type
+      const source = document.createElement('source');
+      source.src = src;
+      
+      // Detect MIME type from path
+      const filename = path.toLowerCase();
+      if (filename.endsWith('.mp4') || filename.endsWith('.m4v')) {
+        source.type = 'video/mp4';
+      } else if (filename.endsWith('.webm')) {
+        source.type = 'video/webm';
+      } else if (filename.endsWith('.mkv')) {
+        source.type = 'video/x-matroska';
+      } else if (filename.endsWith('.avi')) {
+        source.type = 'video/x-msvideo';
+      } else if (filename.endsWith('.mov')) {
+        source.type = 'video/quicktime';
+      } else {
+        source.type = 'video/mp4';
+      }
+      
+      player.appendChild(source);
       player.preload = 'metadata';
-      player.src = src;
       title.textContent = decodeURIComponent(path.split('/').pop());
+      
       player.addEventListener('loadedmetadata', () => {
-        player.play().catch(() => {});
+        player.play().catch((err) => {
+          console.error('Play error:', err);
+          title.textContent = 'Cannot play video - ' + err.message;
+        });
       });
+      
       player.addEventListener('error', (e) => {
         console.error('Video error:', e);
-        title.textContent = 'Error loading video';
+        const errorCode = player.error ? player.error.code : 0;
+        let errorMsg = 'Error loading video';
+        if (errorCode === 4) errorMsg = 'Video format not supported';
+        else if (errorCode === 3) errorMsg = 'Video codec not supported';
+        else if (errorCode === 2) errorMsg = 'Network error loading video';
+        title.textContent = errorMsg;
       });
     }
     document.getElementById('openLocal').addEventListener('click', () => {

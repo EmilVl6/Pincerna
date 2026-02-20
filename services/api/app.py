@@ -61,6 +61,47 @@ def _thumbs_dir():
 	return thumbs
 
 
+def _is_web_playable(full):
+	"""Check if video has browser-compatible codecs using ffprobe."""
+	try:
+		cmd = ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_streams', full]
+		result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+		if result.returncode != 0:
+			return False
+		
+		data = json.loads(result.stdout)
+		streams = data.get('streams', [])
+		
+		video_codec = None
+		audio_codec = None
+		
+		for stream in streams:
+			codec_name = stream.get('codec_name', '').lower()
+			codec_type = stream.get('codec_type', '')
+			
+			if codec_type == 'video' and not video_codec:
+				video_codec = codec_name
+			elif codec_type == 'audio' and not audio_codec:
+				audio_codec = codec_name
+		
+		# Check for web-compatible video codecs
+		web_video_codecs = {'h264', 'hevc', 'h265', 'vp8', 'vp9', 'av1'}
+		# Check for web-compatible audio codecs
+		web_audio_codecs = {'aac', 'mp3', 'opus', 'vorbis'}
+		
+		# Must have compatible video codec, audio is optional
+		if video_codec and video_codec in web_video_codecs:
+			# If there's audio, it should be compatible too
+			if audio_codec and audio_codec not in web_audio_codecs:
+				return False
+			return True
+		
+		return False
+	except Exception:
+		# If we can't determine, assume it's not playable
+		return False
+
+
 def _ensure_thumbnail(full):
 	"""Ensure a thumbnail exists for `full` and return the thumbnail path on disk. Only generates if video is playable."""
 	thumbs = _thumbs_dir()
@@ -75,6 +116,10 @@ def _ensure_thumbnail(full):
 		if size > 50 * 1024 * 1024 * 1024:
 			return None
 	except:
+		return None
+	
+	# Check if video has web-compatible codecs before generating thumbnail
+	if not _is_web_playable(full):
 		return None
 	
 	try:

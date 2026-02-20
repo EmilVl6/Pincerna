@@ -468,6 +468,18 @@ if [ -f "$manifest" ]; then
             h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
             thumb="$thumbs_dir/${h}.jpg"
             if [ ! -f "$thumb" ]; then
+                # Check if video has web-compatible codecs before generating thumbnail
+                video_codec=$(ffprobe -v quiet -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "$f" 2>/dev/null | head -1)
+                case "$video_codec" in
+                    h264|hevc|h265|vp8|vp9|av1)
+                        # Compatible codec, continue
+                        ;;
+                    *)
+                        # Incompatible or unknown codec, skip
+                        continue
+                        ;;
+                esac
+                
                 # Faster thumbnail generation with smaller size
                 timeout 20 ffmpeg -y -ss 3 -i "$f" -vframes 1 -vf scale=320:-1 -q:v 5 "$thumb" >/dev/null 2>&1 || continue
                 # Verify thumbnail was created successfully
@@ -566,6 +578,18 @@ else
             h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
             thumb="$thumbs_dir/${h}.jpg"
             if [ ! -f "$thumb" ]; then
+                # Check if video has web-compatible codecs before generating thumbnail
+                video_codec=$(ffprobe -v quiet -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "$f" 2>/dev/null | head -1)
+                case "$video_codec" in
+                    h264|hevc|h265|vp8|vp9|av1)
+                        # Compatible codec, continue
+                        ;;
+                    *)
+                        # Incompatible or unknown codec, skip
+                        continue
+                        ;;
+                esac
+                
                 timeout 20 ffmpeg -y -ss 3 -i "$f" -vframes 1 -vf scale=320:-1 -q:v 5 "$thumb" >/dev/null 2>&1 || continue
                 # Verify thumbnail was created successfully
                 if [ ! -f "$thumb" ] || [ ! -s "$thumb" ]; then
