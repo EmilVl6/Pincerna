@@ -467,33 +467,13 @@ if [ -f "$manifest" ]; then
             h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
             thumb="$thumbs_dir/${h}.jpg"
             if [ ! -f "$thumb" ]; then
-                # Check if video has web-compatible codecs before generating thumbnail
-                video_codec=$(ffprobe -v quiet -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "$f" 2>/dev/null | head -1)
-                format_name=$(ffprobe -v quiet -show_entries format=format_name -of default=noprint_wrappers=1:nokey=1 "$f" 2>/dev/null)
-                
-                # HEVC/H265 only works in MP4/MOV, not MKV - browsers don't support it
-                if [[ "$video_codec" =~ ^(hevc|h265)$ ]]; then
-                    if [[ ! "$format_name" =~ (mp4|mov|quicktime) ]]; then
-                        # HEVC in MKV/WEBM won't play - skip it
-                        continue
-                    fi
+                # Just verify ffprobe can read it - we transcode incompatible codecs on-the-fly
+                if ! ffprobe -v quiet -select_streams v:0 -show_entries stream=codec_name "$f" >/dev/null 2>&1; then
+                    # Completely broken file, skip it
+                    continue
                 fi
                 
-                # Allow H264, VP8, VP9, AV1 - reject others
-                case "$video_codec" in
-                    h264|avc|vp8|vp9|av1)
-                        # Compatible codec, continue
-                        ;;
-                    hevc|h265)
-                        # Already validated above (MP4/MOV only)
-                        ;;
-                    *)
-                        # Incompatible codec, skip
-                        continue
-                        ;;
-                esac
-                
-                # Faster thumbnail generation with smaller size
+                # Generate thumbnail - faster settings
                 timeout 20 ffmpeg -y -ss 3 -i "$f" -vframes 1 -vf scale=320:-1 -q:v 5 "$thumb" >/dev/null 2>&1 || continue
                 # Verify thumbnail was created successfully
                 if [ ! -f "$thumb" ] || [ ! -s "$thumb" ]; then
@@ -591,32 +571,13 @@ else
             h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
             thumb="$thumbs_dir/${h}.jpg"
             if [ ! -f "$thumb" ]; then
-                # Check if video has web-compatible codecs before generating thumbnail
-                video_codec=$(ffprobe -v quiet -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "$f" 2>/dev/null | head -1)
-                format_name=$(ffprobe -v quiet -show_entries format=format_name -of default=noprint_wrappers=1:nokey=1 "$f" 2>/dev/null)
-                
-                # HEVC/H265 only works in MP4/MOV, not MKV - browsers don't support it
-                if [[ "$video_codec" =~ ^(hevc|h265)$ ]]; then
-                    if [[ ! "$format_name" =~ (mp4|mov|quicktime) ]]; then
-                        # HEVC in MKV/WEBM won't play - skip it
-                        continue
-                    fi
+                # Just verify ffprobe can read it - we transcode incompatible codecs on-the-fly
+                if ! ffprobe -v quiet -select_streams v:0 -show_entries stream=codec_name "$f" >/dev/null 2>&1; then
+                    # Completely broken file, skip it
+                    continue
                 fi
                 
-                # Allow H264, VP8, VP9, AV1 - reject others
-                case "$video_codec" in
-                    h264|avc|vp8|vp9|av1)
-                        # Compatible codec, continue
-                        ;;
-                    hevc|h265)
-                        # Already validated above (MP4/MOV only)
-                        ;;
-                    *)
-                        # Incompatible codec, skip
-                        continue
-                        ;;
-                esac
-                
+                # Generate thumbnail - faster settings
                 timeout 20 ffmpeg -y -ss 3 -i "$f" -vframes 1 -vf scale=320:-1 -q:v 5 "$thumb" >/dev/null 2>&1 || continue
                 # Verify thumbnail was created successfully
                 if [ ! -f "$thumb" ] || [ ! -s "$thumb" ]; then

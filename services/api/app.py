@@ -113,13 +113,16 @@ def _needs_transcoding(full):
 		return (False, None, None)
 
 def _is_web_playable(full):
-	"""Check if video has browser-compatible codecs (for thumbnail generation)."""
-	needs_transcode, video_codec, format_name = _needs_transcoding(full)
-	# If it needs transcoding, we can still generate thumbnails from the original
-	# Just reject completely broken files
-	if video_codec is None:
+	"""Check if video can be played or transcoded (for thumbnail generation).
+	Returns True if ffprobe can read the video at all.
+	"""
+	try:
+		cmd = ['ffprobe', '-v', 'quiet', '-select_streams', 'v:0', '-show_entries', 'stream=codec_name', full]
+		result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+		# If ffprobe can read it, we can generate thumbnails and potentially stream/transcode
+		return result.returncode == 0
+	except Exception:
 		return False
-	return True
 
 
 def _ensure_thumbnail(full):
@@ -655,29 +658,40 @@ def preview_file():
 			# Check if video needs on-the-fly transcoding
 			needs_transcode, video_codec, format_name = _needs_transcoding(full_path)
 			
-			if needs_transcode:
-				# Transcode on-the-fly using ffmpeg pipe
-				logging.info(f'Transcoding {video_codec} in {format_name} to H.264 for: {full_path}')
+			if needs_transcode and request.args.get('transcode') == '1':
+				# User explicitly requested transcoding
+				# For 4K videos, downscale to 1080p for reasonable performance
+				file_size = os.path.getsize(full_path)
 				
-				# Use ffmpeg to transcode to H.264 in MP4 container, stream to stdout
+				# Determine if it's likely 4K (big file or check resolution)
+				scale_filter = 'scale=-2:1080' if file_size > 2 * 1024 * 1024 * 1024 else 'scale=-2:720'
+				
+				logging.info(f'Transcoding {video_codec} in {format_name} to H.264 ({scale_filter}): {full_path}')
+				
+				# Aggressive transcoding for real-time playback on Pi
 				cmd = [
 					'ffmpeg',
 					'-i', full_path,
-					'-c:v', 'libx264',           # H.264 video codec
-					'-preset', 'ultrafast',      # Fastest encoding for real-time
-					'-crf', '23',                # Quality (23 = good balance)
-					'-c:a', 'aac',               # AAC audio (universal)
-					'-b:a', '128k',              # Audio bitrate
-					'-movflags', 'frag_keyframe+empty_moov',  # Enable streaming MP4
-					'-f', 'mp4',                 # Output format
-					'pipe:1'                     # Write to stdout
+					'-c:v', 'libx264',               # H.264 video codec
+					'-preset', 'veryfast',           # Fast but better quality than ultrafast
+					'-tune', 'zerolatency',          # Low latency for streaming
+					'-vf', scale_filter,             # Downscale if needed
+					'-crf', '28',                    # Lower quality for speed
+					'-maxrate', '2M',                # Limit bitrate
+					'-bufsize', '4M',                # Buffer size
+					'-c:a', 'aac',                   # AAC audio
+					'-b:a', '96k',                   # Lower audio bitrate
+					'-ac', '2',                      # Stereo only
+					'-movflags', 'frag_keyframe+empty_moov+default_base_moof',  # Streaming MP4
+					'-f', 'mp4',                     # Output format
+					'pipe:1'                         # Write to stdout
 				]
 				
 				def generate_transcode():
-					proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+					proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=256*1024)
 					try:
 						while True:
-							chunk = proc.stdout.read(256 * 1024)  # 256KB chunks
+							chunk = proc.stdout.read(128 * 1024)  # 128KB chunks for responsiveness
 							if not chunk:
 								break
 							yield chunk
@@ -686,12 +700,12 @@ def preview_file():
 						proc.wait()
 				
 				resp = Response(generate_transcode(), status=200, mimetype='video/mp4')
-				resp.headers.add('Cache-Control', 'no-cache')  # Don't cache transcoded streams
+				resp.headers.add('Cache-Control', 'no-cache')
 				resp.headers.add('X-Content-Type-Options', 'nosniff')
 				resp.headers.add('X-Transcoded', 'true')
 				return resp
 			
-			# No transcoding needed - use direct file streaming
+			# Direct streaming (native codec) - might not work in all browsers
 			# Support HTTP Range requests so mobile browsers and players can seek/stream
 			file_size = os.path.getsize(full_path)
 			range_header = request.headers.get('Range', None)
