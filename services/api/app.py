@@ -61,20 +61,21 @@ def _thumbs_dir():
 	return thumbs
 
 
-def _is_web_playable(full):
-	"""Check if video has browser-compatible codecs using ffprobe."""
+def _needs_transcoding(full):
+	"""Check if video needs on-the-fly transcoding to H.264.
+	Returns (needs_transcode, video_codec, format_name)
+	"""
 	try:
 		cmd = ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_streams', '-show_format', full]
 		result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
 		if result.returncode != 0:
-			return False
+			return (False, None, None)
 		
 		data = json.loads(result.stdout)
 		streams = data.get('streams', [])
 		format_name = data.get('format', {}).get('format_name', '').lower()
 		
 		video_codec = None
-		audio_codec = None
 		
 		for stream in streams:
 			codec_name = stream.get('codec_name', '').lower()
@@ -82,30 +83,43 @@ def _is_web_playable(full):
 			
 			if codec_type == 'video' and not video_codec:
 				video_codec = codec_name
-			elif codec_type == 'audio' and not audio_codec:
-				audio_codec = codec_name
+				break
 		
-		# Be more permissive - check for common web codecs
-		# H264 is universally supported
+		# H264 is universally supported - no transcoding needed
 		if video_codec in ['h264', 'avc']:
-			return True
+			return (False, video_codec, format_name)
 		
-		# VP8/VP9 in WebM
+		# VP8/VP9 in WebM - no transcoding needed
 		if video_codec in ['vp8', 'vp9'] and 'webm' in format_name:
-			return True
+			return (False, video_codec, format_name)
 		
-		# AV1 (newer browsers)
+		# AV1 - no transcoding needed
 		if video_codec == 'av1':
-			return True
+			return (False, video_codec, format_name)
 		
-		# HEVC/H265 works in some browsers (Safari, Edge) especially in MP4
-		if video_codec in ['hevc', 'h265'] and ('mp4' in format_name or 'mov' in format_name):
-			return True
+		# HEVC/H265 in MP4/MOV - Safari/Edge might support, no transcoding
+		if video_codec in ['hevc', 'h265']:
+			if 'mp4' in format_name or 'mov' in format_name or 'quicktime' in format_name:
+				return (False, video_codec, format_name)
+			# HEVC in MKV - needs transcoding!
+			return (True, video_codec, format_name)
 		
-		return False
+		# Any other codec - try transcoding
+		if video_codec:
+			return (True, video_codec, format_name)
+		
+		return (False, None, None)
 	except Exception:
-		# If we can't determine, be permissive and allow it
-		return True
+		return (False, None, None)
+
+def _is_web_playable(full):
+	"""Check if video has browser-compatible codecs (for thumbnail generation)."""
+	needs_transcode, video_codec, format_name = _needs_transcoding(full)
+	# If it needs transcoding, we can still generate thumbnails from the original
+	# Just reject completely broken files
+	if video_codec is None:
+		return False
+	return True
 
 
 def _ensure_thumbnail(full):
@@ -638,6 +652,46 @@ def preview_file():
 			return html, 200, {'Content-Type': 'text/html'}
 		# If raw requested and it's a video, serve with Range support for streaming
 		if mimetype.startswith('video/') and request.args.get('raw'):
+			# Check if video needs on-the-fly transcoding
+			needs_transcode, video_codec, format_name = _needs_transcoding(full_path)
+			
+			if needs_transcode:
+				# Transcode on-the-fly using ffmpeg pipe
+				logging.info(f'Transcoding {video_codec} in {format_name} to H.264 for: {full_path}')
+				
+				# Use ffmpeg to transcode to H.264 in MP4 container, stream to stdout
+				cmd = [
+					'ffmpeg',
+					'-i', full_path,
+					'-c:v', 'libx264',           # H.264 video codec
+					'-preset', 'ultrafast',      # Fastest encoding for real-time
+					'-crf', '23',                # Quality (23 = good balance)
+					'-c:a', 'aac',               # AAC audio (universal)
+					'-b:a', '128k',              # Audio bitrate
+					'-movflags', 'frag_keyframe+empty_moov',  # Enable streaming MP4
+					'-f', 'mp4',                 # Output format
+					'pipe:1'                     # Write to stdout
+				]
+				
+				def generate_transcode():
+					proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+					try:
+						while True:
+							chunk = proc.stdout.read(256 * 1024)  # 256KB chunks
+							if not chunk:
+								break
+							yield chunk
+					finally:
+						proc.kill()
+						proc.wait()
+				
+				resp = Response(generate_transcode(), status=200, mimetype='video/mp4')
+				resp.headers.add('Cache-Control', 'no-cache')  # Don't cache transcoded streams
+				resp.headers.add('X-Content-Type-Options', 'nosniff')
+				resp.headers.add('X-Transcoded', 'true')
+				return resp
+			
+			# No transcoding needed - use direct file streaming
 			# Support HTTP Range requests so mobile browsers and players can seek/stream
 			file_size = os.path.getsize(full_path)
 			range_header = request.headers.get('Range', None)

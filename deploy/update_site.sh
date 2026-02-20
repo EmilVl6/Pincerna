@@ -428,7 +428,6 @@ fi
 log_step "7.1/7" "Indexing video files and generating thumbnails"
 
 VID_EXTS='-iname *.mp4 -o -iname *.mkv -o -iname *.mov -o -iname *.avi -o -iname *.webm -o -iname *.m4v -o -iname *.mpg -o -iname *.mpeg -o -iname *.ts -o -iname *.flv'
-EXCLUDE_DIRS='-path "*/$RECYCLE.BIN/*" -o -path "*/System Volume Information/*" -o -path "*/.Trash-*/*" -o -path "*/lost+found/*"'
 thumbs_dir="$FILES_ROOT/.thumbs"
 manifest="$FILES_ROOT/.video_index.json"
 mkdir -p "$thumbs_dir"
@@ -443,7 +442,7 @@ if [ -f "$manifest" ]; then
         # create timestamp from existing manifest modification time
         touch -r "$manifest" "$idx_ts" 2>/dev/null || touch "$idx_ts"
     fi
-    mapfile -t new_videos < <(find "$FILES_ROOT" -type f \( $EXCLUDE_DIRS \) -prune -o -type f \( $VID_EXTS \) -newer "$idx_ts" -print 2>/dev/null || true)
+    mapfile -t new_videos < <(find "$FILES_ROOT" -type f \( $VID_EXTS \) -newer "$idx_ts" ! -path '*/$RECYCLE.BIN/*' ! -path '*/System Volume Information/*' ! -path '*/.Trash-*/*' ! -path '*/lost+found/*' -print 2>/dev/null || true)
     total_new=${#new_videos[@]}
     if [ "$total_new" -eq 0 ]; then
         log_success "No new or modified videos since last index"
@@ -470,13 +469,27 @@ if [ -f "$manifest" ]; then
             if [ ! -f "$thumb" ]; then
                 # Check if video has web-compatible codecs before generating thumbnail
                 video_codec=$(ffprobe -v quiet -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "$f" 2>/dev/null | head -1)
-                # Be more permissive - allow H264, VP8, VP9, AV1, and HEVC
+                format_name=$(ffprobe -v quiet -show_entries format=format_name -of default=noprint_wrappers=1:nokey=1 "$f" 2>/dev/null)
+                
+                # HEVC/H265 only works in MP4/MOV, not MKV - browsers don't support it
+                if [[ "$video_codec" =~ ^(hevc|h265)$ ]]; then
+                    if [[ ! "$format_name" =~ (mp4|mov|quicktime) ]]; then
+                        # HEVC in MKV/WEBM won't play - skip it
+                        continue
+                    fi
+                fi
+                
+                # Allow H264, VP8, VP9, AV1 - reject others
                 case "$video_codec" in
-                    h264|avc|hevc|h265|vp8|vp9|av1)
+                    h264|avc|vp8|vp9|av1)
                         # Compatible codec, continue
                         ;;
+                    hevc|h265)
+                        # Already validated above (MP4/MOV only)
+                        ;;
                     *)
-                        # Try anyway - might still work
+                        # Incompatible codec, skip
+                        continue
                         ;;
                 esac
                 
@@ -558,7 +571,7 @@ PY
     fi
 else
     # no existing manifest: initial full scan
-    mapfile -t videos < <(find "$FILES_ROOT" -type f \( $EXCLUDE_DIRS \) -prune -o -type f \( $VID_EXTS \) -print 2>/dev/null || true)
+    mapfile -t videos < <(find "$FILES_ROOT" -type f \( $VID_EXTS \) ! -path '*/$RECYCLE.BIN/*' ! -path '*/System Volume Information/*' ! -path '*/.Trash-*/*' ! -path '*/lost+found/*' -print 2>/dev/null || true)
     total=${#videos[@]}
     if [ "$total" -eq 0 ]; then
         log_warn "No video files found under $FILES_ROOT"
@@ -580,12 +593,26 @@ else
             if [ ! -f "$thumb" ]; then
                 # Check if video has web-compatible codecs before generating thumbnail
                 video_codec=$(ffprobe -v quiet -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "$f" 2>/dev/null | head -1)
+                format_name=$(ffprobe -v quiet -show_entries format=format_name -of default=noprint_wrappers=1:nokey=1 "$f" 2>/dev/null)
+                
+                # HEVC/H265 only works in MP4/MOV, not MKV - browsers don't support it
+                if [[ "$video_codec" =~ ^(hevc|h265)$ ]]; then
+                    if [[ ! "$format_name" =~ (mp4|mov|quicktime) ]]; then
+                        # HEVC in MKV/WEBM won't play - skip it
+                        continue
+                    fi
+                fi
+                
+                # Allow H264, VP8, VP9, AV1 - reject others
                 case "$video_codec" in
-                    h264|hevc|h265|vp8|vp9|av1)
+                    h264|avc|vp8|vp9|av1)
                         # Compatible codec, continue
                         ;;
+                    hevc|h265)
+                        # Already validated above (MP4/MOV only)
+                        ;;
                     *)
-                        # Incompatible or unknown codec, skip
+                        # Incompatible codec, skip
                         continue
                         ;;
                 esac
