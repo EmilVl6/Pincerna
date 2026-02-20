@@ -62,16 +62,30 @@ def _thumbs_dir():
 
 
 def _ensure_thumbnail(full):
-	"""Ensure a thumbnail exists for `full` and return the thumbnail path on disk."""
+	"""Ensure a thumbnail exists for `full` and return the thumbnail path on disk. Only generates if video is playable."""
 	thumbs = _thumbs_dir()
 	h = hashlib.md5(full.encode('utf-8')).hexdigest()
 	thumb_path = os.path.join(thumbs, f"{h}.jpg")
 	if os.path.exists(thumb_path):
 		return thumb_path
+	
+	# Check file size - skip extremely large files (>50GB) to avoid timeouts
 	try:
-		cmd = ['ffmpeg', '-y', '-ss', '5', '-i', full, '-frames:v', '1', '-q:v', '2', thumb_path]
-		subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=25)
-		return thumb_path
+		size = os.path.getsize(full)
+		if size > 50 * 1024 * 1024 * 1024:
+			return None
+	except:
+		return None
+	
+	try:
+		# Generate thumbnail with faster settings and verify video integrity
+		cmd = ['ffmpeg', '-y', '-ss', '3', '-i', full, '-frames:v', '1', '-vf', 'scale=320:-1', '-q:v', '5', thumb_path]
+		subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20)
+		
+		# Verify thumbnail was created and has content
+		if os.path.exists(thumb_path) and os.path.getsize(thumb_path) > 1000:
+			return thumb_path
+		return None
 	except Exception:
 		try:
 			if os.path.exists(thumb_path):
@@ -578,10 +592,16 @@ def preview_file():
 			range_header = request.headers.get('Range', None)
 			
 			if not range_header:
-				# No Range header: stream entire file in chunks with status 200
+				# No Range header: adaptive chunk size based on file size
+				if file_size < 100 * 1024 * 1024:  # < 100MB
+					chunk_size = 4 * 1024 * 1024  # 4MB chunks for small files
+				elif file_size < 1024 * 1024 * 1024:  # < 1GB
+					chunk_size = 8 * 1024 * 1024  # 8MB chunks for medium files
+				else:  # >= 1GB
+					chunk_size = 16 * 1024 * 1024  # 16MB chunks for large files
+				
 				def generate():
 					with open(full_path, 'rb') as f:
-						chunk_size = 8 * 1024 * 1024  # 8MB chunks for faster streaming
 						while True:
 							data = f.read(chunk_size)
 							if not data:
@@ -590,16 +610,23 @@ def preview_file():
 				resp = Response(generate(), status=200, mimetype=mimetype)
 				resp.headers.add('Accept-Ranges', 'bytes')
 				resp.headers.add('Content-Length', str(file_size))
-				resp.headers.add('Cache-Control', 'public, max-age=3600')
+				resp.headers.add('Cache-Control', 'public, max-age=7200')
+				resp.headers.add('X-Content-Type-Options', 'nosniff')
 				return resp
 			
 			# Parse range header
 			m = re.match(r'bytes=(\d+)-(\d*)', range_header)
 			if not m:
-				# Malformed Range; stream full file in chunks
+				# Malformed Range; use adaptive chunks
+				if file_size < 100 * 1024 * 1024:
+					chunk_size = 4 * 1024 * 1024
+				elif file_size < 1024 * 1024 * 1024:
+					chunk_size = 8 * 1024 * 1024
+				else:
+					chunk_size = 16 * 1024 * 1024
+				
 				def generate():
 					with open(full_path, 'rb') as f:
-						chunk_size = 8 * 1024 * 1024  # 8MB chunks for faster streaming
 						while True:
 							data = f.read(chunk_size)
 							if not data:
@@ -608,7 +635,7 @@ def preview_file():
 				resp = Response(generate(), status=200, mimetype=mimetype)
 				resp.headers.add('Accept-Ranges', 'bytes')
 				resp.headers.add('Content-Length', str(file_size))
-				resp.headers.add('Cache-Control', 'public, max-age=3600')
+				resp.headers.add('Cache-Control', 'public, max-age=7200')
 				return resp
 			
 			start = int(m.group(1))
@@ -616,11 +643,19 @@ def preview_file():
 			if end >= file_size:
 				end = file_size - 1
 			length = end - start + 1
+			
+			# Adaptive chunk size for range requests (seeking)
+			if length < 10 * 1024 * 1024:  # < 10MB range
+				chunk_size = 512 * 1024  # 512KB for small seeks
+			elif length < 100 * 1024 * 1024:  # < 100MB range
+				chunk_size = 2 * 1024 * 1024  # 2MB for medium seeks
+			else:
+				chunk_size = 4 * 1024 * 1024  # 4MB for large seeks
+			
 			def generate():
 				with open(full_path, 'rb') as f:
 					f.seek(start)
 					remaining = length
-					chunk_size = 2 * 1024 * 1024  # 2MB chunks for range requests (faster seeking)
 					while remaining > 0:
 						read_len = min(chunk_size, remaining)
 						data = f.read(read_len)
@@ -633,7 +668,8 @@ def preview_file():
 			resp.headers.add('Content-Range', f'bytes {start}-{end}/{file_size}')
 			resp.headers.add('Accept-Ranges', 'bytes')
 			resp.headers.add('Content-Length', str(length))
-			resp.headers.add('Cache-Control', 'public, max-age=3600')
+			resp.headers.add('Cache-Control', 'public, max-age=7200')
+			resp.headers.add('X-Content-Type-Options', 'nosniff')
 			return resp
 		else:
 			resp = send_file(full_path, mimetype=mimetype)
@@ -1238,7 +1274,7 @@ def streaming_videos():
 
 @app.route('/streaming/index')
 def streaming_index():
-	"""Return the video manifest, filtering out videos without thumbnails."""
+	"""Return the video manifest, filtering out videos without thumbnails and unplayable codecs."""
 	try:
 		manifest_path = _get_files_base() + "/.video_index.json"
 		if os.path.exists(manifest_path):
@@ -1247,10 +1283,20 @@ def streaming_index():
 			filtered_files = []
 			for f in data.get('files', []):
 				h = f.get('thumbnail', '').split('?h=')[-1]
-				if h:
-					thumb_path = _thumbs_dir() + "/" + h + ".jpg"
-					if os.path.exists(thumb_path):
-						filtered_files.append(f)
+				if not h:
+					continue
+				thumb_path = _thumbs_dir() + "/" + h + ".jpg"
+				if not os.path.exists(thumb_path):
+					continue
+				# Check if video file still exists
+				video_path = _safe_path(f.get('path', ''))
+				if not video_path or not os.path.isfile(video_path):
+					continue
+				# Only include if size is reasonable for web streaming (< 50GB)
+				size = f.get('size', 0)
+				if size > 50 * 1024 * 1024 * 1024:
+					continue
+				filtered_files.append(f)
 			return jsonify(files=filtered_files)
 		else:
 			return jsonify(files=[])

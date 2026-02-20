@@ -194,17 +194,20 @@ async function loadStreamingFiles() {
         });
         banner.appendChild(img);
 
-        // Hidden preview element to warm up playback on hover/focus
-        const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(f.path) + '&token=' + encodeURIComponent(localStorage.getItem('pincerna_token') || '');
-        const pre = document.createElement('video');
-        pre.className = 'preview-preload';
-        pre.preload = 'metadata';
-        pre.muted = true;
-        pre.playsInline = true;
-        pre.style.display = 'none';
-        pre.dataset.src = previewUrl;
-        banner.appendChild(pre);
-        // overlay with title (play button removed)
+        // Size info badge - show if video is large
+        const sizeGB = (f.size || 0) / (1024 * 1024 * 1024);
+        if (sizeGB > 1) {
+          const sizeBadge = document.createElement('div');
+          sizeBadge.className = 'size-badge';
+          sizeBadge.textContent = sizeGB.toFixed(1) + ' GB';
+          sizeBadge.style.cssText = 'position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.7);color:#fff;padding:4px 8px;border-radius:4px;font-size:0.7rem;';
+          banner.appendChild(sizeBadge);
+        }
+
+        const previewUrl = window.location.origin + '/cloud/api/files/preview?path=' + encodeURIComponent(f.path) + '&raw=1&token=' + encodeURIComponent(localStorage.getItem('pincerna_token') || '');
+        let preloadedVideo = null;
+        
+        // overlay with title
         const overlay = document.createElement('div');
         overlay.className = 'poster-overlay';
         banner.appendChild(overlay);
@@ -265,18 +268,8 @@ async function loadStreamingFiles() {
             if (bufferInfo) bufferInfo.style.opacity = '0';
           });
         });
-        // Pop-out removed — no handler needed
-        // preload when the user hovers or focuses the card (warm up first frame)
-        const startPreload = () => {
-          try {
-            if (pre.dataset.loaded) return;
-            pre.src = pre.dataset.src || previewUrl;
-            pre.load();
-            pre.dataset.loaded = '1';
-          } catch (e) {}
-        };
-        card.addEventListener('mouseenter', startPreload);
-        card.addEventListener('focus', startPreload);
+        
+        // Keyboard navigation
         card.addEventListener('keydown', (e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();

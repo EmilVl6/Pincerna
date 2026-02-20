@@ -460,11 +460,20 @@ if [ -f "$manifest" ]; then
             base=$(basename "$f")
             rel="/$(echo "$f" | sed "s#^$FILES_ROOT/##")"
             size=$(stat -c%s "$f" 2>/dev/null || echo 0)
+            # Skip extremely large files (>50GB)
+            if [ "$size" -gt 53687091200 ]; then
+                continue
+            fi
             mtime_cur=$(date -r "$f" --iso-8601=seconds 2>/dev/null || echo "")
             h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
             thumb="$thumbs_dir/${h}.jpg"
             if [ ! -f "$thumb" ]; then
-                timeout 30 ffmpeg -y -ss 5 -i "$f" -vframes 1 -vf scale=640:-1 -q:v 8 "$thumb" >/dev/null 2>&1 || true
+                # Faster thumbnail generation with smaller size
+                timeout 20 ffmpeg -y -ss 3 -i "$f" -vframes 1 -vf scale=320:-1 -q:v 5 "$thumb" >/dev/null 2>&1 || continue
+                # Verify thumbnail was created successfully
+                if [ ! -f "$thumb" ] || [ ! -s "$thumb" ]; then
+                    continue
+                fi
             fi
             thumb_rel="/cloud/api/thumbnail_file?h=${h}"
             python3 - "$base" "$rel" "$size" "$mtime_cur" "$thumb_rel" <<PY >> "$tmp_new_entries"
@@ -549,10 +558,19 @@ else
         for f in "${videos[@]}"; do
             count=$((count+1))
             base=$(basename "$f")
+            size=$(stat -c%s "$f" 2>/dev/null || echo 0)
+            # Skip extremely large files (>50GB)
+            if [ "$size" -gt 53687091200 ]; then
+                continue
+            fi
             h=$(printf '%s' "$f" | md5sum | awk '{print $1}')
             thumb="$thumbs_dir/${h}.jpg"
             if [ ! -f "$thumb" ]; then
-                timeout 30 ffmpeg -y -ss 5 -i "$f" -vframes 1 -vf scale=640:-1 -q:v 8 "$thumb" >/dev/null 2>&1 || true
+                timeout 20 ffmpeg -y -ss 3 -i "$f" -vframes 1 -vf scale=320:-1 -q:v 5 "$thumb" >/dev/null 2>&1 || continue
+                # Verify thumbnail was created successfully
+                if [ ! -f "$thumb" ] || [ ! -s "$thumb" ]; then
+                    continue
+                fi
             fi
             pct=$((count*100/total))
             filled=$((pct/2))
