@@ -470,13 +470,13 @@ if [ -f "$manifest" ]; then
             if [ ! -f "$thumb" ]; then
                 # Check if video has web-compatible codecs before generating thumbnail
                 video_codec=$(ffprobe -v quiet -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "$f" 2>/dev/null | head -1)
+                # Be more permissive - allow H264, VP8, VP9, AV1, and HEVC
                 case "$video_codec" in
-                    h264|hevc|h265|vp8|vp9|av1)
+                    h264|avc|hevc|h265|vp8|vp9|av1)
                         # Compatible codec, continue
                         ;;
                     *)
-                        # Incompatible or unknown codec, skip
-                        continue
+                        # Try anyway - might still work
                         ;;
                 esac
                 

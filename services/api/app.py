@@ -64,13 +64,14 @@ def _thumbs_dir():
 def _is_web_playable(full):
 	"""Check if video has browser-compatible codecs using ffprobe."""
 	try:
-		cmd = ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_streams', full]
+		cmd = ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_streams', '-show_format', full]
 		result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
 		if result.returncode != 0:
 			return False
 		
 		data = json.loads(result.stdout)
 		streams = data.get('streams', [])
+		format_name = data.get('format', {}).get('format_name', '').lower()
 		
 		video_codec = None
 		audio_codec = None
@@ -84,22 +85,27 @@ def _is_web_playable(full):
 			elif codec_type == 'audio' and not audio_codec:
 				audio_codec = codec_name
 		
-		# Check for web-compatible video codecs
-		web_video_codecs = {'h264', 'hevc', 'h265', 'vp8', 'vp9', 'av1'}
-		# Check for web-compatible audio codecs
-		web_audio_codecs = {'aac', 'mp3', 'opus', 'vorbis'}
+		# Be more permissive - check for common web codecs
+		# H264 is universally supported
+		if video_codec in ['h264', 'avc']:
+			return True
 		
-		# Must have compatible video codec, audio is optional
-		if video_codec and video_codec in web_video_codecs:
-			# If there's audio, it should be compatible too
-			if audio_codec and audio_codec not in web_audio_codecs:
-				return False
+		# VP8/VP9 in WebM
+		if video_codec in ['vp8', 'vp9'] and 'webm' in format_name:
+			return True
+		
+		# AV1 (newer browsers)
+		if video_codec == 'av1':
+			return True
+		
+		# HEVC/H265 works in some browsers (Safari, Edge) especially in MP4
+		if video_codec in ['hevc', 'h265'] and ('mp4' in format_name or 'mov' in format_name):
 			return True
 		
 		return False
 	except Exception:
-		# If we can't determine, assume it's not playable
-		return False
+		# If we can't determine, be permissive and allow it
+		return True
 
 
 def _ensure_thumbnail(full):
@@ -637,20 +643,26 @@ def preview_file():
 			range_header = request.headers.get('Range', None)
 			
 			if not range_header:
-				# No Range header: adaptive chunk size based on file size
-				if file_size < 100 * 1024 * 1024:  # < 100MB
-					chunk_size = 4 * 1024 * 1024  # 4MB chunks for small files
-				elif file_size < 1024 * 1024 * 1024:  # < 1GB
-					chunk_size = 8 * 1024 * 1024  # 8MB chunks for medium files
-				else:  # >= 1GB
-					chunk_size = 16 * 1024 * 1024  # 16MB chunks for large files
-				
+				# No Range header: Progressive chunk sizes for instant start like YouTube
+				# Start with small chunks, increase as buffer grows
 				def generate():
 					with open(full_path, 'rb') as f:
+						bytes_sent = 0
 						while True:
+							# Progressive chunk sizing
+							if bytes_sent < 2 * 1024 * 1024:  # First 2MB
+								chunk_size = 256 * 1024  # 256KB - instant start
+							elif bytes_sent < 10 * 1024 * 1024:  # Next 8MB
+								chunk_size = 512 * 1024  # 512KB
+							elif bytes_sent < 50 * 1024 * 1024:  # Next 40MB
+								chunk_size = 1 * 1024 * 1024  # 1MB
+							else:  # Rest of file
+								chunk_size = 2 * 1024 * 1024  # 2MB
+							
 							data = f.read(chunk_size)
 							if not data:
 								break
+							bytes_sent += len(data)
 							yield data
 				resp = Response(generate(), status=200, mimetype=mimetype)
 				resp.headers.add('Accept-Ranges', 'bytes')
@@ -662,20 +674,22 @@ def preview_file():
 			# Parse range header
 			m = re.match(r'bytes=(\d+)-(\d*)', range_header)
 			if not m:
-				# Malformed Range; use adaptive chunks
-				if file_size < 100 * 1024 * 1024:
-					chunk_size = 4 * 1024 * 1024
-				elif file_size < 1024 * 1024 * 1024:
-					chunk_size = 8 * 1024 * 1024
-				else:
-					chunk_size = 16 * 1024 * 1024
-				
+				# Malformed Range; use progressive chunks
 				def generate():
 					with open(full_path, 'rb') as f:
+						bytes_sent = 0
 						while True:
+							if bytes_sent < 2 * 1024 * 1024:
+								chunk_size = 256 * 1024
+							elif bytes_sent < 10 * 1024 * 1024:
+								chunk_size = 512 * 1024
+							else:
+								chunk_size = 1 * 1024 * 1024
+							
 							data = f.read(chunk_size)
 							if not data:
 								break
+							bytes_sent += len(data)
 							yield data
 				resp = Response(generate(), status=200, mimetype=mimetype)
 				resp.headers.add('Accept-Ranges', 'bytes')
@@ -689,13 +703,8 @@ def preview_file():
 				end = file_size - 1
 			length = end - start + 1
 			
-			# Adaptive chunk size for range requests (seeking)
-			if length < 10 * 1024 * 1024:  # < 10MB range
-				chunk_size = 512 * 1024  # 512KB for small seeks
-			elif length < 100 * 1024 * 1024:  # < 100MB range
-				chunk_size = 2 * 1024 * 1024  # 2MB for medium seeks
-			else:
-				chunk_size = 4 * 1024 * 1024  # 4MB for large seeks
+			# Smaller chunks for range requests - instant seeking
+			chunk_size = 256 * 1024  # 256KB for instant response
 			
 			def generate():
 				with open(full_path, 'rb') as f:
