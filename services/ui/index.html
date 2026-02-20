@@ -60,7 +60,8 @@
 
     <!-- Video Modal with Custom Player UI -->
     <div id="video-modal" class="modal" style="display:none">
-      <div class="modal-content video-modal-content">
+      <div class="modal-content video-modal-content custom-modal-center">
+        <button id="close-modal" class="cvc-btn cvc-close" aria-label="Close">✕</button>
         <video id="modal-video" preload="metadata" tabindex="0"></video>
         <div id="custom-video-controls" class="custom-video-controls">
           <button class="cvc-btn cvc-play" id="cvc-play" aria-label="Play/Pause"><span id="cvc-play-icon">▶</span></button>
@@ -74,7 +75,6 @@
           <input type="range" id="cvc-volume" class="cvc-volume" min="0" max="1" step="0.01" value="1">
           <button class="cvc-btn cvc-fullscreen" id="cvc-fullscreen" aria-label="Fullscreen"><span id="cvc-fullscreen-icon">⛶</span></button>
         </div>
-        <button id="close-modal" class="close-btn">&times;</button>
       </div>
     </div>
 

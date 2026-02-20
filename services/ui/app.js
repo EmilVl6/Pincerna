@@ -13,7 +13,6 @@ document.addEventListener('DOMContentLoaded', function() {
   const cvcMuteIcon = document.getElementById('cvc-mute-icon');
   const cvcVolume = document.getElementById('cvc-volume');
   const cvcFullscreen = document.getElementById('cvc-fullscreen');
-  // Hide default controls
   if (modalVideo) modalVideo.controls = false;
 
   function formatTime(t) {
@@ -33,7 +32,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Open modal and set up video
   window.openModal = function(videoUrl, duration) {
-    modal.style.display = 'block';
+    modal.style.display = 'flex';
     modalVideo.src = videoUrl;
     modalVideo.currentTime = 0;
     setCurrentUI(0);
@@ -44,20 +43,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     modalVideo.play();
     cvcPlayIcon.textContent = '⏸';
+    document.body.style.overflow = 'hidden';
   };
 
-  if (closeModalBtn) closeModalBtn.onclick = function() {
+  function closeModal() {
     modal.style.display = 'none';
     modalVideo.pause();
     modalVideo.src = '';
-  };
-
+    document.body.style.overflow = '';
+  }
+  if (closeModalBtn) closeModalBtn.onclick = closeModal;
   window.onclick = function(event) {
-    if (event.target == modal) {
-      modal.style.display = 'none';
-      modalVideo.pause();
-      modalVideo.src = '';
-    }
+    if (event.target == modal) closeModal();
   };
 
   // Custom controls logic
@@ -70,7 +67,6 @@ document.addEventListener('DOMContentLoaded', function() {
       cvcPlayIcon.textContent = '▶';
     }
   };
-
   if (modalVideo) {
     modalVideo.addEventListener('play', () => { cvcPlayIcon.textContent = '⏸'; });
     modalVideo.addEventListener('pause', () => { cvcPlayIcon.textContent = '▶'; });
@@ -85,12 +81,10 @@ document.addEventListener('DOMContentLoaded', function() {
       cvcMuteIcon.textContent = modalVideo.muted ? '🔇' : '🔊';
     });
   }
-
   if (cvcTimeline) {
     cvcTimeline.addEventListener('input', (e) => { setCurrentUI(e.target.value); });
     cvcTimeline.addEventListener('change', (e) => { modalVideo.currentTime = e.target.value; });
   }
-
   if (cvcMute) cvcMute.onclick = function() {
     modalVideo.muted = !modalVideo.muted;
     cvcMuteIcon.textContent = modalVideo.muted ? '🔇' : '🔊';
@@ -100,15 +94,16 @@ document.addEventListener('DOMContentLoaded', function() {
     modalVideo.muted = e.target.value == 0;
     cvcMuteIcon.textContent = modalVideo.muted ? '🔇' : '🔊';
   });
-
   if (cvcFullscreen) cvcFullscreen.onclick = function() {
+    const modalContent = document.querySelector('.custom-modal-center');
     if (document.fullscreenElement) {
       document.exitFullscreen();
-    } else {
+    } else if (modalContent.requestFullscreen) {
+      modalContent.requestFullscreen();
+    } else if (modalVideo.requestFullscreen) {
       modalVideo.requestFullscreen();
     }
   };
-
   // Keyboard shortcuts for accessibility
   if (modalVideo) modalVideo.addEventListener('keydown', (e) => {
     if (e.code === 'Space') {
@@ -120,7 +115,6 @@ document.addEventListener('DOMContentLoaded', function() {
       modalVideo.currentTime = Math.min(modalVideo.duration, modalVideo.currentTime + 5);
     }
   });
-
   // Touch: show controls on tap
   let controlsTimeout;
   if (modalVideo) modalVideo.addEventListener('touchstart', () => {
