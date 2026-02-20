@@ -428,6 +428,7 @@ fi
 log_step "7.1/7" "Indexing video files and generating thumbnails"
 
 VID_EXTS='-iname *.mp4 -o -iname *.mkv -o -iname *.mov -o -iname *.avi -o -iname *.webm -o -iname *.m4v -o -iname *.mpg -o -iname *.mpeg -o -iname *.ts -o -iname *.flv'
+EXCLUDE_DIRS='-path "*/$RECYCLE.BIN/*" -o -path "*/System Volume Information/*" -o -path "*/.Trash-*/*" -o -path "*/lost+found/*"'
 thumbs_dir="$FILES_ROOT/.thumbs"
 manifest="$FILES_ROOT/.video_index.json"
 mkdir -p "$thumbs_dir"
@@ -442,7 +443,7 @@ if [ -f "$manifest" ]; then
         # create timestamp from existing manifest modification time
         touch -r "$manifest" "$idx_ts" 2>/dev/null || touch "$idx_ts"
     fi
-    mapfile -t new_videos < <(find "$FILES_ROOT" -type f \( $VID_EXTS \) -newer "$idx_ts" 2>/dev/null || true)
+    mapfile -t new_videos < <(find "$FILES_ROOT" -type f \( $EXCLUDE_DIRS \) -prune -o -type f \( $VID_EXTS \) -newer "$idx_ts" -print 2>/dev/null || true)
     total_new=${#new_videos[@]}
     if [ "$total_new" -eq 0 ]; then
         log_success "No new or modified videos since last index"
@@ -466,8 +467,7 @@ if [ -f "$manifest" ]; then
                 timeout 30 ffmpeg -y -ss 5 -i "$f" -vframes 1 -vf scale=640:-1 -q:v 8 "$thumb" >/dev/null 2>&1 || true
             fi
             thumb_rel="/cloud/api/thumbnail_file?h=${h}"
-            # produce a JSON entry for this file
-            python3 - <<PY >> "$tmp_new_entries"
+            python3 - "$base" "$rel" "$size" "$mtime_cur" "$thumb_rel" <<PY >> "$tmp_new_entries"
 import json,sys
 entry={
   "name": sys.argv[1],
@@ -478,7 +478,6 @@ entry={
 }
 print(json.dumps(entry))
 PY
-            "$base" "$rel" "$size" "$mtime_cur" "$thumb_rel"
             pct=$((count*100/total_new))
             filled=$((pct/2))
             empty=$((50-filled))
@@ -495,7 +494,8 @@ new_entries_path = "$tmp_new_entries"
 old = []
 if os.path.exists(manifest_path):
     try:
-        old = json.load(open(manifest_path))
+        data = json.load(open(manifest_path))
+        old = data.get('files', []) if isinstance(data, dict) else data
     except Exception:
         old = []
 new = []
@@ -512,7 +512,7 @@ by_path = {e.get('path'): e for e in old}
 for e in new:
     by_path[e.get('path')] = e
 out = list(by_path.values())
-json.dump(out, open('$tmp_manifest','w'))
+json.dump({'files': out}, open('$tmp_manifest','w'))
 print()
 PY
         rm -f "$tmp_new_entries"
@@ -537,7 +537,7 @@ PY
     fi
 else
     # no existing manifest: initial full scan
-    mapfile -t videos < <(find "$FILES_ROOT" -type f \( $VID_EXTS \) 2>/dev/null || true)
+    mapfile -t videos < <(find "$FILES_ROOT" -type f \( $EXCLUDE_DIRS \) -prune -o -type f \( $VID_EXTS \) -print 2>/dev/null || true)
     total=${#videos[@]}
     if [ "$total" -eq 0 ]; then
         log_warn "No video files found under $FILES_ROOT"
