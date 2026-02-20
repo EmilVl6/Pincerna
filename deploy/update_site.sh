@@ -403,15 +403,16 @@ systemctl daemon-reload
 
 
 systemctl enable pincerna.service >/dev/null 2>&1
-systemctl restart pincerna.service
-sleep 2
+if ! systemctl is-active --quiet pincerna.service; then
+    systemctl start pincerna.service
+    sleep 2
+fi
 
 
 if systemctl is-active --quiet pincerna.service; then
-    log_success "Pincerna backend service started"
+    log_success "Pincerna backend service enabled"
 else
-    log_error "Pincerna service failed to start!"
-    systemctl status pincerna.service --no-pager || true
+    log_warn "Pincerna service not running (will restart at end)"
 fi
 
 
@@ -602,17 +603,18 @@ EOF
     fi
 fi
 
-# restart backend so it picks up thumbnails/index
-log_step "Restarting backend service..."
+
+
+
+log_step "8/7" "Restarting services"
 if systemctl restart pincerna.service; then
-    log_success "Backend restarted successfully"
+    log_success "Pincerna backend restarted"
 else
-    log_error "Failed to restart backend"
+    log_error "Failed to restart pincerna"
 fi
 
-log_step "Restarting nginx..."
 if systemctl restart nginx; then
-    log_success "Nginx restarted successfully"
+    log_success "Nginx restarted"
 else
     log_error "Failed to restart nginx"
 fi
