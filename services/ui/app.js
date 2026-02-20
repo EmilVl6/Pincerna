@@ -22,12 +22,12 @@ document.addEventListener('DOMContentLoaded', function() {
     return m + ':' + (s < 10 ? '0' : '') + s;
   }
   function setDurationUI(duration) {
-    cvcTimeline.max = duration;
-    cvcDuration.textContent = formatTime(duration);
+    if (cvcTimeline) cvcTimeline.max = duration;
+    if (cvcDuration) cvcDuration.textContent = formatTime(duration);
   }
   function setCurrentUI(current) {
-    cvcTimeline.value = current;
-    cvcCurrent.textContent = formatTime(current);
+    if (cvcTimeline) cvcTimeline.value = current;
+    if (cvcCurrent) cvcCurrent.textContent = formatTime(current);
   }
 
   // Open modal and set up video
@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded', function() {
       setDurationUI(0);
     }
     modalVideo.play();
-    cvcPlayIcon.textContent = '⏸';
+    if (cvcPlayIcon) cvcPlayIcon.textContent = '⏸';
     document.body.style.overflow = 'hidden';
   };
 
@@ -64,21 +64,21 @@ document.addEventListener('DOMContentLoaded', function() {
       cvcPlayIcon.textContent = '⏸';
     } else {
       modalVideo.pause();
-      cvcPlayIcon.textContent = '▶';
+      if (cvcPlayIcon) cvcPlayIcon.textContent = '▶';
     }
   };
   if (modalVideo) {
-    modalVideo.addEventListener('play', () => { cvcPlayIcon.textContent = '⏸'; });
-    modalVideo.addEventListener('pause', () => { cvcPlayIcon.textContent = '▶'; });
+    modalVideo.addEventListener('play', () => { if (cvcPlayIcon) cvcPlayIcon.textContent = '⏸'; });
+    modalVideo.addEventListener('pause', () => { if (cvcPlayIcon) cvcPlayIcon.textContent = '▶'; });
     modalVideo.addEventListener('timeupdate', () => { setCurrentUI(modalVideo.currentTime); });
     modalVideo.addEventListener('loadedmetadata', () => {
-      if (!cvcDuration.textContent || cvcDuration.textContent === '0:00') {
+      if (!cvcDuration || cvcDuration.textContent === '0:00') {
         setDurationUI(modalVideo.duration);
       }
     });
     modalVideo.addEventListener('volumechange', () => {
-      cvcVolume.value = modalVideo.volume;
-      cvcMuteIcon.textContent = modalVideo.muted ? '🔇' : '🔊';
+      if (cvcVolume) cvcVolume.value = modalVideo.volume;
+      if (cvcMuteIcon) cvcMuteIcon.textContent = modalVideo.muted ? '🔇' : '🔊';
     });
   }
   if (cvcTimeline) {
@@ -87,12 +87,12 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   if (cvcMute) cvcMute.onclick = function() {
     modalVideo.muted = !modalVideo.muted;
-    cvcMuteIcon.textContent = modalVideo.muted ? '🔇' : '🔊';
+    if (cvcMuteIcon) cvcMuteIcon.textContent = modalVideo.muted ? '🔇' : '🔊';
   };
   if (cvcVolume) cvcVolume.addEventListener('input', (e) => {
     modalVideo.volume = e.target.value;
     modalVideo.muted = e.target.value == 0;
-    cvcMuteIcon.textContent = modalVideo.muted ? '🔇' : '🔊';
+    if (cvcMuteIcon) cvcMuteIcon.textContent = modalVideo.muted ? '🔇' : '🔊';
   });
   if (cvcFullscreen) cvcFullscreen.onclick = function() {
     const modalContent = document.querySelector('.custom-modal-center');
