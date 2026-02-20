@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-# Git post-merge hook template: runs automatically after 'git pull'
-# This ensures the site is updated after pulling new code
-# 
-# To install: sudo bash deploy/install_git_hook.sh
-
 set -e
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -15,14 +10,12 @@ echo "  Post-Pull Auto-Update"
 echo "========================================="
 echo ""
 
-# Check if running as root
 if [ "$EUID" -ne 0 ]; then
     echo "WARNING: This hook needs sudo to run update_site.sh"
     echo "         To update manually, run: sudo $REPO_ROOT/deploy/pull_and_update.sh"
     exit 0
 fi
 
-# Run the update script
 if [ -f "$UPDATE_SCRIPT" ]; then
     echo "Running update_site.sh..."
     bash "$UPDATE_SCRIPT"
