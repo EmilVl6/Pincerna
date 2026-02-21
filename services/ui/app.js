@@ -229,7 +229,8 @@ async function loadStreamingFiles() {
   if (!filesEl) return;
   try {
     // Fetch indexed video files from the background indexer
-    const apiUrl = window.location.origin + '/streaming/index';
+    const apiUrl = window.location.origin + '/cloud/api/streaming/index';
+    // If running locally without nginx, fallback to /streaming/index
     let res = await fetch(apiUrl);
     if (!res.ok) {
       console.error('Fetch failed:', res.status, res.statusText);
