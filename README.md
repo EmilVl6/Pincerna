@@ -2,7 +2,7 @@
 
 <img width="250" height="250" alt="ASCII Art" src="https://github.com/user-attachments/assets/5d0176d7-ee33-413b-89f1-21cbb55ad048" />
 
-&emsp;&emsp;&emsp;&emsp;Pincern v1.0-beta
+&emsp;&emsp;&emsp;&emsp;Pincerna v1.0-beta
 
 A Pi Server Framework ~ "Emil's Bartender (A SERVER WITH RSA [Not the cryptography])"
 
