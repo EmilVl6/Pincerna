@@ -19,11 +19,11 @@
 
 #include <openssl/hmac.h>
 #include <openssl/evp.h>
+#include <random>
 
 
 using namespace std; using namespace Pistache; using json = nlohmann::json;
 
-// --- Minimal JWT HS256 Implementation ---
 string base64UrlEncode(const string& input) {
 	static const char* b64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 	string b64;
