@@ -9,7 +9,7 @@ ENV_FILE="/etc/default/pincerna"
 SYSTEMD_UNIT="/etc/systemd/system/pincerna.service"
 NGINX_AVAILABLE="/etc/nginx/sites-available/cloud.emilvinod.com"
 NGINX_ENABLED="/etc/nginx/sites-enabled/cloud.emilvinod.com"
-VENV_PATH="$REPO_ROOT/venv"
+CXX_BINARY="$REPO_ROOT/services/api/pincerna_api"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -122,8 +122,8 @@ check_root
 
 log_step "1/8" "Installing system dependencies"
 
-
-PACKAGES="nginx python3 python3-venv python3-pip rsync curl openssl nmap ntfs-3g ffmpeg"
+# Add build-essential for C++ compilation, remove Python packages
+PACKAGES="nginx build-essential rsync curl openssl nmap ntfs-3g ffmpeg cmake"
 NEED_INSTALL=""
 for pkg in $PACKAGES; do
     if ! dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
@@ -289,23 +289,19 @@ detect_and_mount_drives() {
 detect_and_mount_drives || true
 
 
-log_step "4/8" "Setting up Python environment"
+log_step "4/8" "Building and deploying C++ backend"
 
-
-if [ ! -d "$VENV_PATH" ]; then
-    python3 -m venv "$VENV_PATH"
-    log_success "Created Python virtual environment"
+# Build the C++ backend (assumes build_backend.sh exists)
+if [ ! -f "$CXX_BINARY" ]; then
+    if [ -f "$REPO_ROOT/deploy/build_backend.sh" ]; then
+        bash "$REPO_ROOT/deploy/build_backend.sh"
+    else
+        log_error "Missing build_backend.sh script. Please add it to deploy/ folder."
+        exit 1
+    fi
 fi
 
-
-"$VENV_PATH/bin/python" -m pip install --upgrade pip setuptools wheel -q
-if [ -f "$REPO_ROOT/services/api/requirements.txt" ]; then
-    "$VENV_PATH/bin/python" -m pip install -q --no-cache-dir -r "$REPO_ROOT/services/api/requirements.txt"
-fi
-chown -R www-data:www-data "$VENV_PATH"
-log_success "Python dependencies installed"
-
-
+# Set permissions and log directory
 mkdir -p /var/log/pincerna
 chown www-data:www-data /var/log/pincerna
 chmod 750 /var/log/pincerna
@@ -335,16 +331,15 @@ log_step "6/8" "Configuring services"
 
 cat > "$SYSTEMD_UNIT" <<EOF
 [Unit]
-Description=Pincerna Flask API
+Description=Pincerna C++ API Backend
 After=network.target
 
 [Service]
 Type=simple
 User=www-data
 WorkingDirectory=${REPO_ROOT}
-Environment=FLASK_ENV=production
 EnvironmentFile=${ENV_FILE}
-ExecStart=${VENV_PATH}/bin/gunicorn -b 127.0.0.1:5002 services.api.app:app --workers 2 --worker-class sync --timeout 300 --keep-alive 5 --chdir ${REPO_ROOT}
+ExecStart=${CXX_BINARY} --config ${ENV_FILE}
 Restart=on-failure
 RestartSec=5
 
@@ -719,7 +714,7 @@ echo ""
 echo "Summary:"
 echo -e "  ${GREEN}✓${NC} UI:        $WWW_DIR"
 echo -e "  ${GREEN}✓${NC} Files:     $FILES_ROOT"
-echo -e "  ${GREEN}✓${NC} Backend:   pincerna.service (port 5002)"
+echo -e "  ${GREEN}✓${NC} Backend:   pincerna.service (C++ binary, port 5002)"
 echo ""
 
 echo "Service Status:"

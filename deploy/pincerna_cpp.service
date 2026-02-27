@@ -1,0 +1,15 @@
+[Unit]
+Description=Pincerna C++ API Backend
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/path/to/repo/root
+EnvironmentFile=/etc/default/pincerna
+ExecStart=/path/to/repo/root/services/api/pincerna_api --config /etc/default/pincerna
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
