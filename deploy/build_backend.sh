@@ -16,6 +16,7 @@ fi
 mkdir -p "$API_DIR/build"
 cd "$API_DIR/build"
 
+
 # Prefer CMake if CMakeLists.txt exists, else fallback to g++
 if [ -f "$API_DIR/CMakeLists.txt" ]; then
     log "Detected CMakeLists.txt, using cmake..."
@@ -24,7 +25,20 @@ if [ -f "$API_DIR/CMakeLists.txt" ]; then
     cp pincerna_api "$BINARY_OUT"
 elif ls ../*.cpp >/dev/null 2>&1; then
     log "No CMakeLists.txt, compiling all .cpp files with g++..."
-    g++ -O2 -std=c++17 ../*.cpp -o "$BINARY_OUT" -lpistache -lssl -lcrypto -ljsoncpp -pthread
+    # Detect vcpkg include path if jwt-cpp is installed
+    VCPKG_ROOT="/opt/vcpkg"
+    VCPKG_INC=""
+    if [ -d "$VCPKG_ROOT" ]; then
+        # Try to detect triplet
+        if [ -d "$VCPKG_ROOT/installed/x64-linux/include" ]; then
+            VCPKG_INC="-I$VCPKG_ROOT/installed/x64-linux/include"
+        elif [ -d "$VCPKG_ROOT/installed/arm64-linux/include" ]; then
+            VCPKG_INC="-I$VCPKG_ROOT/installed/arm64-linux/include"
+        elif [ -d "$VCPKG_ROOT/installed/x86-linux/include" ]; then
+            VCPKG_INC="-I$VCPKG_ROOT/installed/x86-linux/include"
+        fi
+    fi
+    g++ -O2 -std=c++17 ../*.cpp -o "$BINARY_OUT" -lpistache -lssl -lcrypto -ljsoncpp -pthread $VCPKG_INC
 else
     log "No C++ source files found in $API_DIR"
     exit 1
