@@ -122,8 +122,13 @@ check_root
 
 log_step "1/8" "Installing system dependencies"
 
-# Add build-essential for C++ compilation, remove Python packages
-PACKAGES="nginx build-essential rsync curl openssl nmap ntfs-3g ffmpeg cmake"
+REQ_FILE="$REPO_ROOT/services/api/requirements.system.txt"
+if [ ! -f "$REQ_FILE" ]; then
+    log_error "Missing $REQ_FILE. Please create it with a list of required system packages."
+    exit 1
+fi
+
+PACKAGES="$(grep -vE '^#|^$' "$REQ_FILE" | xargs)"
 NEED_INSTALL=""
 for pkg in $PACKAGES; do
     if ! dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then

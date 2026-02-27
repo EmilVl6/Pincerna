@@ -1,0 +1,12 @@
+libpistache-dev
+libssl-dev
+libjsoncpp-dev
+build-essential
+cmake
+rsync
+curl
+openssl
+nmap
+ntfs-3g
+ffmpeg
+nginx
