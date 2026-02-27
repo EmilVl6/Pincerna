@@ -122,13 +122,15 @@ check_root
 
 log_step "1/8" "Installing system dependencies"
 
+
 REQ_FILE="$REPO_ROOT/services/api/requirements.system.txt"
 if [ ! -f "$REQ_FILE" ]; then
     log_error "Missing $REQ_FILE. Please create it with a list of required system packages."
     exit 1
 fi
 
-PACKAGES="$(grep -vE '^#|^$' "$REQ_FILE" | xargs)"
+# Read package list and check for jwt-cpp
+PACKAGES="$(grep -vE '^#|^$' "$REQ_FILE" | grep -v 'jwt-cpp' | xargs)"
 NEED_INSTALL=""
 for pkg in $PACKAGES; do
     if ! dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
@@ -145,6 +147,17 @@ if [ -n "$NEED_INSTALL" ]; then
     log_success "Installed:$NEED_INSTALL"
 else
     log_success "All dependencies already installed"
+fi
+
+# If jwt-cpp is listed, install via vcpkg
+if grep -q '^jwt-cpp' "$REQ_FILE"; then
+    log_step "1.1/8" "Installing jwt-cpp via vcpkg"
+    if [ ! -d "/opt/vcpkg" ]; then
+        git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg
+        /opt/vcpkg/bootstrap-vcpkg.sh
+    fi
+    /opt/vcpkg/vcpkg install jwt-cpp
+    log_success "jwt-cpp installed via vcpkg"
 fi
 
 
