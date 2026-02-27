@@ -10,3 +10,4 @@ nmap
 ntfs-3g
 ffmpeg
 nginx
+nlohmann-json3-dev
