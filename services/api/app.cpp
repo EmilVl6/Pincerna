@@ -16,9 +16,91 @@
 #include <thread>
 #include <atomic>
 #include <iostream>
-#include <jwt-cpp/jwt.h>
+
+#include <openssl/hmac.h>
+#include <openssl/evp.h>
+
 
 using namespace std; using namespace Pistache; using json = nlohmann::json;
+
+// --- Minimal JWT HS256 Implementation ---
+string base64UrlEncode(const string& input) {
+	static const char* b64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	string b64;
+	int val = 0, valb = -6;
+	for (unsigned char c : input) {
+		val = (val << 8) + c;
+		valb += 8;
+		while (valb >= 0) {
+			b64.push_back(b64_chars[(val >> valb) & 0x3F]);
+			valb -= 6;
+		}
+	}
+	if (valb > -6) b64.push_back(b64_chars[((val << 8) >> (valb + 8)) & 0x3F]);
+	while (b64.size() % 4) b64.push_back('=');
+	// Convert to base64url
+	for (auto& c : b64) {
+		if (c == '+') c = '-';
+		else if (c == '/') c = '_';
+	}
+	while (!b64.empty() && b64.back() == '=') b64.pop_back();
+	return b64;
+}
+
+string base64UrlDecode(const string& input) {
+	string b64 = input;
+	for (auto& c : b64) {
+		if (c == '-') c = '+';
+		else if (c == '_') c = '/';
+	}
+	while (b64.size() % 4) b64.push_back('=');
+	string out;
+	int val = 0, valb = -8;
+	for (unsigned char c : b64) {
+		if (isalnum(c) || c == '+' || c == '/') val = (val << 6) + (c >= 'A' && c <= 'Z' ? c - 'A' : c >= 'a' && c <= 'z' ? c - 'a' + 26 : c >= '0' && c <= '9' ? c - '0' + 52 : c == '+' ? 62 : 63);
+		else continue;
+		valb += 6;
+		if (valb >= 0) {
+			out.push_back(char((val >> valb) & 0xFF));
+			valb -= 8;
+		}
+	}
+	return out;
+}
+
+string hmacSha256(const string& data, const string& key) {
+	unsigned char hash[EVP_MAX_MD_SIZE];
+	unsigned int len = 0;
+	HMAC(EVP_sha256(), key.data(), key.size(), (const unsigned char*)data.data(), data.size(), hash, &len);
+	return string((char*)hash, len);
+}
+
+string createJwt(const json& payload, const string& secret) {
+	json header = { {"alg", "HS256"}, {"typ", "JWT"} };
+	string header_b64 = base64UrlEncode(header.dump());
+	string payload_b64 = base64UrlEncode(payload.dump());
+	string to_sign = header_b64 + "." + payload_b64;
+	string signature = base64UrlEncode(hmacSha256(to_sign, secret));
+	return to_sign + "." + signature;
+}
+
+bool verifyJwt(const string& token, const string& secret, json& outPayload) {
+	size_t p1 = token.find('.');
+	size_t p2 = token.rfind('.');
+	if (p1 == string::npos || p2 == string::npos || p1 == p2) return false;
+	string header_b64 = token.substr(0, p1);
+	string payload_b64 = token.substr(p1 + 1, p2 - p1 - 1);
+	string sig_b64 = token.substr(p2 + 1);
+	string to_sign = header_b64 + "." + payload_b64;
+	string expected_sig = base64UrlEncode(hmacSha256(to_sign, secret));
+	if (sig_b64 != expected_sig) return false;
+	try {
+		outPayload = json::parse(base64UrlDecode(payload_b64));
+	} catch (...) {
+		return false;
+	}
+	return true;
+}
 
 string SECRET;
 mutex secretMutex;
@@ -91,7 +173,19 @@ public:
 	}
 
 	void doLogin(const Rest::Request& request, Http::ResponseWriter response) {
-		json resp = { {"token", "jwt_token_placeholder"} };
+		// Example: create JWT for user
+		json payload = {
+			{"sub", "user_id"},
+			{"email", "emilvinod@gmail.com"},
+			{"iat", (int)time(nullptr)},
+			{"exp", (int)(time(nullptr) + 3600)}
+		};
+		string token;
+		{
+			lock_guard<mutex> lock(secretMutex);
+			token = createJwt(payload, SECRET);
+		}
+		json resp = { {"token", token} };
 		response.send(Http::Code::Ok, resp.dump());
 	}
 
