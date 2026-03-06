@@ -1,13 +1,10 @@
-libpistache-dev
+# System dependencies for Pincerna (Rust backend)
 libssl-dev
-libjsoncpp-dev
+pkg-config
 build-essential
-cmake
 rsync
 curl
 openssl
 nmap
 ntfs-3g
-ffmpeg
 nginx
-nlohmann-json3-dev

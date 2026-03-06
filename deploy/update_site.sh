@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -9,7 +9,7 @@ ENV_FILE="/etc/default/pincerna"
 SYSTEMD_UNIT="/etc/systemd/system/pincerna.service"
 NGINX_AVAILABLE="/etc/nginx/sites-available/cloud.emilvinod.com"
 NGINX_ENABLED="/etc/nginx/sites-enabled/cloud.emilvinod.com"
-CXX_BINARY="$REPO_ROOT/services/api/pincerna_api"
+RUST_BINARY="$REPO_ROOT/services/api/pincerna_api"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -25,15 +25,15 @@ log_step() {
 }
 
 log_success() {
-    echo -e "${GREEN}✓${NC} $1"
+    echo -e "${GREEN}âœ“${NC} $1"
 }
 
 log_warn() {
-    echo -e "${YELLOW}⚠${NC} $1"
+    echo -e "${YELLOW}âš ${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}✗${NC} $1"
+    echo -e "${RED}âœ—${NC} $1"
 }
 
 
@@ -79,7 +79,7 @@ get_credential() {
         echo -en "${YELLOW}Enter ${prompt_text}: ${NC}"
         read -r current_value
     else
-        echo -e "${GREEN}✓${NC} ${prompt_text}: [already configured]"
+        echo -e "${GREEN}âœ“${NC} ${prompt_text}: [already configured]"
     fi
     
     echo "$current_value"
@@ -129,8 +129,7 @@ if [ ! -f "$REQ_FILE" ]; then
     exit 1
 fi
 
-# Read package list and check for jwt-cpp
-PACKAGES="$(grep -vE '^#|^$' "$REQ_FILE" | grep -v 'jwt-cpp' | xargs)"
+PACKAGES="$(grep -vE '^#|^$' "$REQ_FILE" | xargs)"
 NEED_INSTALL=""
 for pkg in $PACKAGES; do
     if ! dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
@@ -149,15 +148,14 @@ else
     log_success "All dependencies already installed"
 fi
 
-# If jwt-cpp is listed, install via vcpkg
-if grep -q '^jwt-cpp' "$REQ_FILE"; then
-    log_step "1.1/8" "Installing jwt-cpp via vcpkg"
-    if [ ! -d "/opt/vcpkg" ]; then
-        git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg
-        /opt/vcpkg/bootstrap-vcpkg.sh
-    fi
-    /opt/vcpkg/vcpkg install jwt-cpp
-    log_success "jwt-cpp installed via vcpkg"
+# Install Rust toolchain if not present
+if ! command -v cargo &>/dev/null; then
+    log_step "1.1/8" "Installing Rust toolchain"
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+    . "$HOME/.cargo/env"
+    log_success "Rust toolchain installed"
+else
+    log_success "Rust toolchain already installed"
 fi
 
 
@@ -307,16 +305,18 @@ detect_and_mount_drives() {
 detect_and_mount_drives || true
 
 
-log_step "4/8" "Building and deploying C++ backend"
+log_step "4/8" "Building Rust backend"
 
-# Build the C++ backend (assumes build_backend.sh exists)
-if [ ! -f "$CXX_BINARY" ]; then
-    if [ -f "$REPO_ROOT/deploy/build_backend.sh" ]; then
-        bash "$REPO_ROOT/deploy/build_backend.sh"
-    else
-        log_error "Missing build_backend.sh script. Please add it to deploy/ folder."
-        exit 1
-    fi
+if [ -f "$REPO_ROOT/deploy/build_backend.sh" ]; then
+    bash "$REPO_ROOT/deploy/build_backend.sh"
+else
+    log_error "Missing build_backend.sh script. Please add it to deploy/ folder."
+    exit 1
+fi
+
+if [ ! -f "$RUST_BINARY" ]; then
+    log_error "Build failed: $RUST_BINARY not found"
+    exit 1
 fi
 
 # Set permissions and log directory
@@ -349,7 +349,7 @@ log_step "6/8" "Configuring services"
 
 cat > "$SYSTEMD_UNIT" <<EOF
 [Unit]
-Description=Pincerna C++ API Backend
+Description=Pincerna Rust API Backend
 After=network.target
 
 [Service]
@@ -357,7 +357,7 @@ Type=simple
 User=www-data
 WorkingDirectory=${REPO_ROOT}
 EnvironmentFile=${ENV_FILE}
-ExecStart=${CXX_BINARY} --config ${ENV_FILE}
+ExecStart=${RUST_BINARY}
 Restart=on-failure
 RestartSec=5
 
@@ -438,276 +438,6 @@ else
 fi
 
 
-log_step "7.1/8" "Indexing video files and generating thumbnails"
-
-VID_EXTS='-iname *.mp4 -o -iname *.mkv -o -iname *.mov -o -iname *.avi -o -iname *.webm -o -iname *.m4v -o -iname *.mpg -o -iname *.mpeg -o -iname *.ts -o -iname *.flv'
-thumbs_dir="$FILES_ROOT/.thumbs"
-previews_dir="$FILES_ROOT/.previews"
-manifest="$FILES_ROOT/.video_index.json"
-mkdir -p "$thumbs_dir"
-mkdir -p "$previews_dir"
-chown www-data:www-data "$thumbs_dir"
-chown www-data:www-data "$previews_dir"
-
-# Remove all old preview videos before generating new ones
-find "$previews_dir" -type f -name '*.mp4' -delete
-
-idx_ts="$FILES_ROOT/.video_index.ts"
-tmp_manifest=$(mktemp)
-
-if [ -f "$manifest" ]; then
-    # incremental mode: find only files newer than last indexing timestamp
-    if [ ! -f "$idx_ts" ]; then
-        # create timestamp from existing manifest modification time
-        touch -r "$manifest" "$idx_ts" 2>/dev/null || touch "$idx_ts"
-    fi
-    mapfile -t new_videos < <(find "$FILES_ROOT" -type f \( $VID_EXTS \) -newer "$idx_ts" ! -path '*/$RECYCLE.BIN/*' ! -path '*/System Volume Information/*' ! -path '*/.Trash-*/*' ! -path '*/lost+found/*' -print 2>/dev/null || true)
-    total_new=${#new_videos[@]}
-    if [ "$total_new" -eq 0 ]; then
-        log_success "No new or modified videos since last index"
-        manifest_changed=0
-        # update timestamp to now
-        touch "$idx_ts"
-    else
-        echo "Found $total_new new/modified video(s). Generating thumbnails..."
-        count=0
-        spinner_start "Generating thumbnails..."
-        tmp_new_entries=$(mktemp)
-        for f in "${new_videos[@]}"; do
-            count=$((count+1))
-            base=$(basename "$f")
-            rel="/$(echo "$f" | sed "s#^$FILES_ROOT/##")"
-            size=$(stat -c%s "$f" 2>/dev/null || echo 0)
-            # Skip extremely large files (>50GB)
-            if [ "$size" -gt 53687091200 ]; then
-                continue
-            fi
-            mtime_cur=$(date -r "$f" --iso-8601=seconds 2>/dev/null || echo "")
-            # Calculate hash from the MANIFEST path (not full filesystem path) for consistency
-            h=$(printf '%s' "$rel" | md5sum | awk '{print $1}')
-            thumb="$thumbs_dir/${h}.jpg"
-            preview="$previews_dir/${h}.mp4"
-
-            # Extract duration using ffprobe (in seconds, float)
-            duration=$(ffprobe -v error -select_streams v:0 -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$f" 2>/dev/null | awk '{print int($1+0.5)}')
-            [ -z "$duration" ] && duration=0
-
-            # Just verify ffprobe can read it - we transcode incompatible codecs on-the-fly
-            if ! ffprobe -v quiet -select_streams v:0 -show_entries stream=codec_name "$f" >/dev/null 2>&1; then
-                # Completely broken file, skip it
-                continue
-            fi
-
-            # Generate thumbnail if missing
-            if [ ! -f "$thumb" ]; then
-                timeout 20 ffmpeg -y -ss 3 -i "$f" -vframes 1 -vf scale=320:-1 -q:v 5 "$thumb" >/dev/null 2>&1 || continue
-                # Verify thumbnail was created successfully
-                if [ ! -f "$thumb" ] || [ ! -s "$thumb" ]; then
-                    continue
-                fi
-            fi
-
-            # Generate 10-second H.264 preview clip if missing (for instant playback)
-            if [ ! -f "$preview" ]; then
-                # Extract first 10 seconds, encode to H.264 for universal browser support
-                timeout 60 ffmpeg -y -i "$f" -t 10 \
-                    -c:v libx264 -preset veryfast -crf 23 \
-                    -vf "scale='min(1280,iw):-2'" \
-                    -c:a aac -b:a 96k -ac 2 \
-                    -movflags +faststart \
-                    "$preview" >/dev/null 2>&1 || true
-                # If preview generation failed, that's OK - will fall back to direct streaming
-            fi
-
-            thumb_rel="/cloud/api/thumbnail_file?h=${h}"
-            preview_rel=""
-            if [ -f "$preview" ] && [ -s "$preview" ]; then
-                preview_rel="/cloud/api/preview_file?h=${h}"
-            fi
-            python3 - "$base" "$rel" "$size" "$mtime_cur" "$thumb_rel" "$preview_rel" "$duration" <<PY >> "$tmp_new_entries"
-import json,sys
-entry={
-  "name": sys.argv[1],
-  "path": sys.argv[2],
-  "size": int(sys.argv[3]),
-  "mtime": sys.argv[4],
-  "thumbnail": sys.argv[5],
-  "preview": sys.argv[6] if sys.argv[6] else None,
-  "duration": int(sys.argv[7]) if sys.argv[7].isdigit() else None
-}
-print(json.dumps(entry))
-PY
-            pct=$((count*100/total_new))
-            filled=$((pct/2))
-            empty=$((50-filled))
-            printf "\r[%s%s] %d/%d %s" "$(printf '%0.s#' $(seq 1 $filled))" "$(printf '%0.s-' $(seq 1 $empty))" "$count" "$total_new" "$base"
-        done
-        echo
-        spinner_stop
-
-        # merge existing manifest with new entries using Python
-        python3 - <<PY > "$tmp_manifest"
-import json,os
-manifest_path = "$manifest"
-new_entries_path = "$tmp_new_entries"
-old = []
-if os.path.exists(manifest_path):
-    try:
-        data = json.load(open(manifest_path))
-        old = data.get('files', []) if isinstance(data, dict) else data
-    except Exception:
-        old = []
-new = []
-with open(new_entries_path) as f:
-    for l in f:
-        l=l.strip()
-        if not l: continue
-        try:
-            new.append(json.loads(l))
-        except Exception:
-            pass
-# build dict by path to de-duplicate/replace
-by_path = {e.get('path'): e for e in old}
-for e in new:
-    by_path[e.get('path')] = e
-out = list(by_path.values())
-json.dump({'files': out}, open('$tmp_manifest','w'))
-print()
-PY
-        rm -f "$tmp_new_entries"
-        # compare and move
-        if [ -f "$manifest" ]; then
-            old_sum=$(md5sum "$manifest" | awk '{print $1}')
-            new_sum=$(md5sum "$tmp_manifest" | awk '{print $1}')
-        else
-            old_sum=""
-            new_sum=$(md5sum "$tmp_manifest" | awk '{print $1}')
-        fi
-        if [ "$old_sum" = "$new_sum" ]; then
-            log_success "Video manifest unchanged (no restart needed)"
-            rm -f "$tmp_manifest"
-            manifest_changed=0
-        else
-            mv "$tmp_manifest" "$manifest"
-            log_success "Video manifest updated with new entries: $manifest"
-            manifest_changed=1
-        fi
-        touch "$idx_ts"
-    fi
-else
-    # no existing manifest: initial full scan
-    mapfile -t videos < <(find "$FILES_ROOT" -type f \( $VID_EXTS \) ! -path '*/$RECYCLE.BIN/*' ! -path '*/System Volume Information/*' ! -path '*/.Trash-*/*' ! -path '*/lost+found/*' -print 2>/dev/null || true)
-    total=${#videos[@]}
-    if [ "$total" -eq 0 ]; then
-        log_warn "No video files found under $FILES_ROOT"
-        manifest_changed=0
-    else
-        echo "Found $total video(s). Generating thumbnails..."
-        count=0
-        spinner_start "Generating thumbnails..."
-        for f in "${videos[@]}"; do
-            count=$((count+1))
-            base=$(basename "$f")
-            size=$(stat -c%s "$f" 2>/dev/null || echo 0)
-            # Skip extremely large files (>50GB)
-            if [ "$size" -gt 53687091200 ]; then
-                continue
-            fi
-            rel="/$(echo "$f" | sed "s#^$FILES_ROOT/##")"
-            # Calculate hash from the MANIFEST path (not full filesystem path) for consistency
-            h=$(printf '%s' "$rel" | md5sum | awk '{print $1}')
-            thumb="$thumbs_dir/${h}.jpg"
-            preview="$previews_dir/${h}.mp4"
-            
-            # Just verify ffprobe can read it
-            if ! ffprobe -v quiet -select_streams v:0 -show_entries stream=codec_name "$f" >/dev/null 2>&1; then
-                # Completely broken file, skip it
-                continue
-            fi
-            
-            # Generate thumbnail if missing
-            if [ ! -f "$thumb" ]; then
-                timeout 20 ffmpeg -y -ss 3 -i "$f" -vframes 1 -vf scale=320:-1 -q:v 5 "$thumb" >/dev/null 2>&1 || continue
-                # Verify thumbnail was created successfully
-                if [ ! -f "$thumb" ] || [ ! -s "$thumb" ]; then
-                    continue
-                fi
-            fi
-            
-            # Generate 10-second H.264 preview clip if missing
-            if [ ! -f "$preview" ]; then
-                timeout 60 ffmpeg -y -i "$f" -t 10 \
-                    -c:v libx264 -preset veryfast -crf 23 \
-                    -vf "scale='min(1280,iw):-2'" \
-                    -c:a aac -b:a 96k -ac 2 \
-                    -movflags +faststart \
-                    "$preview" >/dev/null 2>&1 || true
-            fi
-            pct=$((count*100/total))
-            filled=$((pct/2))
-            empty=$((50-filled))
-            printf "\r[%s%s] %d/%d %s" "$(printf '%0.s#' $(seq 1 $filled))" "$(printf '%0.s-' $(seq 1 $empty))" "$count" "$total" "$base"
-        done
-        echo
-        spinner_stop
-
-        # build manifest from full list
-        tmp_data=$(mktemp)
-        spinner_start "Writing manifest..."
-        for f in "${videos[@]}"; do
-            size=$(stat -c%s "$f" 2>/dev/null || echo 0)
-            # Skip files >50GB
-            if [ "$size" -gt 53687091200 ]; then
-                continue
-            fi
-            mtime=$(date -r "$f" --iso-8601=seconds 2>/dev/null || echo "")
-            rel="/$(echo "$f" | sed "s#^$FILES_ROOT/##")"
-            # Calculate hash from manifest path for consistency
-            h=$(printf '%s' "$rel" | md5sum | awk '{print $1}')
-            preview="$previews_dir/${h}.mp4"
-            preview_exists="false"
-            if [ -f "$preview" ] && [ -s "$preview" ]; then
-                preview_exists="true"
-            fi
-            echo "$h	$size	$mtime	$rel	$preview_exists" >> "$tmp_data"
-        done
-        python3 <<EOF > "$tmp_manifest"
-import json
-import os
-files = []
-with open('$tmp_data', 'r') as f:
-    for line in f:
-        parts = line.strip().split('\t', 4)
-        h, size, mtime, rel, preview_exists = parts
-        name = os.path.basename(rel)
-        thumb = f"/cloud/api/thumbnail_file?h={h}"
-        preview = f"/cloud/api/preview_file?h={h}" if preview_exists == "true" else None
-        files.append({
-            'name': name,
-            'path': rel,
-            'size': int(size),
-            'mtime': mtime,
-            'thumbnail': thumb,
-            'preview': preview
-        })
-print(json.dumps({'files': files}))
-EOF
-        rm "$tmp_data"
-        spinner_stop
-        chown -R www-data:www-data "$thumbs_dir"
-        chown -R www-data:www-data "$previews_dir"
-        mv "$tmp_manifest" "$manifest"
-        chown www-data:www-data "$manifest"
-        touch "$idx_ts"
-        chown www-data:www-data "$idx_ts"
-        log_success "Video manifest written to $manifest"
-        manifest_changed=1
-    fi
-fi
-
-
-
-
 log_step "8/8" "Restarting services"
 if systemctl restart pincerna.service; then
     log_success "Pincerna backend restarted"
@@ -730,22 +460,22 @@ echo -e "${GREEN}    Installation Complete!              ${NC}"
 echo -e "${GREEN}=========================================${NC}"
 echo ""
 echo "Summary:"
-echo -e "  ${GREEN}✓${NC} UI:        $WWW_DIR"
-echo -e "  ${GREEN}✓${NC} Files:     $FILES_ROOT"
-echo -e "  ${GREEN}✓${NC} Backend:   pincerna.service (C++ binary, port 5002)"
+echo -e "  ${GREEN}âœ“${NC} UI:        $WWW_DIR"
+echo -e "  ${GREEN}âœ“${NC} Files:     $FILES_ROOT"
+echo -e "  ${GREEN}âœ“${NC} Backend:   pincerna.service (Rust binary, port 5002)"
 echo ""
 
 echo "Service Status:"
 if systemctl is-active --quiet pincerna.service; then
-    echo -e "  ${GREEN}●${NC} pincerna.service: running"
+    echo -e "  ${GREEN}â—${NC} pincerna.service: running"
 else
-    echo -e "  ${RED}●${NC} pincerna.service: stopped"
+    echo -e "  ${RED}â—${NC} pincerna.service: stopped"
 fi
 
 if systemctl is-active --quiet nginx; then
-    echo -e "  ${GREEN}●${NC} nginx: running"
+    echo -e "  ${GREEN}â—${NC} nginx: running"
 else
-    echo -e "  ${RED}●${NC} nginx: stopped"
+    echo -e "  ${RED}â—${NC} nginx: stopped"
 fi
 
 echo ""
